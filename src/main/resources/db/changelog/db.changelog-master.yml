@@ -1,0 +1,123 @@
+databaseChangeLog:
+  # ===============================================
+  # POKEMON CARD ORDER PLANNING SYSTEM
+  # Master Liquibase Changelog
+  # ===============================================
+  #
+  # MANAGED TABLES (by Liquibase):
+  # - j_employee
+  # - j_planning
+  # - j_group
+  # - j_employee_group
+  # - j_status_workflow
+  # - j_delai_priority_mapping
+  #
+  # READ-ONLY TABLES (not managed):
+  # - order (shared with Symfony)
+  # - card (shared catalog)
+  # - card_translation
+  # - card_certification
+  # - card_certification_order
+  #
+  # ===============================================
+
+  # ========================================
+  # SCHEMA CHANGES - Core Tables
+  # ========================================
+  
+  # Employee table - card processing team members
+  - include:
+      file: db/changelog/changes/001-create-employee-table.yml
+      context: development,docker,production
+  
+  # Planning table - order-employee assignments
+  - include:
+      file: db/changelog/changes/002-create-planning-table.yml
+      context: development,docker,production
+  
+  # ========================================
+  # SCHEMA CHANGES - User Management
+  # (To be created when needed)
+  # ========================================
+  
+  # Group/Role table
+  # - include:
+  #     file: db/changelog/changes/003-create-group-table.yml
+  #     context: development,docker,production
+  
+  # Employee-Group junction table
+  # - include:
+  #     file: db/changelog/changes/004-create-employee-group-table.yml
+  #     context: development,docker,production
+  
+  # ========================================
+  # SCHEMA CHANGES - Reference Data
+  # (To be created when needed)
+  # ========================================
+  
+  # Status workflow definitions
+  # - include:
+  #     file: db/changelog/changes/005-create-status-workflow-table.yml
+  #     context: development,docker,production
+  
+  # Priority mapping (delai codes)
+  # - include:
+  #     file: db/changelog/changes/006-create-delai-priority-mapping.yml
+  #     context: development,docker,production
+  
+  # ========================================
+  # INITIAL DATA
+  # ========================================
+  
+  # Initial groups/roles data
+  # - include:
+  #     file: db/changelog/data/001-initial-groups.yml
+  #     context: development,docker,production
+  
+  # Initial status workflow data
+  # - include:
+  #     file: db/changelog/data/002-initial-status-workflow.yml
+  #     context: development,docker,production
+  
+  # Initial priority mapping data
+  # - include:
+  #     file: db/changelog/data/003-initial-priority-mapping.yml
+  #     context: development,docker,production
+  
+  # ========================================
+  # FUTURE CHANGES
+  # ========================================
+  #
+  # Add new changelogs here with incremental IDs:
+  # 
+  # - include:
+  #     file: db/changelog/changes/007-add-employee-phone.yml
+  #     context: development,docker,production
+  #
+  # - include:
+  #     file: db/changelog/changes/008-add-planning-notes.yml
+  #     context: development,docker,production
+  #
+  # ========================================
+  
+  # ========================================
+  # IMPORTANT NOTES
+  # ========================================
+  #
+  # 1. NEVER modify existing changesets after they're applied
+  # 2. ALWAYS increment changeset IDs (001, 002, 003...)
+  # 3. ALWAYS provide rollback when possible
+  # 4. Test in development before production
+  # 5. Use semantic naming for changesets
+  # 6. Keep contexts consistent across environments
+  #
+  # CONTEXTS:
+  # - development: Local dev environment
+  # - docker: Docker/staging environment
+  # - production: Production environment
+  #
+  # CHANGESET NAMING CONVENTION:
+  # XXX-action-description.yml
+  # Example: 007-add-employee-phone.yml
+  #
+  # ========================================

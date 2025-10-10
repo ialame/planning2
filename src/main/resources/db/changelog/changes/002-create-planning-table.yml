@@ -1,0 +1,195 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-create-planning-table
+      author: pokemon-card-planning
+      context: development,docker,production
+      comment: Create planning table for order-employee assignments
+
+      # Check if table doesn't exist
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: j_planning
+
+      changes:
+        # Create main table
+        - createTable:
+            tableName: j_planning
+            columns:
+              # Primary key
+              - column:
+                  name: id
+                  type: BINARY(16)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              # Foreign keys (references)
+              - column:
+                  name: order_id
+                  type: BINARY(16)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: employee_id
+                  type: BINARY(16)
+                  constraints:
+                    nullable: false
+
+              # Timing information
+              - column:
+                  name: planning_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: start_time
+                  type: DATETIME
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: end_time
+                  type: DATETIME
+                  constraints:
+                    nullable: true
+
+              # Work details
+              - column:
+                  name: estimated_duration_minutes
+                  type: INT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: card_count
+                  type: INT
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+
+              # Status tracking
+              - column:
+                  name: status
+                  type: INT
+                  defaultValueNumeric: 2
+                  constraints:
+                    nullable: false
+                  remarks: "Order status from shared order table"
+
+              - column:
+                  name: delai
+                  type: VARCHAR(10)
+                  constraints:
+                    nullable: true
+                  remarks: "Priority code (X, F+, F, C, E)"
+
+              - column:
+                  name: completed
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: progress_percentage
+                  type: INT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+
+              # Additional information
+              - column:
+                  name: notes
+                  type: TEXT
+                  constraints:
+                    nullable: true
+
+              # Audit fields
+              - column:
+                  name: created_at
+                  type: DATETIME
+                  defaultValueComputed: CURRENT_TIMESTAMP
+
+              - column:
+                  name: updated_at
+                  type: DATETIME
+                  defaultValueComputed: CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
+        # Create foreign key to employee
+        - addForeignKeyConstraint:
+            baseTableName: j_planning
+            baseColumnNames: employee_id
+            constraintName: fk_planning_employee
+            referencedTableName: j_employee
+            referencedColumnNames: id
+            onDelete: CASCADE
+            onUpdate: CASCADE
+
+        # Note: NO foreign key to `order` table (read-only, managed externally)
+        # We reference order_id but don't enforce FK constraint
+
+        # Create indexes for performance
+        - createIndex:
+            tableName: j_planning
+            indexName: idx_planning_employee_date
+            columns:
+              - column:
+                  name: employee_id
+              - column:
+                  name: planning_date
+
+        - createIndex:
+            tableName: j_planning
+            indexName: idx_planning_order
+            columns:
+              - column:
+                  name: order_id
+
+        - createIndex:
+            tableName: j_planning
+            indexName: idx_planning_date
+            columns:
+              - column:
+                  name: planning_date
+
+        - createIndex:
+            tableName: j_planning
+            indexName: idx_planning_status
+            columns:
+              - column:
+                  name: status
+
+        - createIndex:
+            tableName: j_planning
+            indexName: idx_planning_delai
+            columns:
+              - column:
+                  name: delai
+
+        - createIndex:
+            tableName: j_planning
+            indexName: idx_planning_start_time
+            columns:
+              - column:
+                  name: start_time
+
+        - createIndex:
+            tableName: j_planning
+            indexName: idx_planning_employee_time
+            columns:
+              - column:
+                  name: employee_id
+              - column:
+                  name: planning_date
+              - column:
+                  name: start_time
+
+      # Rollback instructions
+      rollback:
+        - dropTable:
+            tableName: j_planning

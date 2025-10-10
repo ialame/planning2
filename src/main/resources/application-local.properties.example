@@ -1,0 +1,64 @@
+# ===============================================
+# LOCAL CONFIGURATION TEMPLATE
+# Pokemon Card Planning - Development Setup
+# ===============================================
+#
+# INSTRUCTIONS:
+# 1. Copy this file to: application-local.properties
+# 2. Update the values below with your actual credentials
+# 3. The application-local.properties file is ignored by Git
+#
+
+# Application
+spring.application.name=pokemon-card-planning
+server.port=8080
+
+# Database Configuration
+# Replace with your local database credentials
+spring.datasource.url=jdbc:mariadb://localhost:3306/dev?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+spring.datasource.username=YOUR_DATABASE_USERNAME
+spring.datasource.password=YOUR_DATABASE_PASSWORD
+spring.datasource.driver-class-name=org.mariadb.jdbc.Driver
+
+# Connection Pool
+spring.datasource.hikari.maximum-pool-size=10
+spring.datasource.hikari.minimum-idle=2
+spring.datasource.hikari.connection-timeout=30000
+
+# JPA/Hibernate Configuration
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MariaDBDialect
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+
+# Liquibase Configuration
+spring.liquibase.enabled=true
+spring.liquibase.change-log=classpath:db/changelog/db.changelog-master.yml
+spring.liquibase.contexts=development
+
+# CORS Configuration - Development
+spring.web.cors.allowed-origins=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000
+spring.web.cors.allowed-methods=GET,POST,PUT,DELETE,OPTIONS
+spring.web.cors.allowed-headers=*
+spring.web.cors.allow-credentials=false
+
+# Logging Configuration
+logging.level.root=INFO
+logging.level.com.pcagrade=DEBUG
+logging.level.org.springframework.web=DEBUG
+logging.level.org.hibernate.SQL=DEBUG
+
+# Management endpoints
+management.endpoints.web.exposure.include=health,info,metrics
+management.endpoint.health.show-details=always
+
+# Pokemon Card Planning Configuration
+planning.card.processing.time=3
+planning.employee.break.time=15
+planning.workday.start=08:00
+planning.workday.end=17:00
+
+# Order table compatibility
+order.table.readonly=true
+order.status.integer.mapping=true
+order.adapter.service.enabled=true

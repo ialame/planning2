@@ -1,0 +1,109 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-employee-table
+      author: pokemon-card-planning
+      context: development,docker,production
+      comment: Create employee table for card processing team
+
+      # Check if table doesn't exist
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: j_employee
+
+      changes:
+        # Create main table
+        - createTable:
+            tableName: j_employee
+            columns:
+              # Primary key (UUID stored as BINARY(16))
+              - column:
+                  name: id
+                  type: BINARY(16)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              # Basic information
+              - column:
+                  name: first_name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: last_name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: email
+                  type: VARCHAR(150)
+                  constraints:
+                    nullable: true
+                    unique: true
+
+              # Work configuration
+              - column:
+                  name: work_hours_per_day
+                  type: INT
+                  defaultValueNumeric: 8
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: efficiency_rating
+                  type: DECIMAL(3,2)
+                  defaultValueNumeric: 1.0
+                  constraints:
+                    nullable: false
+
+              # Audit fields
+              - column:
+                  name: creation_date
+                  type: DATETIME
+                  defaultValueComputed: CURRENT_TIMESTAMP
+
+              - column:
+                  name: modification_date
+                  type: DATETIME
+                  defaultValueComputed: CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
+        # Create indexes for performance
+        - createIndex:
+            tableName: j_employee
+            indexName: idx_employee_active
+            columns:
+              - column:
+                  name: active
+
+        - createIndex:
+            tableName: j_employee
+            indexName: idx_employee_name
+            columns:
+              - column:
+                  name: last_name
+              - column:
+                  name: first_name
+
+        - createIndex:
+            tableName: j_employee
+            indexName: idx_employee_email
+            unique: true
+            columns:
+              - column:
+                  name: email
+
+      # Rollback instructions
+      rollback:
+        - dropTable:
+            tableName: j_employee

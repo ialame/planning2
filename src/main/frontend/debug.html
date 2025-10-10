@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        button { background: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 3px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        .output { background: #f8f9fa; padding: 10px; border-radius: 3px; margin: 10px 0; font-family: monospace; white-space: pre-wrap; }
+        .success { border-left: 4px solid #28a745; }
+        .error { border-left: 4px solid #dc3545; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 3px; }
+    </style>
+</head>
+<body>
+<h1>🔧 API Debug & Test Page</h1>
+<p>Use this page to test the backend API endpoints directly from the browser.</p>
+
+<!-- API Test Section -->
+<div class="section">
+    <h2>📡 API Connectivity Tests</h2>
+
+    <button onclick="testBackendConnection()">🔗 Test Backend Connection</button>
+    <button onclick="debugEmployees()">🔍 Debug Employee Table</button>
+    <button onclick="listEmployees()">👥 List All Employees</button>
+    <button onclick="initTable()">🔧 Initialize Employee Table</button>
+
+    <div id="connectivity-output" class="output"></div>
+</div>
+
+<!-- Employee Creation Section -->
+<div class="section">
+    <h2>👤 Create Employee Test</h2>
+
+    <div>
+        <input type="text" id="firstName" placeholder="First Name" value="Test">
+        <input type="text" id="lastName" placeholder="Last Name" value="User">
+        <input type="email" id="email" placeholder="Email" value="test@example.com">
+        <input type="number" id="workHours" placeholder="Work Hours" value="8" min="1" max="12">
+        <button onclick="createEmployee()">➕ Create Employee</button>
+    </div>
+
+    <div id="create-output" class="output"></div>
+</div>
+
+<!-- Live Employee List -->
+<div class="section">
+    <h2>📋 Current Employees in Database</h2>
+    <button onclick="refreshEmployeeList()">🔄 Refresh List</button>
+    <div id="employee-list" class="output"></div>
+</div>
+
+<script>
+    // Base URL for API calls
+    const API_BASE = '';  // Empty because we'll use relative URLs with proxy
+
+    function log(elementId, message, isError = false) {
+        const element = document.getElementById(elementId);
+        const timestamp = new Date().toLocaleTimeString();
+        const className = isError ? 'error' : 'success';
+        element.innerHTML = `<div class="${className}">[${timestamp}] ${message}</div>` + element.innerHTML;
+    }
+
+    async function testBackendConnection() {
+        try {
+            log('connectivity-output', '🔄 Testing backend connection...');
+
+            const response = await fetch(API_BASE_URL+'/api/employees/debug');
+            const data = await response.json();
+
+            if (response.ok) {
+                log('connectivity-output', `✅ Backend connected! Response: ${JSON.stringify(data, null, 2)}`);
+            } else {
+                log('connectivity-output', `❌ Backend error: ${response.status}`, true);
+            }
+        } catch (error) {
+            log('connectivity-output', `❌ Connection failed: ${error.message}`, true);
+        }
+    }
+
+    async function debugEmployees() {
+        try {
+            log('connectivity-output', '🔍 Getting debug info...');
+
+            const response = await fetch(API_BASE_URL+'/api/employees/debug');
+            const data = await response.json();
+
+            if (response.ok) {
+                log('connectivity-output', `🔍 Debug info: ${JSON.stringify(data, null, 2)}`);
+            } else {
+                log('connectivity-output', `❌ Debug failed: ${response.status}`, true);
+            }
+        } catch (error) {
+            log('connectivity-output', `❌ Debug error: ${error.message}`, true);
+        }
+    }
+
+    async function initTable() {
+        try {
+            log('connectivity-output', '🔧 Initializing employee table...');
+
+            const response = await fetch(API_BASE_URL+'/api/employees/init-table', {
+                method: 'POST'
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                log('connectivity-output', `✅ Table init: ${JSON.stringify(data, null, 2)}`);
+            } else {
+                log('connectivity-output', `❌ Table init failed: ${response.status}`, true);
+            }
+        } catch (error) {
+            log('connectivity-output', `❌ Table init error: ${error.message}`, true);
+        }
+    }
+
+    async function listEmployees() {
+        try {
+            log('connectivity-output', '👥 Fetching employees...');
+
+            const response = await fetch(API_BASE_URL+'/api/employees/active');
+            const data = await response.json();
+
+            if (response.ok) {
+                log('connectivity-output', `✅ Employees (${data.length}): ${JSON.stringify(data, null, 2)}`);
+            } else {
+                log('connectivity-output', `❌ Fetch employees failed: ${response.status}`, true);
+            }
+        } catch (error) {
+            log('connectivity-output', `❌ Fetch employees error: ${error.message}`, true);
+        }
+    }
+
+    async function createEmployee() {
+        try {
+            const firstName = document.getElementById('firstName').value;
+            const lastName = document.getElementById('lastName').value;
+            const email = document.getElementById('email').value;
+            const workHours = parseInt(document.getElementById('workHours').value);
+
+            if (!firstName || !lastName || !email) {
+                log('create-output', '❌ Please fill all required fields', true);
+                return;
+            }
+
+            log('create-output', '💾 Creating employee...');
+
+            const requestData = {
+                firstName: firstName,
+                lastName: lastName,
+                email: email,
+                workHoursPerDay: workHours
+            };
+
+            log('create-output', `📤 Request: ${JSON.stringify(requestData, null, 2)}`);
+
+            const response = await fetch(API_BASE_URL+'/api/employees', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            const result = await response.json();
+            log('create-output', `📥 Response (${response.status}): ${JSON.stringify(result, null, 2)}`);
+
+            if (response.ok && result.success) {
+                log('create-output', `✅ Employee created: ${result.fullName}`);
+                // Clear form
+                document.getElementById('firstName').value = '';
+                document.getElementById('lastName').value = '';
+                document.getElementById('email').value = '';
+                document.getElementById('workHours').value = '8';
+                // Refresh list
+                setTimeout(refreshEmployeeList, 500);
+            } else {
+                log('create-output', `❌ Creation failed: ${result.message}`, true);
+            }
+        } catch (error) {
+            log('create-output', `❌ Network error: ${error.message}`, true);
+        }
+    }
+
+    async function refreshEmployeeList() {
+        try {
+            log('employee-list', '🔄 Refreshing employee list...');
+
+            const response = await fetch(API_BASE_URL+'/api/employees/active');
+            const employees = await response.json();
+
+            if (response.ok) {
+                if (employees.length === 0) {
+                    log('employee-list', '📭 No employees found in database');
+                } else {
+                    let listHtml = `<h3>👥 ${employees.length} Employees Found:</h3>`;
+                    employees.forEach((emp, index) => {
+                        listHtml += `
+                                <div style="border: 1px solid #ddd; padding: 10px; margin: 5px 0; border-radius: 3px;">
+                                    <strong>${index + 1}. ${emp.fullName}</strong><br>
+                                    📧 ${emp.email}<br>
+                                    ⏰ ${emp.workHoursPerDay}h/day<br>
+                                    📅 Created: ${new Date(emp.creationDate).toLocaleDateString()}<br>
+                                    🔑 ID: ${emp.id}
+                                </div>
+                            `;
+                    });
+                    document.getElementById('employee-list').innerHTML = listHtml;
+                }
+            } else {
+                log('employee-list', `❌ Failed to load employees: ${response.status}`, true);
+            }
+        } catch (error) {
+            log('employee-list', `❌ Error loading employees: ${error.message}`, true);
+        }
+    }
+
+    // Auto-load employee list on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(refreshEmployeeList, 1000);
+    });
+</script>
+</body>
+</html>

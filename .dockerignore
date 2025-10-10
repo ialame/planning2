@@ -1,0 +1,47 @@
+# ===============================================
+# DOCKERIGNORE FOR POKEMON CARD PLANNING
+# Minimal version to avoid excluding required files
+# ===============================================
+
+# Build artifacts (but not source)
+target/
+build/
+
+# Logs
+*.log
+*.tmp
+*.temp
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.project
+.classpath
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git files
+.git/
+.gitignore
+
+# Documentation
+README.md
+docs/
+
+# Docker files to avoid recursion
+docker-compose*.yml
+*.yaml
+.dockerignore
+
+# Local development files
+application-local.properties
+
+# Node modules if any
+node_modules/
+npm-debug.log
