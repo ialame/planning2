@@ -1,3 +1,6 @@
+// ===================================================================
+// OrderRepository.java
+// ===================================================================
 package com.pcagrade.order.repository;
 
 import com.pcagrade.order.entity.Order;
@@ -7,144 +10,85 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Repository for Order entity management
- * Translated from CommandeRepository to OrderRepository with enum support
+ * Repository for Order entity
+ * Handles database operations for Pokemon card orders
  */
 @Repository
 public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     /**
-     * Find order by order number
-     * @param orderNumber the order number to search for
-     * @return optional order
+     * Find order by order number (unique identifier from Symfony)
      */
     Optional<Order> findByOrderNumber(String orderNumber);
 
     /**
-     * Find orders by status (using enum)
-     * @param status the status enum to filter by
-     * @return list of orders with specified status
+     * Find order by Symfony order ID
      */
-    List<Order> findByStatus(Integer status);
-
-
-    List<Order> findByStatusNotIn(Collection<Integer> statuses);
-
-    List<Order> findByStatusAndOrderDateAfter(Integer status, LocalDateTime date);
-
-    List<Order> findByStatusIn(Collection<Integer> statuses);
+    Optional<Order> findBySymfonyOrderId(Long symfonyOrderId);
 
     /**
-     * Count orders by status
-     * @param status the status integer to count
-     * @return number of orders with this status
+     * Check if order exists by order number
      */
-    long countByStatus(Integer status);
-
+    boolean existsByOrderNumber(String orderNumber);
 
     /**
      * Find orders by status
-     * @param status the status integer to filter by
-     * @return list of orders with specified status
      */
-    @Query("SELECT o FROM Order o WHERE o.status = :status")
-    List<Order> findOrdersByStatus(@Param("status") Integer status);
+    List<Order> findByStatus(String status);
 
     /**
-     * Find unassigned orders (status = 1 for A_RECEPTIONNER)
-     * @param status the status integer (typically 1)
-     * @return list of unassigned orders
+     * Find orders with delivery date before given date (overdue orders)
      */
-    @Query("SELECT o FROM Order o WHERE o.status = :status")
-    List<Order> findUnassignedOrders(@Param("status") Integer status);
+    @Query("SELECT o FROM Order o WHERE o.deliveryDate < :date AND o.status != 'COMPLETED'")
+    List<Order> findOverdueOrders(@Param("date") LocalDate date);
 
     /**
-     * Find orders that need processing (excluding sent and received)
-     * @return list of orders to be processed, ordered by priority and date
+     * Find orders to be delivered soon (within next N days)
      */
-    @Query("SELECT o FROM Order o WHERE o.status NOT IN (5, 8) ORDER BY o.priority DESC, o.orderDate ASC")
-    List<Order> findOrdersToProcess();
+    @Query("SELECT o FROM Order o WHERE o.deliveryDate BETWEEN :start AND :end ORDER BY o.deliveryDate ASC")
+    List<Order> findOrdersDueSoon(@Param("start") LocalDate start, @Param("end") LocalDate end);
 
     /**
-     * Find orders created after specific date
-     * @param date the date after which to search
-     * @return list of orders created after the specified date
+     * Find orders ordered by priority (earliest delivery date first)
      */
-    @Query("SELECT o FROM Order o WHERE o.orderDate >= :date ORDER BY o.orderDate ASC")
-    List<Order> findOrdersAfterDate(@Param("date") LocalDate date);
+    @Query("SELECT o FROM Order o WHERE o.status != 'COMPLETED' ORDER BY o.deliveryDate ASC, o.priority ASC")
+    List<Order> findAllOrderedByPriority();
 
     /**
-     * Find orders by priority
-     * @param priority the priority level
-     * @return list of orders with specified priority
+     * Find orders for a specific customer
      */
-    List<Order> findByPriorityOrderByOrderDateAsc(Order.OrderPriority priority);
+    List<Order> findByCustomerNameContainingIgnoreCase(String customerName);
 
     /**
-     * Find orders between dates
-     * @param startDate start date
-     * @param endDate end date
-     * @return list of orders between specified dates
+     * Find orders by delivery date
      */
-    @Query("SELECT o FROM Order o WHERE o.orderDate BETWEEN :startDate AND :endDate ORDER BY o.orderDate ASC")
-    List<Order> findOrdersBetweenDates(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
-
-
+    List<Order> findByDeliveryDate(LocalDate deliveryDate);
 
     /**
-     * Find orders by card count range
-     * @param minCards minimum number of cards
-     * @param maxCards maximum number of cards
-     * @return list of orders within card count range
+     * Count orders by status
      */
-    @Query("SELECT o FROM Order o WHERE o.cardCount BETWEEN :minCards AND :maxCards ORDER BY o.cardCount ASC")
-    List<Order> findOrdersByCardCountRange(@Param("minCards") int minCards, @Param("maxCards") int maxCards);
+    long countByStatus(String status);
 
     /**
-     * Get total card count for all orders
-     * @return sum of all cards across all orders
+     * Find pending orders (not yet completed)
      */
-    @Query("SELECT COALESCE(SUM(o.cardCount), 0) FROM Order o")
-    Long getTotalCardCount();
+    @Query("SELECT o FROM Order o WHERE o.status IN ('PENDING', 'IN_PROGRESS') ORDER BY o.deliveryDate ASC")
+    List<Order> findPendingOrders();
 
     /**
-     * Get average processing time in minutes
-     * @return average processing time
+     * Get total cards count across all orders
      */
-    @Query("SELECT AVG(o.estimatedTimeMinutes) FROM Order o WHERE o.estimatedTimeMinutes > 0")
-    Double getAverageProcessingTime();
-
+    @Query("SELECT SUM(o.totalCards) FROM Order o")
+    Long getTotalCardsCount();
 
     /**
-     * Find orders created between dates
-     * @param startDate start date
-     * @param endDate end date
-     * @return list of orders created in the date range
+     * Get completed cards count across all orders
      */
-    @Query("SELECT o FROM Order o WHERE o.creationDate BETWEEN :startDate AND :endDate ORDER BY o.creationDate DESC")
-    List<Order> findOrdersCreatedBetween(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
-
-
-
-
-    /**
-     * Get workload statistics (count and total estimated time by status)
-     * @return list of object arrays containing [status, count, totalTime]
-     */
-    @Query("SELECT o.status, COUNT(o), COALESCE(SUM(o.estimatedTimeMinutes), 0) FROM Order o GROUP BY o.status")
-    List<Object[]> getWorkloadByStatus();
-
-    /**
-     * Get orders summary by priority
-     * @return list of object arrays containing [priority, count, totalCards]
-     */
-    @Query("SELECT o.priority, COUNT(o), COALESCE(SUM(o.cardCount), 0) FROM Order o GROUP BY o.priority ORDER BY o.priority")
-    List<Object[]> getOrdersSummaryByPriority();
+    @Query("SELECT SUM(o.completedCards) FROM Order o")
+    Long getCompletedCardsCount();
 }

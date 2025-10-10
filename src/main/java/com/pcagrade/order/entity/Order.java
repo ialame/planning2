@@ -40,8 +40,6 @@ import org.hibernate.annotations.Immutable;
 @Builder
 public class Order extends AbstractUlidEntity {
 
-
-
     /**
      * Unique order number for tracking
      */
@@ -187,25 +185,7 @@ public class Order extends AbstractUlidEntity {
      */
     @PrePersist
     protected void onCreate() {
-        if (this.creationDate == null) {
-            this.creationDate = LocalDateTime.now();
-        }
-        if (this.modificationDate == null) {
-            this.modificationDate = LocalDateTime.now();
-        }
-        if (this.orderDate == null) {
-            this.orderDate = LocalDate.now();
-        }
-        if (this.priority == null) {
-            this.priority = OrderPriority.FAST;
-        }
-        if (this.status == null) {
-            this.status = OrderStatus.PENDING.getCode();
-        }
-        // Calculate estimated time if not set
-        if (this.estimatedTimeMinutes == null && this.cardCount != null) {
-            calculateEstimatedTime();
-        }
+
     }
 
     /**
