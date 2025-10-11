@@ -5,6 +5,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.web.client.RestTemplate;
 
 /**
  * Pokemon Card Order Planning System
@@ -34,6 +36,7 @@ public class PlanningApplication {
             log.info("👥 Employee management: http://localhost:8080/api/employees");
             log.info("📦 Order management: http://localhost:8080/api/orders");
             log.info("🏥 Health check: http://localhost:8080/api/health");
+            log.info("🔄 Sync endpoint: http://localhost:8080/api/sync/orders");
 
             // Print application info
             String[] activeProfiles = context.getEnvironment().getActiveProfiles();
@@ -66,5 +69,14 @@ public class PlanningApplication {
 
             System.exit(1);
         }
+    }
+
+    /**
+     * RestTemplate bean for HTTP client operations
+     * Required by MinimalSyncController to call Symfony API
+     */
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
     }
 }

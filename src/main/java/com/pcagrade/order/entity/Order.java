@@ -7,17 +7,19 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Immutable;
 
 import java.time.LocalDate;
 
 /**
  * Order entity representing Pokemon card orders
- * Read-only entity - synced from Symfony database
+ * Writable entity - synced from Symfony API and stored locally for planning
+ *
+ * IMPORTANT: This entity is now WRITABLE to allow syncing from Symfony
+ * Data flows: Symfony API → Spring Boot → dev-planning database
  */
 @Entity
 @Table(name = "`order`")
-@Immutable  // ✅ Read-only entity
+// @Immutable  ← REMOVED to allow writes
 @Data
 @EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
@@ -27,49 +29,50 @@ public class Order extends AbstractUlidEntity {
 
     /**
      * Symfony order ID (ULID hex format)
+     * This is the unique identifier from the Symfony system
      */
-    @Column(name = "symfony_order_id", unique = true, insertable = false, updatable = false)
+    @Column(name = "symfony_order_id", unique = true)
     private String symfonyOrderId;
 
     /**
      * Unique order number for tracking
      */
-    @Column(name = "order_number", insertable = false, updatable = false)
+    @Column(name = "order_number")
     private String orderNumber;
 
     /**
-     * Customer name (from customer table join)
+     * Customer name (from customer table join in Symfony)
      */
-    @Column(name = "customer_name", insertable = false, updatable = false)
+    @Column(name = "customer_name")
     private String customerName;
 
     /**
      * Delivery date code (actually the delai code: X, F+, F, C, E)
+     * X = Express (1 day)
+     * F+ = Fast+ (1 week)
+     * F = Fast (2 weeks)
+     * C = Classic (1 month)
+     * E = Economy (3 months)
      */
-    @Column(name = "delivery_date", insertable = false, updatable = false)
+    @Column(name = "delivery_date", length = 10)
     private String deliveryDate;
 
     /**
      * Order creation date
      */
-    @Column(name = "order_date", insertable = false, updatable = false)
+    @Column(name = "order_date")
     private LocalDate orderDate;
 
     /**
      * Total number of cards in this order
      */
-    @Column(name = "total_cards", insertable = false, updatable = false)
+    @Column(name = "total_cards")
     private Integer totalCards;
 
     /**
-     * Order status
-     * 1=new, 2=processing, 3=ready, 4=shipped, 5=completed, 6=cancelled, 8=archived, 41=pending
+     * Order status (from Symfony workflow)
+     * Status constants for planning reference:
      */
-
-    /**
-     * Order status
-     */
-    // Constantes de statut
     public static final int STATUS_A_RECEPTIONNER = 1;
     public static final int STATUS_COLIS_ACCEPTE = 9;
     public static final int STATUS_A_SCANNER = 10;
@@ -84,94 +87,79 @@ public class Order extends AbstractUlidEntity {
     public static final int STATUS_ENVOYEE = 5;
     public static final int STATUS_RECU = 8;
 
-
-    @Column(name = "status", insertable = false, updatable = false)
+    @Column(name = "status")
     private Integer status;
 
     /**
      * Price from invoice (total_ttc)
-     * NEW FIELD - Synced from Symfony API
+     * Synced from Symfony API: invoice.total_ttc
      */
-    @Column(name = "price", insertable = false, updatable = false)
+    @Column(name = "price")
     private Float price;
 
     /**
      * Delivery priority code
-     * NEW FIELD - Replaces priority
      * Values: X=1day, F+=1week, F=2weeks, C=1month, E=3months
+     * Synced from Symfony API: order.delai
      */
-    @Column(name = "delai", length = 3, insertable = false, updatable = false)
+    @Column(name = "delai", length = 3)
     private String delai;
 
     // ============================================================
-    // DEPRECATED FIELDS - Remove after migration
-    // ============================================================
-
-    // @Column(name = "priority", insertable = false, updatable = false)
-    // private Integer priority;  // ← DEPRECATED, use delai instead
-
-    // ============================================================
-    // HELPER METHODS
+    // HELPER METHODS FOR PLANNING
     // ============================================================
 
     /**
-     * Get numeric priority from delai code
-     * X=1, F+=2, F=3, C=4, E=5
+     * Get estimated processing time in minutes
+     * Based on: 3 minutes per card
      */
-    public int getDelaiNumber() {
-        if (delai == null) return 99;
+    public int getEstimatedProcessingMinutes() {
+        if (totalCards == null || totalCards <= 0) {
+            return 0;
+        }
+        return totalCards * 3;
+    }
+
+    /**
+     * Get priority score for scheduling (higher = more urgent)
+     * Based on delai code
+     */
+    public int getPriorityScore() {
+        if (delai == null) return 50;
+
         return switch (delai) {
-            case "X" -> 1;
-            case "F+" -> 2;
-            case "F" -> 3;
-            case "C" -> 4;
-            case "E" -> 5;
-            default -> 99;
+            case "X" -> 100;   // Express - Highest priority
+            case "F+" -> 80;   // Fast+
+            case "F" -> 60;    // Fast
+            case "C" -> 40;    // Classic
+            case "E" -> 20;    // Economy - Lowest priority
+            default -> 50;     // Unknown
         };
     }
 
     /**
-     * Get human-readable priority description
+     * Check if order is ready for planning
+     * (has been accepted but not yet completed)
+     */
+    public boolean isReadyForPlanning() {
+        return status != null &&
+                status >= STATUS_A_NOTER &&
+                status < STATUS_ENVOYEE;
+    }
+
+    /**
+     * Get human-readable delai description
      */
     public String getDelaiDescription() {
         if (delai == null) return "Unknown";
+
         return switch (delai) {
             case "X" -> "Express (1 day)";
             case "F+" -> "Fast+ (1 week)";
             case "F" -> "Fast (2 weeks)";
             case "C" -> "Classic (1 month)";
             case "E" -> "Economy (3 months)";
-            default -> "Unknown";
+            default -> "Unknown (" + delai + ")";
         };
-    }
-    /**
-     * Order priority levels
-     */
-    public enum OrderDelai {
-        EXCELSIOR,     // 1 week - price >= 1000€
-        FAST_PLUS,   // 2 weeks - price >= 500€
-        FAST,      // 4 weeks - price < 500€
-        CLASSIC    // 8 weeks - price < 100€
-    }
-    /**
-     * Check if order is completed
-     */
-    public boolean isCompleted() {
-        return status != null && (status == 5 || status == 6 || status == 8);
-    }
-
-    /**
-     * Check if order is active (not completed or cancelled)
-     */
-    public boolean isActive() {
-        return !isCompleted();
-    }
-
-    /**
-     * Get formatted price with currency
-     */
-    public String getFormattedPrice() {
-        if (price == null) return "0.00 €";
-        return String.format("%.2f €", price);
     }
 }

@@ -14,8 +14,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Minimal Sync Controller - Syncs only essential fields from Symfony
- * Simple, fast, and reliable!
+ * Minimal Sync Controller - Syncs only Orders from Symfony
+ *
+ * IMPORTANT: We only sync Orders, NOT Cards!
+ * - Card table is a read-only catalog shared with other projects
+ * - Order table contains all info needed for planning (total_cards, delai, status)
  */
 @RestController
 @RequestMapping("/api/sync")
@@ -35,46 +38,10 @@ public class MinimalSyncController {
     }
 
     /**
-     * Sync all data (orders + cards)
-     * POST /api/sync/all
-     */
-    @PostMapping("/all")
-    public ResponseEntity<Map<String, Object>> syncAll() {
-        log.info("🔄 Starting complete sync (orders + cards)...");
-
-        Map<String, Object> result = new HashMap<>();
-        long startTime = System.currentTimeMillis();
-
-        try {
-            // Step 1: Sync orders
-            log.info("📦 Step 1/2: Syncing orders...");
-            ResponseEntity<Map<String, Object>> ordersResponse = syncOrders();
-            result.put("orders", ordersResponse.getBody());
-
-            // Step 2: Sync cards
-            log.info("🎴 Step 2/2: Syncing cards...");
-            ResponseEntity<Map<String, Object>> cardsResponse = syncCards();
-            result.put("cards", cardsResponse.getBody());
-
-            long duration = System.currentTimeMillis() - startTime;
-            result.put("success", true);
-            result.put("duration_ms", duration);
-            result.put("message", "Complete sync successful");
-
-            log.info("✅ Complete sync finished in {}ms", duration);
-            return ResponseEntity.ok(result);
-
-        } catch (Exception e) {
-            log.error("❌ Error during complete sync", e);
-            result.put("success", false);
-            result.put("error", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
-        }
-    }
-
-    /**
-     * Sync only orders from Symfony
+     * Sync orders from Symfony
      * POST /api/sync/orders
+     *
+     * This is the main sync endpoint - syncs all orders needed for planning
      */
     @PostMapping("/orders")
     public ResponseEntity<Map<String, Object>> syncOrders() {
@@ -121,89 +88,34 @@ public class MinimalSyncController {
     }
 
     /**
-     * Sync only cards from Symfony
-     * POST /api/sync/cards
+     * Sync all data (currently only orders, since cards are read-only catalog)
+     * POST /api/sync/all
      */
-    @PostMapping("/cards")
-    public ResponseEntity<Map<String, Object>> syncCards() {
-        log.info("🔄 Starting cards sync...");
+    @PostMapping("/all")
+    public ResponseEntity<Map<String, Object>> syncAll() {
+        log.info("🔄 Starting complete sync...");
 
         Map<String, Object> result = new HashMap<>();
         long startTime = System.currentTimeMillis();
 
         try {
-            // Call Symfony minimal export API
-            String url = symfonyApiUrl + "/api/planning/export/cards";
-            log.info("📡 Fetching from: {}", url);
-
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-
-            if (response == null || !response.containsKey("cards")) {
-                throw new RuntimeException("Invalid response from Symfony API");
-            }
-
-            List<Map<String, Object>> cardsData = (List<Map<String, Object>>) response.get("cards");
-            log.info("🎴 Received {} cards", cardsData.size());
-
-            // Sync using minimal service
-            int syncedCount = syncService.syncCards(cardsData);
+            // For now, we only sync orders
+            // Card catalog is read-only and doesn't need sync
+            ResponseEntity<Map<String, Object>> ordersResponse = syncOrders();
+            result.put("orders", ordersResponse.getBody());
 
             long duration = System.currentTimeMillis() - startTime;
-
             result.put("success", true);
-            result.put("total_cards", cardsData.size());
-            result.put("synced_count", syncedCount);
             result.put("duration_ms", duration);
-            result.put("message", String.format("Synced %d/%d cards", syncedCount, cardsData.size()));
+            result.put("message", "Complete sync successful (orders only)");
+            result.put("note", "Card catalog is read-only and does not require sync");
 
-            log.info("✅ Cards sync completed: {} cards in {}ms", syncedCount, duration);
+            log.info("✅ Complete sync finished in {}ms", duration);
             return ResponseEntity.ok(result);
 
         } catch (Exception e) {
-            log.error("❌ Error syncing cards", e);
+            log.error("❌ Error during complete sync", e);
             result.put("success", false);
-            result.put("error", e.getMessage());
-            result.put("symfony_url", symfonyApiUrl);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
-        }
-    }
-
-    /**
-     * Sync cards for a specific order
-     * POST /api/sync/order/{orderId}/cards
-     */
-    @PostMapping("/order/{orderId}/cards")
-    public ResponseEntity<Map<String, Object>> syncOrderCards(@PathVariable Long orderId) {
-        log.info("🔄 Starting cards sync for order {}...", orderId);
-
-        Map<String, Object> result = new HashMap<>();
-
-        try {
-            String url = symfonyApiUrl + "/api/planning/export/order/" + orderId + "/cards";
-            log.info("📡 Fetching from: {}", url);
-
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-
-            if (response == null || !response.containsKey("cards")) {
-                throw new RuntimeException("Invalid response from Symfony API");
-            }
-
-            List<Map<String, Object>> cardsData = (List<Map<String, Object>>) response.get("cards");
-            log.info("🎴 Received {} cards for order {}", cardsData.size(), orderId);
-
-            int syncedCount = syncService.syncCards(cardsData);
-
-            result.put("success", true);
-            result.put("order_id", orderId);
-            result.put("synced_count", syncedCount);
-            result.put("message", String.format("Synced %d cards for order %d", syncedCount, orderId));
-
-            return ResponseEntity.ok(result);
-
-        } catch (Exception e) {
-            log.error("❌ Error syncing cards for order {}", orderId, e);
-            result.put("success", false);
-            result.put("order_id", orderId);
             result.put("error", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
@@ -244,9 +156,10 @@ public class MinimalSyncController {
      */
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Object>> getStats() {
-        // This could be enhanced to show actual sync statistics
         Map<String, Object> stats = new HashMap<>();
-        stats.put("message", "Sync statistics coming soon");
+        stats.put("message", "Sync statistics");
+        stats.put("synced_entities", "orders");
+        stats.put("note", "Card catalog is read-only and managed separately");
         return ResponseEntity.ok(stats);
     }
 }

@@ -1,23 +1,86 @@
 package com.pcagrade.order.entity;
 
-
 import com.pcagrade.order.util.AbstractUlidEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.Immutable;
+// @Immutable REMOVED - entity is now writable for sync
 
 import java.time.Instant;
+import java.util.UUID;
 
-@Getter
-@Setter
-@Immutable
+/**
+ * CardCertification entity
+ * NOW WRITABLE - synced from Symfony API for planning
+ *
+ * Represents a certified card within an order.
+ * Contains both certification details and planning flags.
+ */
+@Data
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "card_certification")
 public class CardCertification extends AbstractUlidEntity {
+
+    // ============================================================
+    // NEW FIELDS FOR PLANNING (added by Spring Boot sync)
+    // ============================================================
+
+    /**
+     * Symfony certification ID (ULID hex format)
+     * Used to identify certifications from Symfony
+     */
+    @Column(name = "symfony_certification_id", unique = true)
+    private String symfonyCertificationId;
+
+    /**
+     * Order ID reference (for faster queries)
+     * Denormalized from card_certification_order junction table
+     */
+    @Column(name = "order_id")
+    private UUID orderId;
+
+    /**
+     * Card name (denormalized for display)
+     * Example: "Pikachu 25/102"
+     */
+    @Column(name = "card_name")
+    private String cardName;
+
+    /**
+     * Grading task completed flag
+     */
+    @Column(name = "grading_completed")
+    @ColumnDefault("0")
+    private Boolean gradingCompleted = false;
+
+    /**
+     * Certification task completed flag
+     */
+    @Column(name = "certification_completed")
+    @ColumnDefault("1")
+    private Boolean certificationCompleted = true;
+
+    /**
+     * Scanning task completed flag
+     */
+    @Column(name = "scanning_completed")
+    @ColumnDefault("0")
+    private Boolean scanningCompleted = false;
+
+    /**
+     * Packaging task completed flag
+     */
+    @Column(name = "packaging_completed")
+    @ColumnDefault("0")
+    private Boolean packagingCompleted = false;
+
+    // ============================================================
+    // EXISTING FIELDS (from original table structure)
+    // ============================================================
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -118,4 +181,74 @@ public class CardCertification extends AbstractUlidEntity {
     @Column(name = "multi_grade")
     private Boolean multiGrade;
 
+    // ============================================================
+    // HELPER METHODS FOR PLANNING
+    // ============================================================
+
+    /**
+     * Get estimated processing time in minutes for remaining tasks
+     * Based on: 3 minutes per task
+     */
+    public int getRemainingProcessingMinutes() {
+        int minutes = 0;
+
+        if (!Boolean.TRUE.equals(gradingCompleted)) {
+            minutes += 3; // Grading: 3 minutes
+        }
+        if (!Boolean.TRUE.equals(certificationCompleted)) {
+            minutes += 3; // Certification: 3 minutes
+        }
+        if (!Boolean.TRUE.equals(scanningCompleted)) {
+            minutes += 3; // Scanning: 3 minutes
+        }
+        if (!Boolean.TRUE.equals(packagingCompleted)) {
+            minutes += 3; // Packaging: 3 minutes
+        }
+
+        return minutes;
+    }
+
+    /**
+     * Check if all processing is complete
+     */
+    public boolean isFullyProcessed() {
+        return Boolean.TRUE.equals(gradingCompleted) &&
+                Boolean.TRUE.equals(certificationCompleted) &&
+                Boolean.TRUE.equals(scanningCompleted) &&
+                Boolean.TRUE.equals(packagingCompleted);
+    }
+
+    /**
+     * Get completion percentage (0-100)
+     */
+    public int getCompletionPercentage() {
+        int completedTasks = 0;
+        int totalTasks = 4;
+
+        if (Boolean.TRUE.equals(gradingCompleted)) completedTasks++;
+        if (Boolean.TRUE.equals(certificationCompleted)) completedTasks++;
+        if (Boolean.TRUE.equals(scanningCompleted)) completedTasks++;
+        if (Boolean.TRUE.equals(packagingCompleted)) completedTasks++;
+
+        return (completedTasks * 100) / totalTasks;
+    }
+
+    /**
+     * Get next required task
+     */
+    public String getNextTask() {
+        if (!Boolean.TRUE.equals(gradingCompleted)) {
+            return "GRADING";
+        }
+        if (!Boolean.TRUE.equals(certificationCompleted)) {
+            return "CERTIFICATION";
+        }
+        if (!Boolean.TRUE.equals(scanningCompleted)) {
+            return "SCANNING";
+        }
+        if (!Boolean.TRUE.equals(packagingCompleted)) {
+            return "PACKAGING";
+        }
+        return "COMPLETED";
+    }
 }
