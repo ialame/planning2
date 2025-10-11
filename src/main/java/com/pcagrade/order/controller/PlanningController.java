@@ -1,7 +1,7 @@
 package com.pcagrade.order.controller;
 
 import com.pcagrade.order.service.EmployeeService;
-import com.pcagrade.order.service.GreedyPlanningService;
+//import com.pcagrade.order.service.GreedyPlanningService;
 import com.pcagrade.order.service.ImprovedPlanningService;
 import com.pcagrade.order.service.PlanningService;
 import jakarta.persistence.EntityManager;
@@ -34,8 +34,8 @@ public class PlanningController {
     @Autowired
     private PlanningService planningService;
 
-    @Autowired
-    private GreedyPlanningService greedyPlanningService;
+//    @Autowired
+//    private GreedyPlanningService greedyPlanningService;
 
     @Autowired
     private ImprovedPlanningService improvedPlanningService;

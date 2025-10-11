@@ -12,13 +12,22 @@ import org.springframework.transaction.annotation.Transactional;
 import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Minimal Sync Service - Only syncs essential fields for planning
- * Works with any Order/Card entity structure using reflection
+ * Minimal Sync Service - Syncs 9 essential fields for planning
+ *
+ * Synced fields from Symfony API:
+ * 1. id (ULID hex)
+ * 2. order_number
+ * 3. customer_name
+ * 4. delivery_date (delai code)
+ * 5. order_date
+ * 6. total_cards
+ * 7. status
+ * 8. price (NEW - from invoice.total_ttc)
+ * 9. delai (NEW - replaces priority)
  */
 @Service
 public class MinimalSyncService {
@@ -37,7 +46,7 @@ public class MinimalSyncService {
     }
 
     // ============================================================
-    // ORDER SYNC - 8 Essential Fields Only
+    // ORDER SYNC - 9 Essential Fields
     // ============================================================
 
     @Transactional
@@ -59,126 +68,128 @@ public class MinimalSyncService {
     }
 
     private Order syncSingleOrder(Map<String, Object> data) {
-        Long symfonyId = getLong(data, "id");
-        if (symfonyId == null) {
+        String symfonyIdHex = getString(data, "id");
+        if (symfonyIdHex == null) {
             throw new IllegalArgumentException("Order must have an id");
         }
 
-        // Find or create order
-        Order order = findOrderBySymfonyId(symfonyId)
+        // Find or create order by symfony ID
+        Order order = findOrderBySymfonyId(symfonyIdHex)
                 .orElse(createNewOrder());
 
-        // Set the 8 essential fields using reflection
-        trySet(order, "symfonyOrderId", symfonyId);
+        // Set the 9 essential fields using reflection
+        trySet(order, "symfonyOrderId", symfonyIdHex);
         trySet(order, "orderNumber", getString(data, "order_number"));
         trySet(order, "customerName", getString(data, "customer_name"));
-        trySet(order, "deliveryDate", parseDate(getString(data, "delivery_date")));
+
+        // delivery_date is actually the delai code (not a date)
+        String deliveryDateCode = getString(data, "delivery_date");
+        trySet(order, "deliveryDate", deliveryDateCode);
+
         trySet(order, "orderDate", parseDate(getString(data, "order_date")));
         trySet(order, "totalCards", getInteger(data, "total_cards"));
-        trySet(order, "status", getString(data, "status"));
-        trySet(order, "priority", getInteger(data, "priority"));
+        trySet(order, "status", getInteger(data, "status"));
+
+        // NEW: Price from invoice
+        trySet(order, "price", getFloat(data, "price"));
+
+        // NEW: Delai code (replaces priority)
+        trySet(order, "delai", getString(data, "delai"));
 
         Order saved = orderRepository.save(order);
-        log.debug("✅ Synced order: {} (Symfony ID: {})", saved.getId(), symfonyId);
+        log.debug("✅ Synced order: {} (Symfony ID: {}, Delai: {}, Price: {})",
+                saved.getId(), symfonyIdHex, saved.getDelai(), saved.getPrice());
 
         return saved;
     }
 
     // ============================================================
-    // CARD SYNC - 8 Essential Fields Only
+    // CARD SYNC - 8 Essential Fields
     // ============================================================
 
     @Transactional
     public int syncCards(List<Map<String, Object>> cardsData) {
         log.info("🔄 Starting cards sync: {} cards", cardsData.size());
         int successCount = 0;
-        List<Card> batch = new ArrayList<>();
 
         for (Map<String, Object> cardData : cardsData) {
             try {
-                Card card = createCardFromData(cardData);
-                if (card != null) {
-                    batch.add(card);
-
-                    if (batch.size() >= BATCH_SIZE) {
-                        cardRepository.saveAll(batch);
-                        successCount += batch.size();
-                        log.info("✅ Saved batch: {} cards", batch.size());
-                        batch.clear();
-                    }
-                }
+                syncSingleCard(cardData);
+                successCount++;
             } catch (Exception e) {
                 log.error("❌ Error syncing card {}: {}", cardData.get("id"), e.getMessage());
             }
-        }
-
-        // Save remaining cards
-        if (!batch.isEmpty()) {
-            cardRepository.saveAll(batch);
-            successCount += batch.size();
-            log.info("✅ Saved final batch: {} cards", batch.size());
         }
 
         log.info("✅ Cards sync completed: {}/{} cards synced", successCount, cardsData.size());
         return successCount;
     }
 
-    private Card createCardFromData(Map<String, Object> data) {
-        Long symfonyOrderId = getLong(data, "order_id");
-        if (symfonyOrderId == null) {
-            log.warn("⚠️ Card {} has no order_id, skipping", data.get("id"));
+    private Card syncSingleCard(Map<String, Object> data) {
+        String cardIdHex = getString(data, "id");
+        if (cardIdHex == null) {
+            throw new IllegalArgumentException("Card must have an id");
+        }
+
+        String orderIdHex = getString(data, "order_id");
+        if (orderIdHex == null) {
+            log.warn("⚠️ Card {} has no order_id, skipping", cardIdHex);
             return null;
         }
 
-        // Find the order (must exist!)
-        Order order = findOrderBySymfonyId(symfonyOrderId).orElse(null);
+        // Find the order
+        Order order = findOrderBySymfonyId(orderIdHex).orElse(null);
         if (order == null) {
-            log.warn("⚠️ Order {} not found for card {}, skipping", symfonyOrderId, data.get("id"));
+            log.warn("⚠️ Order {} not found for card {}, skipping", orderIdHex, cardIdHex);
             return null;
         }
 
-        Card card = createNewCard();
+        // Find or create card
+        Card card = findCardBySymfonyId(cardIdHex)
+                .orElse(createNewCard());
 
         // Set the 8 essential fields
-        trySet(card, "symfonyCardId", getString(data, "id"));
+        trySet(card, "symfonyCardId", cardIdHex);
         trySet(card, "order", order);
-        trySet(card, "cardName", getString(data, "card_name", "Pokemon Card"));
-
-        // Processing status flags - THE KEY DATA FOR PLANNING!
+        trySet(card, "cardName", getString(data, "card_name"));
+        trySet(card, "processingStatus", getInteger(data, "processing_status"));
         trySet(card, "gradingCompleted", getBoolean(data, "grading_completed"));
         trySet(card, "certificationCompleted", getBoolean(data, "certification_completed"));
         trySet(card, "scanningCompleted", getBoolean(data, "scanning_completed"));
         trySet(card, "packagingCompleted", getBoolean(data, "packaging_completed"));
 
-        trySet(card, "processingStatus", getString(data, "processing_status", "PENDING"));
+        Card saved = cardRepository.save(card);
+        log.debug("✅ Synced card: {} for order {}", saved.getId(), order.getOrderNumber());
 
-        return card;
+        return saved;
     }
 
     // ============================================================
-    // Reflection-based Setters - Works with ANY entity structure
+    // Helper Methods - Reflection-based Setters
     // ============================================================
 
-    /**
-     * Try to set a field value using reflection
-     * Tries multiple approaches to work with any entity structure
-     */
     private void trySet(Object obj, String fieldName, Object value) {
-        if (value == null) return;
+        if (value == null) {
+            return; // Don't set null values
+        }
 
-        // Try standard setter first
-        if (tryStandardSetter(obj, fieldName, value)) return;
+        // Try standard setter
+        if (tryStandardSetter(obj, fieldName, value)) {
+            return;
+        }
 
-        // Try alternative French field names
-        if (tryFrenchAlternatives(obj, fieldName, value)) return;
+        // Try French alternatives
+        if (tryFrenchAlternatives(obj, fieldName, value)) {
+            return;
+        }
 
-        // Log if we couldn't set the field (not critical, might not exist)
-        log.trace("⚠️ Could not set field '{}' on {}", fieldName, obj.getClass().getSimpleName());
+        // Log warning if field couldn't be set
+        log.warn("⚠️ Could not set field '{}' on {}", fieldName, obj.getClass().getSimpleName());
     }
 
     private boolean tryStandardSetter(Object obj, String fieldName, Object value) {
         try {
-            String setterName = "set" + capitalize(fieldName);
+            String setterName = "set" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
             Method[] methods = obj.getClass().getMethods();
 
             for (Method method : methods) {
@@ -219,22 +230,42 @@ public class MinimalSyncService {
     // Repository Helpers
     // ============================================================
 
-    private java.util.Optional<Order> findOrderBySymfonyId(Long symfonyId) {
+    private java.util.Optional<Order> findOrderBySymfonyId(String symfonyIdHex) {
         try {
-            Method method = OrderRepository.class.getMethod("findBySymfonyOrderId", Long.class);
-            return (java.util.Optional<Order>) method.invoke(orderRepository, symfonyId);
+            Method method = OrderRepository.class.getMethod("findBySymfonyOrderId", String.class);
+            return (java.util.Optional<Order>) method.invoke(orderRepository, symfonyIdHex);
         } catch (Exception e) {
             // Method doesn't exist, try alternative
             return orderRepository.findAll().stream()
-                    .filter(o -> symfonyId.equals(getOrderSymfonyId(o)))
+                    .filter(o -> symfonyIdHex.equals(getOrderSymfonyId(o)))
                     .findFirst();
         }
     }
 
-    private Long getOrderSymfonyId(Order order) {
+    private String getOrderSymfonyId(Order order) {
         try {
             Method method = Order.class.getMethod("getSymfonyOrderId");
-            return (Long) method.invoke(order);
+            return (String) method.invoke(order);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private java.util.Optional<Card> findCardBySymfonyId(String symfonyIdHex) {
+        try {
+            Method method = CardRepository.class.getMethod("findBySymfonyCardId", String.class);
+            return (java.util.Optional<Card>) method.invoke(cardRepository, symfonyIdHex);
+        } catch (Exception e) {
+            return cardRepository.findAll().stream()
+                    .filter(c -> symfonyIdHex.equals(getCardSymfonyId(c)))
+                    .findFirst();
+        }
+    }
+
+    private String getCardSymfonyId(Card card) {
+        try {
+            Method method = Card.class.getMethod("getSymfonyCardId");
+            return (String) method.invoke(card);
         } catch (Exception e) {
             return null;
         }
@@ -271,23 +302,26 @@ public class MinimalSyncService {
 
     private Integer getInteger(Map<String, Object> data, String key) {
         Object value = data.get(key);
-        if (value == null) return 0;
+        if (value == null) return null;
         if (value instanceof Integer) return (Integer) value;
+        if (value instanceof Number) return ((Number) value).intValue();
         try {
             return Integer.parseInt(value.toString());
         } catch (NumberFormatException e) {
-            return 0;
+            log.warn("⚠️ Could not parse integer from key '{}': {}", key, value);
+            return null;
         }
     }
 
-    private Long getLong(Map<String, Object> data, String key) {
+    private Float getFloat(Map<String, Object> data, String key) {
         Object value = data.get(key);
         if (value == null) return null;
-        if (value instanceof Long) return (Long) value;
-        if (value instanceof Integer) return ((Integer) value).longValue();
+        if (value instanceof Float) return (Float) value;
+        if (value instanceof Number) return ((Number) value).floatValue();
         try {
-            return Long.parseLong(value.toString());
+            return Float.parseFloat(value.toString());
         } catch (NumberFormatException e) {
+            log.warn("⚠️ Could not parse float from key '{}': {}", key, value);
             return null;
         }
     }
@@ -296,23 +330,23 @@ public class MinimalSyncService {
         Object value = data.get(key);
         if (value == null) return false;
         if (value instanceof Boolean) return (Boolean) value;
+        if (value instanceof Number) return ((Number) value).intValue() != 0;
         return Boolean.parseBoolean(value.toString());
     }
 
-    private LocalDate parseDate(String dateString) {
-        if (dateString == null || dateString.trim().isEmpty()) {
+    private LocalDate parseDate(String dateStr) {
+        if (dateStr == null || dateStr.isEmpty()) {
             return null;
         }
         try {
-            return LocalDate.parse(dateString, DATE_FORMATTER);
+            // Handle both "2025-07-04" and "2025-07-04 12:30:00" formats
+            if (dateStr.length() > 10) {
+                dateStr = dateStr.substring(0, 10);
+            }
+            return LocalDate.parse(dateStr, DATE_FORMATTER);
         } catch (Exception e) {
-            log.warn("⚠️ Could not parse date: {}", dateString);
+            log.warn("⚠️ Could not parse date: {}", dateStr);
             return null;
         }
-    }
-
-    private String capitalize(String str) {
-        if (str == null || str.isEmpty()) return str;
-        return str.substring(0, 1).toUpperCase() + str.substring(1);
     }
 }

@@ -44,20 +44,20 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     /**
      * Find orders with delivery date before given date (overdue orders)
      */
-    @Query("SELECT o FROM Order o WHERE o.deliveryDate < :date AND o.status != 'COMPLETED'")
-    List<Order> findOverdueOrders(@Param("date") LocalDate date);
+//     @Query("SELECT o FROM Order o WHERE o.deliveryDate < :date AND o.status != 'COMPLETED'")
+//     List<Order> findOverdueOrders(@Param("date") LocalDate date);
 
     /**
      * Find orders to be delivered soon (within next N days)
      */
-    @Query("SELECT o FROM Order o WHERE o.deliveryDate BETWEEN :start AND :end ORDER BY o.deliveryDate ASC")
-    List<Order> findOrdersDueSoon(@Param("start") LocalDate start, @Param("end") LocalDate end);
+//     @Query("SELECT o FROM Order o WHERE o.deliveryDate BETWEEN :start AND :end ORDER BY o.deliveryDate ASC")
+//     List<Order> findOrdersDueSoon(@Param("start") LocalDate start, @Param("end") LocalDate end);
 
     /**
      * Find orders ordered by priority (earliest delivery date first)
      */
-    @Query("SELECT o FROM Order o WHERE o.status != 'COMPLETED' ORDER BY o.deliveryDate ASC, o.priority ASC")
-    List<Order> findAllOrderedByPriority();
+//     @Query("SELECT o FROM Order o WHERE o.status != 'COMPLETED' ORDER BY o.deliveryDate ASC, o.priority ASC")
+//     List<Order> findAllOrderedByPriority();
 
     /**
      * Find orders for a specific customer
@@ -77,8 +77,8 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     /**
      * Find pending orders (not yet completed)
      */
-    @Query("SELECT o FROM Order o WHERE o.status IN ('PENDING', 'IN_PROGRESS') ORDER BY o.deliveryDate ASC")
-    List<Order> findPendingOrders();
+//    @Query("SELECT o FROM Order o WHERE o.status IN ('PENDING', 'IN_PROGRESS') ORDER BY o.deliveryDate ASC")
+//    List<Order> findPendingOrders();
 
     /**
      * Get total cards count across all orders
@@ -89,6 +89,6 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     /**
      * Get completed cards count across all orders
      */
-    @Query("SELECT SUM(o.completedCards) FROM Order o")
-    Long getCompletedCardsCount();
+//     @Query("SELECT SUM(o.completedCards) FROM Order o")
+//     Long getCompletedCardsCount();
 }

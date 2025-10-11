@@ -68,7 +68,7 @@ public class OrderService {
             order.setOrderDate(LocalDate.now());
         }
         if (order.getPriority() == null) {
-            order.setPriority(Order.OrderPriority.FAST);
+            order.setDelai("F");
         }
 
         Order savedOrder = orderRepository.save(order);
@@ -351,17 +351,17 @@ public class OrderService {
      * Search orders by various criteria
      * @param searchTerm search term
      * @param status order status filter
-     * @param priority priority filter
+     * @param delai
      * @return list of filtered orders
      */
     @Transactional(readOnly = true)
-    public List<Order> searchOrders(String searchTerm, Integer status, Order.OrderPriority priority) {
+    public List<Order> searchOrders(String searchTerm, Integer status, String delai) {
         return orderRepository.findAll().stream()
                 .filter(order -> searchTerm == null ||
                         order.getOrderNumber().toLowerCase().contains(searchTerm.toLowerCase()) ||
                         order.getCustomerName().toLowerCase().contains(searchTerm.toLowerCase()))
                 .filter(order -> status == null || order.getStatus().equals(status))
-                .filter(order -> priority == null || order.getPriority().equals(priority))
+                .filter(order -> delai == null || delai.equals(order.getDelai()))
                 .collect(Collectors.toList());
     }
     // ========== STATISTICS METHODS ==========
@@ -440,20 +440,21 @@ public class OrderService {
      * Calculate deadline label based on priority
      */
     private String calculateDeadlineLabel(Order order) {
-        if (order.getPriority() == Order.OrderPriority.EXCELSIOR) {
+        String delai = order.getDelai();
+        if ("X".equals(delai)) {  // Express (was EXCELSIOR)
             return "X"; // Most urgent (add this new case)
-        } else if (order.getPriority() == Order.OrderPriority.FAST_PLUS) {
+        } else if ("F+".equals(delai)) {  // Fast+ (was FAST_PLUS)
             return "F+"; // Urgent
-        } else if (order.getPriority() == Order.OrderPriority.FAST) {
+        } else if ("F".equals(delai)) {  // Fast (was FAST)
             return "F"; // Medium
-        } else if (order.getPriority() == Order.OrderPriority.CLASSIC) {
+        } else if ("C".equals(delai)) {  // Classic (was CLASSIC)
             return "C"; // Normal
+        } else if ("E".equals(delai)) {  // Economy (new)
+            return "E"; // Economic
         } else {
             return "C"; // Default fallback
         }
     }
-
-
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getRecentOrdersAsMap() {

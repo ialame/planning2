@@ -528,17 +528,21 @@ public class OrderController {
                 }
             }
 
-            Order.OrderPriority orderPriority = null;
+            String delai = null;
             if (priority != null && !priority.isEmpty()) {
-                try {
-                    orderPriority = Order.OrderPriority.valueOf(priority.toUpperCase());
-                } catch (IllegalArgumentException e) {
-                    System.err.println("Invalid priority: " + priority);
-                }
+                // Map old priority names to delai codes
+                delai = switch (priority.toUpperCase()) {
+                    case "EXCELSIOR" -> "X";
+                    case "FAST_PLUS" -> "F+";
+                    case "FAST" -> "F";
+                    case "CLASSIC" -> "C";
+                    case "ECONOMY" -> "E";
+                    default -> priority; // If already in delai format (X, F+, F, C, E)
+                };
             }
 
 // Update the service call to use Integer instead of OrderStatus
-            List<Order> orders = orderService.searchOrders(searchTerm, orderStatusCode, orderPriority);
+            List<Order> orders = orderService.searchOrders(searchTerm, statusInt, delai);
 
             List<Map<String, Object>> orderMaps = orders.stream()
                     .map(order -> {
