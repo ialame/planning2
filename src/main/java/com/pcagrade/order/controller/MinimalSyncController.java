@@ -3,7 +3,7 @@ package com.pcagrade.order.controller;
 import com.pcagrade.order.entity.Order;
 import com.pcagrade.order.repository.OrderRepository;
 import com.pcagrade.order.service.CardCertificationSyncService;
-import com.pcagrade.order.util.UlidConverter;
+import com.pcagrade.order.service.TranslationSyncService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,15 +17,19 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * Minimal controller for synchronizing orders and cards from Symfony API
- * Focuses on essential fields needed for planning
+ * FIXED Sync Controller
+ *
+ * Key fix: Uses symfonyOrderId field to store Symfony ID instead of trying
+ * to use it as primary key. This allows Spring Boot to generate its own ULIDs
+ * while maintaining the mapping to Symfony orders.
  */
 @RestController
 @RequestMapping("/api/sync")
 public class MinimalSyncController {
 
     private static final Logger log = LoggerFactory.getLogger(MinimalSyncController.class);
-    private static final int CARD_BATCH_SIZE = 100; // Process cards in batches
+    private static final int CARD_BATCH_SIZE = 100;
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private final OrderRepository orderRepository;
     private final CardCertificationSyncService cardSyncService;
@@ -34,13 +38,100 @@ public class MinimalSyncController {
     @Value("${symfony.api.base-url:http://localhost:8000}")
     private String symfonyApiUrl;
 
+    private final TranslationSyncService translationSyncService;
+
+    // Mettre à jour le constructeur
     public MinimalSyncController(
             OrderRepository orderRepository,
             CardCertificationSyncService cardSyncService,
+            TranslationSyncService translationSyncService,
             RestTemplate restTemplate) {
         this.orderRepository = orderRepository;
         this.cardSyncService = cardSyncService;
+        this.translationSyncService = translationSyncService;
         this.restTemplate = restTemplate;
+    }
+
+    /**
+     * Sync English card translations
+     * POST /api/sync/translations
+     */
+    @PostMapping("/translations")
+    public ResponseEntity<Map<String, Object>> syncTranslations() {
+        log.info("🔄 Starting English translations sync");
+
+        Map<String, Object> result = new HashMap<>();
+        long startTime = System.currentTimeMillis();
+
+        try {
+            String translationsUrl = symfonyApiUrl + "/api/planning/export/translations?limit=50000";
+            log.info("📡 Fetching English translations from: {}", translationsUrl);
+
+            Map<String, Object> response = restTemplate.getForObject(translationsUrl, Map.class);
+
+            if (response == null || !response.containsKey("translations")) {
+                throw new RuntimeException("Invalid response from Symfony API");
+            }
+
+            List<Map<String, Object>> translationsData = (List<Map<String, Object>>) response.get("translations");
+            log.info("📚 Received {} English translations from Symfony", translationsData.size());
+
+            int syncedCount = translationSyncService.syncTranslations(translationsData);
+            Map<String, Object> stats = translationSyncService.getTranslationStats();
+
+            long duration = System.currentTimeMillis() - startTime;
+
+            result.put("success", true);
+            result.put("total_translations", translationsData.size());
+            result.put("synced_count", syncedCount);
+            result.put("duration_ms", duration);
+            result.put("locale", "EN");
+            result.put("stats", stats);
+            result.put("message", String.format("Successfully synced %d English translations", syncedCount));
+
+            return ResponseEntity.ok(result);
+
+        } catch (Exception e) {
+            log.error("❌ Error syncing translations", e);
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
+        }
+    }
+
+    /**
+     * Sync all data: orders then cards
+     * POST /api/sync/all
+     */
+    @PostMapping("/all")
+    public ResponseEntity<Map<String, Object>> syncAll() {
+        log.info("🔄 Starting complete synchronization...");
+
+        Map<String, Object> response = new HashMap<>();
+        long startTime = System.currentTimeMillis();
+
+        try {
+            // Step 1: Sync orders
+            ResponseEntity<Map<String, Object>> ordersResult = syncOrders();
+            response.put("orders", ordersResult.getBody());
+
+            // Step 2: Sync cards
+            ResponseEntity<Map<String, Object>> cardsResult = syncCards(null, null);
+            response.put("cards", cardsResult.getBody());
+
+            long duration = System.currentTimeMillis() - startTime;
+            response.put("success", true);
+            response.put("duration_ms", duration);
+            response.put("message", "Complete sync successful");
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("❌ Error during complete sync", e);
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
     }
 
     /**
@@ -56,7 +147,7 @@ public class MinimalSyncController {
 
         try {
             // Fetch orders from Symfony API
-            String ordersUrl = symfonyApiUrl + "/api/planning/export/orders?limit=10000&exclude_completed=true";
+            String ordersUrl = symfonyApiUrl + "/api/planning/export/orders?limit=50000";
             log.info("📡 Fetching orders from: {}", ordersUrl);
 
             Map<String, Object> response = restTemplate.getForObject(ordersUrl, Map.class);
@@ -94,21 +185,21 @@ public class MinimalSyncController {
             result.put("duration_ms", duration);
             result.put("message", String.format("Synced %d/%d orders", syncedCount, ordersData.size()));
 
-            log.info("✅ Orders sync completed: {} orders in {}ms", syncedCount, duration);
+            log.info("✅ Orders sync completed: {} orders synced in {}ms", syncedCount, duration);
+
             return ResponseEntity.ok(result);
 
         } catch (Exception e) {
             log.error("❌ Error syncing orders", e);
             result.put("success", false);
             result.put("error", e.getMessage());
-            result.put("symfony_url", symfonyApiUrl);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
 
     /**
      * Sync cards from Symfony API
-     * POST /api/sync/cards
+     * POST /api/sync/cards?limit=100&orderId=xxx
      */
     @PostMapping("/cards")
     public ResponseEntity<Map<String, Object>> syncCards(
@@ -119,22 +210,20 @@ public class MinimalSyncController {
 
         Map<String, Object> result = new HashMap<>();
         long startTime = System.currentTimeMillis();
-        int totalSynced = 0;
-        int totalErrors = 0;
 
         try {
-            // Build API URL with parameters
-            StringBuilder urlBuilder = new StringBuilder(symfonyApiUrl)
-                    .append("/api/planning/export/cards");
+            // Build URL with parameters
+            StringBuilder urlBuilder = new StringBuilder(symfonyApiUrl);
+            urlBuilder.append("/api/planning/export/cards");
 
             List<String> params = new ArrayList<>();
             if (limit != null) {
                 params.add("limit=" + limit);
             } else {
-                params.add("limit=50000"); // Default high limit
+                params.add("limit=50000"); // Default limit
             }
             if (orderId != null) {
-                params.add("order_id=" + orderId);
+                params.add("orderId=" + orderId);
             }
 
             if (!params.isEmpty()) {
@@ -144,6 +233,7 @@ public class MinimalSyncController {
             String cardsUrl = urlBuilder.toString();
             log.info("📡 Fetching cards from: {}", cardsUrl);
 
+            // Fetch cards from Symfony API
             Map<String, Object> response = restTemplate.getForObject(cardsUrl, Map.class);
 
             if (response == null || !response.containsKey("cards")) {
@@ -153,98 +243,45 @@ public class MinimalSyncController {
             List<Map<String, Object>> cardsData = (List<Map<String, Object>>) response.get("cards");
             log.info("🎴 Received {} cards from Symfony", cardsData.size());
 
-            // Process cards in batches
-            int totalCards = cardsData.size();
-            for (int i = 0; i < totalCards; i += CARD_BATCH_SIZE) {
-                int endIndex = Math.min(i + CARD_BATCH_SIZE, totalCards);
-                List<Map<String, Object>> batch = cardsData.subList(i, endIndex);
+            // Sync cards using the service
+            int syncedCount = cardSyncService.syncCardsBatch(cardsData, CARD_BATCH_SIZE);
 
-                log.info("📦 Processing batch {}-{} of {}", i + 1, endIndex, totalCards);
-
-                try {
-                    int batchSynced = cardSyncService.syncCardsBatch(batch, CARD_BATCH_SIZE);
-                    totalSynced += batchSynced;
-                    log.info("✅ Batch processed: {} cards synced", batchSynced);
-                } catch (Exception e) {
-                    totalErrors += batch.size();
-                    log.error("❌ Error processing batch {}-{}", i + 1, endIndex, e);
-                }
-            }
+            // Get statistics
+            Map<String, Object> stats = cardSyncService.getSyncStats();
 
             long duration = System.currentTimeMillis() - startTime;
 
             result.put("success", true);
-            result.put("total_cards", totalCards);
-            result.put("synced_count", totalSynced);
-            result.put("error_count", totalErrors);
+            result.put("total_cards", cardsData.size());
+            result.put("synced_count", syncedCount);
+            result.put("error_count", cardsData.size() - syncedCount);
             result.put("duration_ms", duration);
-            result.put("message", String.format("Successfully synced %d/%d cards", totalSynced, totalCards));
+            result.put("stats", stats);
+            result.put("message", String.format("Successfully synced %d/%d cards", syncedCount, cardsData.size()));
 
-            // Add sync statistics
-            result.put("stats", cardSyncService.getSyncStats());
+            log.info("✅ Cards sync completed: {} cards synced in {}ms", syncedCount, duration);
 
-            log.info("✅ Cards sync completed: {}/{} cards in {}ms", totalSynced, totalCards, duration);
             return ResponseEntity.ok(result);
 
         } catch (Exception e) {
             log.error("❌ Error syncing cards", e);
             result.put("success", false);
-            result.put("synced_count", totalSynced);
-            result.put("error_count", totalErrors);
             result.put("error", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
 
     /**
-     * Sync all data (orders + cards)
-     * POST /api/sync/all
-     */
-    @PostMapping("/all")
-    public ResponseEntity<Map<String, Object>> syncAll() {
-        log.info("🔄 Starting complete sync...");
-
-        Map<String, Object> result = new HashMap<>();
-        long startTime = System.currentTimeMillis();
-
-        try {
-            // Step 1: Sync orders
-            log.info("📦 Step 1/2: Syncing orders...");
-            ResponseEntity<Map<String, Object>> ordersResponse = syncOrders();
-            result.put("orders", ordersResponse.getBody());
-
-            // Step 2: Sync cards
-            log.info("🎴 Step 2/2: Syncing cards...");
-            ResponseEntity<Map<String, Object>> cardsResponse = syncCards(null, null);
-            result.put("cards", cardsResponse.getBody());
-
-            long duration = System.currentTimeMillis() - startTime;
-            result.put("success", true);
-            result.put("duration_ms", duration);
-            result.put("message", "Complete sync successful");
-
-            log.info("✅ Complete sync finished in {}ms", duration);
-            return ResponseEntity.ok(result);
-
-        } catch (Exception e) {
-            log.error("❌ Error during complete sync", e);
-            result.put("success", false);
-            result.put("error", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
-        }
-    }
-
-    /**
-     * Check Symfony API connection
+     * Health check
      * GET /api/sync/health
      */
     @GetMapping("/health")
-    public ResponseEntity<Map<String, Object>> checkHealth() {
+    public ResponseEntity<Map<String, Object>> healthCheck() {
         Map<String, Object> result = new HashMap<>();
 
         try {
-            String url = symfonyApiUrl + "/api/planning/export/health";
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            String healthUrl = symfonyApiUrl + "/api/planning/export/health";
+            Map<String, Object> response = restTemplate.getForObject(healthUrl, Map.class);
 
             result.put("symfony_api", "connected");
             result.put("symfony_url", symfonyApiUrl);
@@ -271,59 +308,59 @@ public class MinimalSyncController {
     public ResponseEntity<Map<String, Object>> getStats() {
         Map<String, Object> stats = new HashMap<>();
 
-        // Order statistics
         long totalOrders = orderRepository.count();
         stats.put("total_orders", totalOrders);
-
-        // Card statistics from sync service
         stats.put("card_stats", cardSyncService.getSyncStats());
-
         stats.put("message", "Sync statistics retrieved successfully");
 
         return ResponseEntity.ok(stats);
     }
 
+    // ============================================================
+    // PRIVATE HELPER METHODS
+    // ============================================================
+
     /**
      * Create or update Order from Symfony data
+     *
+     * KEY FIX: Uses symfonyOrderId to find/link orders instead of trying
+     * to use Symfony ID as primary key
      */
     private Order createOrUpdateOrder(Map<String, Object> data) {
         try {
-            String orderIdHex = (String) data.get("id");
-            if (orderIdHex == null || orderIdHex.isEmpty()) {
+            String symfonyOrderId = (String) data.get("id");
+            if (symfonyOrderId == null || symfonyOrderId.isEmpty()) {
                 log.warn("⚠️ Order has no id, skipping");
                 return null;
             }
 
-// Use Symfony ID directly as the primary key
-            UUID orderId = UlidConverter.hexToUuid(orderIdHex);
-
-// Try to find existing order by this ID
-            Order order = orderRepository.findById(orderId)
+            // ✅ FIXED: Find order by symfonyOrderId field, not by primary key
+            Order order = orderRepository.findBySymfonyOrderId(symfonyOrderId)
                     .orElse(new Order());
 
-// Set the Symfony ID as primary key
-            order.setId(orderId);
+            // ✅ FIXED: Store Symfony ID in separate field
+            order.setSymfonyOrderId(symfonyOrderId);
 
-            // Map fields from API
+            // Map other fields from API
             order.setOrderNumber((String) data.get("order_number"));
+            order.setCustomerName((String) data.get("customer_name"));
             order.setTotalCards(getInteger(data, "total_cards", 0));
             order.setStatus(getInteger(data, "status", 1));
             order.setDelai((String) data.get("delai"));
             order.setPrice(getFloat(data, "price", 0.0f));
 
-            // Parse delivery_date (stored as String in database)
+            // Parse dates
             String deliveryDateStr = (String) data.get("delivery_date");
-            if (deliveryDateStr != null) {
+            if (deliveryDateStr != null && !deliveryDateStr.isEmpty()) {
                 order.setDeliveryDate(deliveryDateStr);
             }
 
-            // Parse order_date
-            String orderDateStr = (String) data.get("date");
-            if (orderDateStr != null) {
+            String orderDateStr = (String) data.get("order_date");
+            if (orderDateStr != null && !orderDateStr.isEmpty()) {
                 try {
-                    order.setOrderDate(LocalDate.parse(orderDateStr, DateTimeFormatter.ISO_LOCAL_DATE));
+                    order.setOrderDate(LocalDate.parse(orderDateStr, DATE_FORMATTER));
                 } catch (Exception e) {
-                    log.warn("⚠️ Invalid order date format: {}", orderDateStr);
+                    log.warn("⚠️ Invalid order_date format: {}", orderDateStr);
                 }
             }
 
@@ -335,17 +372,11 @@ public class MinimalSyncController {
         }
     }
 
-    /**
-     * Helper: Get integer value with default
-     */
-    private Integer getInteger(Map<String, Object> map, String key, int defaultValue) {
+    private Integer getInteger(Map<String, Object> map, String key, Integer defaultValue) {
         Object value = map.get(key);
-        if (value == null) {
-            return defaultValue;
-        }
-        if (value instanceof Number) {
-            return ((Number) value).intValue();
-        }
+        if (value == null) return defaultValue;
+        if (value instanceof Integer) return (Integer) value;
+        if (value instanceof Number) return ((Number) value).intValue();
         try {
             return Integer.parseInt(value.toString());
         } catch (Exception e) {
@@ -353,37 +384,13 @@ public class MinimalSyncController {
         }
     }
 
-    /**
-     * Helper: Get float value with default
-     */
-    private Float getFloat(Map<String, Object> map, String key, float defaultValue) {
+    private Float getFloat(Map<String, Object> map, String key, Float defaultValue) {
         Object value = map.get(key);
-        if (value == null) {
-            return defaultValue;
-        }
-        if (value instanceof Number) {
-            return ((Number) value).floatValue();
-        }
+        if (value == null) return defaultValue;
+        if (value instanceof Float) return (Float) value;
+        if (value instanceof Number) return ((Number) value).floatValue();
         try {
             return Float.parseFloat(value.toString());
-        } catch (Exception e) {
-            return defaultValue;
-        }
-    }
-
-    /**
-     * Helper: Get double value with default
-     */
-    private Double getDouble(Map<String, Object> map, String key, double defaultValue) {
-        Object value = map.get(key);
-        if (value == null) {
-            return defaultValue;
-        }
-        if (value instanceof Number) {
-            return ((Number) value).doubleValue();
-        }
-        try {
-            return Double.parseDouble(value.toString());
         } catch (Exception e) {
             return defaultValue;
         }

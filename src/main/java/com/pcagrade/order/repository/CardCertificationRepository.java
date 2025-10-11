@@ -3,7 +3,6 @@ package com.pcagrade.order.repository;
 import com.pcagrade.order.entity.CardCertification;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -12,7 +11,7 @@ import java.util.UUID;
 
 /**
  * Repository for CardCertification entity
- * Handles database operations for card certifications
+ * Handles database operations for card certifications with planning flags
  */
 @Repository
 public interface CardCertificationRepository extends JpaRepository<CardCertification, UUID> {
@@ -28,54 +27,81 @@ public interface CardCertificationRepository extends JpaRepository<CardCertifica
     List<CardCertification> findByOrderId(UUID orderId);
 
     /**
-     * Count certifications for an order
+     * Check if certification exists by Symfony ID
      */
-    long countByOrderId(UUID orderId);
+    boolean existsBySymfonyCertificationId(String symfonyCertificationId);
+
+    // ============================================================
+    // COUNTING METHODS FOR STATISTICS
+    // ============================================================
 
     /**
-     * Find incomplete certifications (not fully processed)
+     * Count cards by grading completion status
      */
-    @Query("SELECT c FROM CardCertification c WHERE " +
+    long countByGradingCompleted(boolean completed);
+
+    /**
+     * Count cards by certification completion status
+     */
+    long countByCertificationCompleted(boolean completed);
+
+    /**
+     * Count cards by scanning completion status
+     */
+    long countByScanningCompleted(boolean completed);
+
+    /**
+     * Count cards by packaging completion status
+     */
+    long countByPackagingCompleted(boolean completed);
+
+    /**
+     * Count incomplete cards (at least one task not completed)
+     */
+    @Query("SELECT COUNT(c) FROM CardCertification c WHERE " +
             "c.gradingCompleted = false OR " +
             "c.certificationCompleted = false OR " +
             "c.scanningCompleted = false OR " +
             "c.packagingCompleted = false")
-    List<CardCertification> findIncompleteCertifications();
+    long countIncompleteCards();
 
     /**
-     * Find certifications needing grading
+     * Find incomplete certifications for a specific order
      */
-    @Query("SELECT c FROM CardCertification c WHERE c.gradingCompleted = false")
-    List<CardCertification> findCertificationsNeedingGrading();
+    @Query("SELECT c FROM CardCertification c WHERE c.orderId = :orderId AND (" +
+            "c.gradingCompleted = false OR " +
+            "c.certificationCompleted = false OR " +
+            "c.scanningCompleted = false OR " +
+            "c.packagingCompleted = false)")
+    List<CardCertification> findIncompleteByOrderId(UUID orderId);
+
+    // ============================================================
+    // TASK-SPECIFIC QUERIES
+    // ============================================================
 
     /**
-     * Find certifications needing certification
+     * Find all cards needing grading
+     */
+    List<CardCertification> findByGradingCompletedFalse();
+
+    /**
+     * Find all cards needing certification
      */
     @Query("SELECT c FROM CardCertification c WHERE " +
             "c.gradingCompleted = true AND c.certificationCompleted = false")
-    List<CardCertification> findCertificationsNeedingCertification();
+    List<CardCertification> findNeedingCertification();
 
     /**
-     * Find certifications needing scanning
+     * Find all cards needing scanning
      */
     @Query("SELECT c FROM CardCertification c WHERE " +
             "c.certificationCompleted = true AND c.scanningCompleted = false")
-    List<CardCertification> findCertificationsNeedingScanning();
+    List<CardCertification> findNeedingScanning();
 
     /**
-     * Find certifications needing packaging
+     * Find all cards needing packaging
      */
     @Query("SELECT c FROM CardCertification c WHERE " +
             "c.scanningCompleted = true AND c.packagingCompleted = false")
-    List<CardCertification> findCertificationsNeedingPackaging();
-
-    /**
-     * Count completed certifications for an order
-     */
-    @Query("SELECT COUNT(c) FROM CardCertification c WHERE c.orderId = :orderId AND " +
-            "c.gradingCompleted = true AND " +
-            "c.certificationCompleted = true AND " +
-            "c.scanningCompleted = true AND " +
-            "c.packagingCompleted = true")
-    long countCompletedByOrderId(@Param("orderId") UUID orderId);
+    List<CardCertification> findNeedingPackaging();
 }

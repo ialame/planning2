@@ -1,28 +1,31 @@
 package com.pcagrade.order.service;
 
 import com.pcagrade.order.entity.CardCertification;
+import com.pcagrade.order.entity.Order;
 import com.pcagrade.order.repository.CardCertificationRepository;
 import com.pcagrade.order.repository.OrderRepository;
-import com.pcagrade.order.util.UlidConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 /**
- * Service for synchronizing card certification data from Symfony API
- * Maps API data to CardCertification entities with processing status flags
+ * Improved Card Certification Sync Service
+ *
+ * Key improvements:
+ * - Smaller batch size (50 instead of 100)
+ * - Better error handling (continues on single card errors)
+ * - Detailed logging for debugging
+ * - Separate transaction per batch to avoid rollback-only issues
  */
 @Service
 public class CardCertificationSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(CardCertificationSyncService.class);
+    private static final int BATCH_SIZE = 50; // Reduced from 100
 
     private final CardCertificationRepository cardCertificationRepository;
     private final OrderRepository orderRepository;
@@ -35,43 +38,81 @@ public class CardCertificationSyncService {
     }
 
     /**
-     * Sync cards in batches with proper transaction management
-     * Uses REQUIRES_NEW to ensure each batch gets its own transaction
-     *
-     * @param cardsData List of card data from Symfony API
-     * @param batchSize Number of cards to process per batch
-     * @return Number of successfully synced cards
+     * Sync cards in batches with improved error handling
+     * Each batch gets its own transaction to prevent rollback cascading
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
-    public int syncCardsBatch(List<Map<String, Object>> cardsData, int batchSize) {
-        int successCount = 0;
-        List<CardCertification> batch = new ArrayList<>();
+    public int syncCardsBatch(List<Map<String, Object>> cardsData, int requestedBatchSize) {
+        log.info("🔄 Starting card sync: {} cards to process", cardsData.size());
 
-        for (Map<String, Object> cardData : cardsData) {
+        int totalSuccess = 0;
+        int totalErrors = 0;
+        int batchNumber = 0;
+
+        // Use smaller batch size for stability
+        int effectiveBatchSize = Math.min(requestedBatchSize, BATCH_SIZE);
+
+        // Process in batches
+        for (int i = 0; i < cardsData.size(); i += effectiveBatchSize) {
+            batchNumber++;
+            int endIndex = Math.min(i + effectiveBatchSize, cardsData.size());
+            List<Map<String, Object>> batch = cardsData.subList(i, endIndex);
+
             try {
-                CardCertification card = createOrUpdateCardFromData(cardData);
-                if (card != null) {
-                    batch.add(card);
+                int batchSuccess = syncSingleBatch(batch, batchNumber);
+                totalSuccess += batchSuccess;
 
-                    // Save batch when it reaches the batch size
-                    if (batch.size() >= batchSize) {
-                        cardCertificationRepository.saveAll(batch);
-                        successCount += batch.size();
-                        log.info("✅ Saved batch of {} cards", batch.size());
-                        batch.clear();
-                    }
+                if (batchSuccess < batch.size()) {
+                    totalErrors += (batch.size() - batchSuccess);
+                }
+
+                if (batchNumber % 10 == 0) {
+                    log.info("📊 Progress: Processed {} batches, {} cards synced, {} errors",
+                            batchNumber, totalSuccess, totalErrors);
                 }
             } catch (Exception e) {
-                log.error("❌ Error processing card: {}", cardData.get("id"), e);
-                // Continue with next card instead of breaking entire batch
+                log.error("❌ Batch {} failed completely: {}", batchNumber, e.getMessage());
+                totalErrors += batch.size();
             }
         }
 
-        // Save remaining cards
-        if (!batch.isEmpty()) {
-            cardCertificationRepository.saveAll(batch);
-            successCount += batch.size();
-            log.info("✅ Saved final batch of {} cards", batch.size());
+        log.info("✅ Card sync completed: {}/{} cards synced ({} errors)",
+                totalSuccess, cardsData.size(), totalErrors);
+
+        return totalSuccess;
+    }
+
+    /**
+     * Sync a single batch with its own transaction
+     * REQUIRES_NEW ensures each batch is independent
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    protected int syncSingleBatch(List<Map<String, Object>> batchData, int batchNumber) {
+        List<CardCertification> cardsToSave = new ArrayList<>();
+        int successCount = 0;
+
+        for (Map<String, Object> cardData : batchData) {
+            try {
+                CardCertification card = createOrUpdateCardFromData(cardData);
+                if (card != null) {
+                    cardsToSave.add(card);
+                    successCount++;
+                }
+            } catch (Exception e) {
+                String cardId = getString(cardData, "id");
+                log.warn("⚠️ Skipping card {} in batch {}: {}", cardId, batchNumber, e.getMessage());
+                // Continue with next card - don't let one bad card fail the whole batch
+            }
+        }
+
+        // Save all valid cards in this batch
+        if (!cardsToSave.isEmpty()) {
+            try {
+                cardCertificationRepository.saveAll(cardsToSave);
+                log.debug("✅ Batch {} saved: {}/{} cards", batchNumber, cardsToSave.size(), batchData.size());
+            } catch (Exception e) {
+                log.error("❌ Failed to save batch {}: {}", batchNumber, e.getMessage());
+                throw e; // Let this batch fail but don't affect other batches
+            }
         }
 
         return successCount;
@@ -79,116 +120,101 @@ public class CardCertificationSyncService {
 
     /**
      * Create or update CardCertification from Symfony API data
-     * Maps processing status flags from API to entity
      */
     private CardCertification createOrUpdateCardFromData(Map<String, Object> data) {
-        try {
-            String certificationIdHex = getString(data, "id");
-            if (certificationIdHex == null || certificationIdHex.isEmpty()) {
-                log.warn("⚠️ Card has no id, skipping");
-                return null;
-            }
-
-            // Try to find existing certification
-            CardCertification card = cardCertificationRepository
-                    .findBySymfonyCertificationId(certificationIdHex)
-                    .orElse(new CardCertification());
-
-            // Set Symfony ID for future lookups
-            card.setSymfonyCertificationId(certificationIdHex);
-
-            // Map order_id (hex string to UUID)
-            String orderIdHex = getString(data, "order_id");
-            if (orderIdHex != null && !orderIdHex.isEmpty()) {
-                try {
-                    UUID orderId = UlidConverter.hexToUuid(orderIdHex);
-                    card.setOrderId(orderId);
-
-                    // Verify order exists
-                    if (!orderRepository.existsById(orderId)) {
-                        log.warn("⚠️ Order {} not found for card {}, skipping", orderIdHex, certificationIdHex);
-                        return null;
-                    }
-                } catch (Exception e) {
-                    log.error("❌ Invalid order_id format: {}", orderIdHex, e);
-                    return null;
-                }
-            } else {
-                log.warn("⚠️ Card {} has no order_id, skipping", certificationIdHex);
-                return null;
-            }
-
-            // Map card name
-            card.setCardName(getString(data, "card_name"));
-
-            // Map processing status flags (from Symfony API)
-            card.setGradingCompleted(getBoolean(data, "grading_completed", false));
-            card.setCertificationCompleted(getBoolean(data, "certification_completed", false));
-            card.setScanningCompleted(getBoolean(data, "scanning_completed", false));
-            card.setPackagingCompleted(getBoolean(data, "packaging_completed", false));
-
-            // Note: Most required fields should be set by the database defaults
-            // We only set the planning-specific fields from the API data
-
-            return card;
-
-        } catch (Exception e) {
-            log.error("❌ Error creating card from data", e);
-            throw new RuntimeException("Failed to create card from data", e);
-        }
-    }
-
-    /**
-     * Get string value from map, handling null and different types
-     */
-    private String getString(Map<String, Object> map, String key) {
-        Object value = map.get(key);
-        if (value == null) {
+        String certificationIdHex = getString(data, "id");
+        if (certificationIdHex == null || certificationIdHex.isEmpty()) {
+            log.warn("⚠️ Card has no id, skipping");
             return null;
         }
-        return value.toString();
+
+        // Try to find existing certification
+        CardCertification card = cardCertificationRepository
+                .findBySymfonyCertificationId(certificationIdHex)
+                .orElse(new CardCertification());
+
+        // Set Symfony ID
+        card.setSymfonyCertificationId(certificationIdHex);
+
+        // Map order_id by finding order through symfonyOrderId
+        String orderIdHex = getString(data, "order_id");
+        if (orderIdHex != null && !orderIdHex.isEmpty()) {
+            Optional<Order> orderOpt = orderRepository.findBySymfonyOrderId(orderIdHex);
+
+            if (orderOpt.isPresent()) {
+                Order order = orderOpt.get();
+                card.setOrderId(order.getId());
+
+                log.trace("Mapped card {} to order {} (Spring Boot ID: {})",
+                        certificationIdHex, orderIdHex, order.getId());
+            } else {
+                log.warn("⚠️ Order {} not found for card {}, skipping",
+                        orderIdHex, certificationIdHex);
+                return null;
+            }
+        } else {
+            log.warn("⚠️ Card {} has no order_id, skipping", certificationIdHex);
+            return null;
+        }
+
+        // Map card name
+        card.setCardName(getString(data, "card_name"));
+
+        // Map processing status flags
+        card.setGradingCompleted(getBoolean(data, "grading_completed", false));
+        card.setCertificationCompleted(getBoolean(data, "certification_completed", false));
+        card.setScanningCompleted(getBoolean(data, "scanning_completed", false));
+        card.setPackagingCompleted(getBoolean(data, "packaging_completed", false));
+
+        return card;
     }
 
     /**
-     * Get boolean value from map, with default fallback
+     * Get sync statistics
      */
+    public Map<String, Object> getSyncStats() {
+        Map<String, Object> stats = new HashMap<>();
+
+        try {
+            long totalCards = cardCertificationRepository.count();
+            long needsGrading = cardCertificationRepository.countByGradingCompleted(false);
+            long needsCertification = cardCertificationRepository.countByCertificationCompleted(false);
+            long needsScanning = cardCertificationRepository.countByScanningCompleted(false);
+            long needsPackaging = cardCertificationRepository.countByPackagingCompleted(false);
+
+            long incompleteCards = cardCertificationRepository.countIncompleteCards();
+
+            double completionPercentage = totalCards > 0
+                    ? ((totalCards - incompleteCards) * 100.0 / totalCards)
+                    : 0.0;
+
+            stats.put("total_cards", totalCards);
+            stats.put("incomplete_cards", incompleteCards);
+            stats.put("needs_grading", needsGrading);
+            stats.put("needs_certification", needsCertification);
+            stats.put("needs_scanning", needsScanning);
+            stats.put("needs_packaging", needsPackaging);
+            stats.put("completion_percentage", Math.round(completionPercentage * 100.0) / 100.0);
+
+        } catch (Exception e) {
+            log.error("❌ Error getting sync stats", e);
+            stats.put("error", e.getMessage());
+        }
+
+        return stats;
+    }
+
+    // Helper methods
+    private String getString(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value != null ? value.toString() : null;
+    }
+
     private Boolean getBoolean(Map<String, Object> map, String key, boolean defaultValue) {
         Object value = map.get(key);
-        if (value == null) {
-            return defaultValue;
-        }
-        if (value instanceof Boolean) {
-            return (Boolean) value;
-        }
-        // Handle numeric values (0/1)
-        if (value instanceof Number) {
-            return ((Number) value).intValue() != 0;
-        }
-        // Handle string values
+        if (value == null) return defaultValue;
+        if (value instanceof Boolean) return (Boolean) value;
+        if (value instanceof Number) return ((Number) value).intValue() != 0;
         return Boolean.parseBoolean(value.toString());
-    }
-
-    /**
-     * Get sync statistics for monitoring
-     */
-    @Transactional(readOnly = true)
-    public Map<String, Object> getSyncStats() {
-        long totalCards = cardCertificationRepository.count();
-        long incompleteCards = cardCertificationRepository.findIncompleteCertifications().size();
-        long needGrading = cardCertificationRepository.findCertificationsNeedingGrading().size();
-        long needCertification = cardCertificationRepository.findCertificationsNeedingCertification().size();
-        long needScanning = cardCertificationRepository.findCertificationsNeedingScanning().size();
-        long needPackaging = cardCertificationRepository.findCertificationsNeedingPackaging().size();
-
-        return Map.of(
-                "total_cards", totalCards,
-                "incomplete_cards", incompleteCards,
-                "needs_grading", needGrading,
-                "needs_certification", needCertification,
-                "needs_scanning", needScanning,
-                "needs_packaging", needPackaging,
-                "completion_percentage", totalCards > 0 ?
-                        (double)(totalCards - incompleteCards) / totalCards * 100 : 0
-        );
     }
 }
