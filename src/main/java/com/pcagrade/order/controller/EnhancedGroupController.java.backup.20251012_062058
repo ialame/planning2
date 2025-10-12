@@ -64,7 +64,7 @@ public class EnhancedGroupController {
      * Endpoint: GET /api/v2/groups
      */
     @GetMapping
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true)  // ← AJOUTER CETTE LIGNE
     @Operation(summary = "Get all active groups", description = "Retrieve all active groups with optional pagination and search")
     @ApiResponse(responseCode = "200", description = "Groups retrieved successfully")
     public ResponseEntity<Map<String, Object>> getAllGroups(
@@ -325,7 +325,6 @@ public class EnhancedGroupController {
      * Endpoint: GET /api/v2/groups/employee/{employeeId}
      */
     @GetMapping("/employee/{employeeId}")
-    @Transactional(readOnly = true)
     @Operation(summary = "Get groups for employee", description = "Get all groups assigned to an employee")
     public ResponseEntity<Map<String, Object>> getGroupsForEmployee(@PathVariable String employeeId) {
         try {
@@ -498,7 +497,6 @@ public class EnhancedGroupController {
      * Endpoint: GET /api/v2/groups/permission-levels
      */
     @GetMapping("/permission-levels")
-    @Transactional(readOnly = true)
     @Operation(summary = "Get permission levels", description = "Get all available permission levels with descriptions")
     public ResponseEntity<List<GroupDto.PermissionLevelInfo>> getPermissionLevels() {
         try {
@@ -520,7 +518,6 @@ public class EnhancedGroupController {
      * Endpoint: GET /api/v2/groups/permission-level/{level}
      */
     @GetMapping("/permission-level/{level}")
-    @Transactional(readOnly = true)
     @Operation(summary = "Get groups by permission level", description = "Get groups with minimum permission level")
     public ResponseEntity<Map<String, Object>> getGroupsByPermissionLevel(@PathVariable int level) {
         try {
@@ -557,7 +554,6 @@ public class EnhancedGroupController {
      * Endpoint: GET /api/v2/groups/statistics
      */
     @GetMapping("/statistics")
-    @Transactional(readOnly = true)
     @Operation(summary = "Get group statistics", description = "Get comprehensive statistics about groups and their members")
     public ResponseEntity<Map<String, Object>> getGroupStatistics() {
         try {
@@ -601,7 +597,6 @@ public class EnhancedGroupController {
      * Endpoint: GET /api/v2/groups/summary
      */
     @GetMapping("/summary")
-    @Transactional(readOnly = true)
     @Operation(summary = "Get group summary", description = "Get high-level summary of group system")
     public ResponseEntity<Map<String, Object>> getGroupSummary() {
         try {
@@ -882,7 +877,6 @@ public class EnhancedGroupController {
      * Endpoint: GET /api/v2/groups/{id}
      */
     @GetMapping("/{id}")
-    @Transactional(readOnly = true)
     @Operation(summary = "Get group by ID", description = "Retrieve a specific group by its ID with employee details")
     @ApiResponse(responseCode = "200", description = "Group found")
     @ApiResponse(responseCode = "404", description = "Group not found")

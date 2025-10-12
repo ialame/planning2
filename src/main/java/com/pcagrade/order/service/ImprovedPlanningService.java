@@ -190,38 +190,32 @@ public class ImprovedPlanningService {
         }
     }
 
+
     /**
      * Get orders by status (NO date filter)
-     * Using real card count from card_certification_order
+     * ✅ FIXED: Use order.total_cards and order.order_date, removed annulee/paused filters
      */
     private List<Map<String, Object>> getOrdersByStatus(int status) {
         try {
             String sql = """
-                SELECT 
-                    HEX(o.id) as id,
-                    o.num_commande as orderNumber,
-                    COALESCE(
-                        (SELECT COUNT(*) 
-                         FROM card_certification_order cco 
-                         WHERE cco.order_id = o.id), 
-                        0
-                    ) as cardCount,
-                    o.delai,
-                    o.date as orderDate
-                FROM `order` o
-                WHERE o.status = ?
-                  AND o.annulee = 0
-                  AND o.paused = 0
-                ORDER BY 
-                    CASE o.delai 
-                        WHEN 'X' THEN 5
-                        WHEN 'F+' THEN 4
-                        WHEN 'F' THEN 3
-                        WHEN 'C' THEN 2
-                        WHEN 'E' THEN 1
-                        ELSE 0
-                    END DESC,
-                    o.date ASC
+            SELECT 
+                HEX(o.id) as id,
+                o.order_number as orderNumber,
+                COALESCE(o.total_cards, 0) as cardCount,
+                o.delai,
+                o.order_date as orderDate
+            FROM `order` o
+            WHERE o.status = ?
+            ORDER BY
+                CASE o.delai
+                    WHEN 'X' THEN 5
+                    WHEN 'F+' THEN 4
+                    WHEN 'F' THEN 3
+                    WHEN 'C' THEN 2
+                    WHEN 'E' THEN 1
+                    ELSE 0
+                END DESC,
+                o.order_date ASC
             """;
 
             Query query = entityManager.createNativeQuery(sql);
@@ -231,20 +225,32 @@ public class ImprovedPlanningService {
             List<Object[]> results = query.getResultList();
 
             List<Map<String, Object>> orders = new ArrayList<>();
+
             for (Object[] row : results) {
                 Map<String, Object> order = new HashMap<>();
-                order.put("id", (String) row[0]);
-                order.put("orderNumber", (String) row[1]);
-                order.put("cardCount", ((Number) row[2]).intValue());
-                order.put("delai", (String) row[3]);
+                order.put("id", row[0]);
+                order.put("orderNumber", row[1]);
+
+                Number cardCountNum = (Number) row[2];
+                int cardCount = cardCountNum != null ? cardCountNum.intValue() : 0;
+
+                if (cardCount == 0) {
+                    log.debug("⏭️ Skipping order {} with 0 cards", row[1]);
+                    continue;
+                }
+
+                order.put("cardCount", cardCount);
+                order.put("delai", row[3]);
                 order.put("orderDate", row[4]);
+
                 orders.add(order);
             }
 
+            log.debug("✅ Found {} orders with status {}", orders.size(), status);
             return orders;
 
         } catch (Exception e) {
-            log.error("❌ Error fetching orders by status: {}", e.getMessage());
+            log.error("❌ Error fetching orders by status: {}", e.getMessage(), e);
             return new ArrayList<>();
         }
     }
