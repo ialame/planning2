@@ -51,9 +51,9 @@ public class SimpleOrderController {
                     o.order_date as creationDate,
                     o.symfony_order_id as reference,
                     o.customer_name as clientOrderNumber,
-                    COALESCE(o.total_cards, o.card_count, 0) as cardCount,
-                    COALESCE(o.total_cards, o.card_count, 0) as cardsWithName,
-                    COALESCE(o.price, o.total_price, 0) as totalPrice
+                    COALESCE(o.total_cards, 0) as cardCount,
+                    COALESCE(o.total_cards, 0) as cardsWithName,
+                    COALESCE(o.price, 0) as totalPrice
                 FROM `order` o
                 WHERE 1=1
                 """);
@@ -130,7 +130,7 @@ public class SimpleOrderController {
             }
 
             // Calculate total cards across all orders (not just current page)
-            String cardSql = "SELECT SUM(COALESCE(o.total_cards, o.card_count, 0)) FROM `order` o WHERE 1=1" +
+            String cardSql = "SELECT SUM(COALESCE(o.total_cards, 0)) FROM `order` o WHERE 1=1" +
                     sqlBuilder.toString().substring(sqlBuilder.indexOf("WHERE 1=1") + 9,
                             sqlBuilder.indexOf("ORDER BY"));
 
@@ -268,8 +268,8 @@ public class SimpleOrderController {
                     o.order_date as creationDate,
                     o.symfony_order_id as reference,
                     o.customer_name as clientOrderNumber,
-                    COALESCE(o.total_cards, o.card_count, 0) as cardCount,
-                    COALESCE(o.price, o.total_price, 0) as totalPrice
+                    COALESCE(o.total_cards, 0) as cardCount,
+                    COALESCE(o.price, 0) as totalPrice
                 FROM `order` o
                 WHERE HEX(o.id) = ?
                 """;

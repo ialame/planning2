@@ -1,488 +1,787 @@
-# 🚀 First Time Setup Guide - Pokemon Card Planning
+# 🃏 Pokemon Card Planning System
 
-**For new developers starting from scratch (no database)**
+**Production-ready planning and workflow management system for Pokemon card grading operations**
 
-This guide will help you set up the complete development environment when you have **nothing** on your machine.
-
----
-
-## 📋 Prerequisites
-
-Before starting, ensure you have:
-
-- ✅ **Java 17+** installed (`java -version`)
-- ✅ **Maven 3.8+** installed (`mvn -version`)
-- ✅ **Node.js 18+** and npm (`node -v` and `npm -v`)
-- ✅ **MariaDB/MySQL 10.6+** installed and running
-- ✅ **Git** installed
-- ✅ Access to the **Symfony backend API** (for data synchronization)
+[![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.java.net/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-green.svg)](https://spring.io/projects/spring-boot)
+[![Vue.js](https://img.shields.io/badge/Vue.js-3.4-blue.svg)](https://vuejs.org/)
+[![MariaDB](https://img.shields.io/badge/MariaDB-10.11-blue.svg)](https://mariadb.org/)
+[![Symfony](https://img.shields.io/badge/Symfony-5.4-black.svg)](https://symfony.com/)
 
 ---
 
-## 🎯 Architecture Overview
+## 📋 Table of Contents
 
-This project uses **TWO databases**:
+1. [Overview](#overview)
+2. [Architecture](#architecture)
+3. [Prerequisites](#prerequisites)
+4. [Quick Start](#quick-start)
+5. [Database Setup](#database-setup)
+6. [Backend Setup (Spring Boot)](#backend-setup-spring-boot)
+7. [Frontend Setup (Vue.js)](#frontend-setup-vuejs)
+8. [Symfony API](#symfony-api)
+9. [Usage](#usage)
+10. [Troubleshooting](#troubleshooting)
+11. [API Documentation](#api-documentation)
+
+---
+
+## 🎯 Overview
+
+This system manages the complete workflow for Pokemon card grading operations:
+
+- **Order Management**: Track orders with priorities (Express, Fast+, Fast, Classic, Economy)
+- **Employee Management**: Manage employees with roles and skills
+- **Automated Planning**: Generate optimal work schedules based on priorities and employee availability
+- **Progress Tracking**: Monitor card processing through stages (grading, certification, scanning, packaging)
+- **Real-time Sync**: Synchronize data from Symfony backend via REST API
+
+### Key Features
+
+✅ **Automatic Database Initialization** - Database, tables, and seed data created automatically  
+✅ **Role-Based Access Control** - 7 predefined roles (Admin, Manager, Grader, Certifier, Scanner, Preparer, Viewer)  
+✅ **Smart Planning Algorithm** - Assigns tasks based on priorities, deadlines, and employee skills  
+✅ **Real-time Statistics** - Live dashboards with order status and employee workload  
+✅ **RESTful API** - Symfony API for data synchronization
+
+---
+
+## 🏗️ Architecture
 
 ```
-┌─────────────────────┐           ┌──────────────────────┐
-│   Symfony Backend   │           │  Spring Boot Backend │
-│   (External API)    │           │   (This project)     │
-│                     │           │                      │
-│   Database: "dev"   │  Sync →   │  Database:           │
-│   Port: 8000        │           │  "dev-planning"      │
-│                     │           │  Port: 8080          │
-│   Tables:           │           │                      │
-│   - order           │           │  Tables:             │
-│   - card            │           │  - order (synced)    │
-│   - card_*          │           │  - card (synced)     │
-│                     │           │  - j_employee (new)  │
-│                     │           │  - j_planning (new)  │
-│                     │           │  - j_group (new)     │
-└─────────────────────┘           └──────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                      VUE.JS FRONTEND                        │
+│            (http://localhost:3000 ou 5173)                  │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         │ HTTP/REST
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 SPRING BOOT BACKEND                         │
+│                  (http://localhost:8080)                    │
+│  • Order Management      • Planning Engine                  │
+│  • Employee Management   • Statistics                       │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         │ JDBC
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    MARIADB DATABASE                         │
+│                    (localhost:3306)                         │
+│                    dev-planning                             │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         │ Data Sync
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     SYMFONY API                             │
+│                  (http://localhost:8000)                    │
+│                /api/planning/export/*                       │
+└─────────────────────────────────────────────────────────────┘
 ```
-
-**Key Points:**
-- **Symfony tables** (`order`, `card`, etc.) are synced via API
-- **Planning tables** (`j_employee`, `j_planning`, etc.) are created by Spring Boot
-- You don't need direct access to the Symfony database
 
 ---
 
-## 🔧 Step-by-Step Setup
+## ✅ Prerequisites
 
-### Step 1: Clone the Repository
+Before you begin, ensure you have the following installed:
+
+### Required
+
+- **Java 21+** - [Download OpenJDK](https://adoptium.net/)
+- **Maven 3.8+** - [Download Maven](https://maven.apache.org/download.cgi)
+- **Node.js 18+** - [Download Node.js](https://nodejs.org/)
+- **MariaDB 10.11+** or MySQL 8+ - [Download MariaDB](https://mariadb.org/download/)
+
+### Optional (for Symfony API sync)
+
+- **PHP 8.1+** - [Download PHP](https://www.php.net/downloads)
+- **Symfony CLI** - [Install Symfony](https://symfony.com/download)
+- **Composer** - [Download Composer](https://getcomposer.org/)
+
+### Verify Installation
 
 ```bash
-git clone https://github.com/YOUR_ORG/pokemon-planning.git
-cd pokemon-planning
+java -version    # Should show Java 21+
+mvn -version     # Should show Maven 3.8+
+node -version    # Should show Node 18+
+mysql --version  # Should show MariaDB 10.11+ or MySQL 8+
 ```
 
 ---
 
-### Step 2: Create Database
+## 🚀 Quick Start
 
-**Option A: Let Spring Boot create it automatically**
-
-Spring Boot can create the database if you add `createDatabaseIfNotExist=true` to the connection string.
-
-**Option B: Create it manually (recommended for first time)**
+**For the impatient - Get up and running in 3 commands:**
 
 ```bash
-# Connect to MySQL/MariaDB as root
+# 1. Configure database (one-time setup)
 mysql -u root -p
+CREATE USER 'ia'@'localhost' IDENTIFIED BY 'foufafou';
+GRANT ALL PRIVILEGES ON *.* TO 'ia'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
 
-# Create database
+# 2. Start backend (creates database + tables + seed data automatically)
+mvn spring-boot:run
+
+# 3. In another terminal, start frontend
+cd src/main/frontend
+npm install
+npm run dev
+```
+
+🎉 **That's it!** Open http://localhost:3000 and you're ready to go!
+
+The system automatically creates:
+- ✅ Database `dev-planning`
+- ✅ All required tables
+- ✅ 7 default roles (Admin, Manager, Grader, etc.)
+- ✅ 5 test employees with assigned roles
+
+---
+
+## 🗄️ Database Setup
+
+### Option 1: Automatic Setup (Recommended)
+
+The application creates everything automatically on first run:
+
+```bash
+# Just start the application
+mvn spring-boot:run
+```
+
+**What happens automatically:**
+1. Creates database `dev-planning` if it doesn't exist
+2. Creates all tables via Hibernate DDL
+3. Populates `j_group` with 7 default roles
+4. Creates 5 test employees in `j_employee`
+5. Assigns roles to employees to cover all 7 roles
+
+### Option 2: Manual Database Creation
+
+If you prefer to create the database manually:
+
+```bash
+mysql -u ia -pfoufafou << 'EOF'
 CREATE DATABASE IF NOT EXISTS `dev-planning` 
   CHARACTER SET utf8mb4 
   COLLATE utf8mb4_unicode_ci;
 
-# Create user (if needed)
-CREATE USER IF NOT EXISTS 'your_username'@'localhost' 
-  IDENTIFIED BY 'your_password';
-
-# Grant permissions
-GRANT ALL PRIVILEGES ON `dev-planning`.* 
-  TO 'your_username'@'localhost';
-
-FLUSH PRIVILEGES;
-
-# Verify
 USE `dev-planning`;
-SHOW TABLES;  -- Should be empty for now
 
-EXIT;
+-- Tables will be created automatically by Hibernate
+-- Just start the Spring Boot application
+EOF
 ```
+
+### Database Schema
+
+The main tables created automatically:
+
+| Table | Description |
+|-------|-------------|
+| `order` | Pokemon card orders (synced from Symfony) |
+| `card_certification` | Individual cards being processed |
+| `j_employee` | Employees with work hours and efficiency |
+| `j_group` | Roles (Admin, Manager, Grader, etc.) |
+| `j_employee_group` | Employee-to-role assignments |
+| `j_planning` | Generated work schedules |
+
+### Seed Data
+
+**7 Default Roles** (created automatically):
+
+| Role | Permission Level | Description |
+|------|------------------|-------------|
+| ROLE_ADMIN | 10 | System administrators |
+| ROLE_MANAGER | 7 | Team managers |
+| ROLE_NOTEUR | 5 | Card graders |
+| ROLE_CERTIFICATEUR | 5 | Card certifiers/encapsulators |
+| ROLE_SCANNER | 4 | Card scanners |
+| ROLE_PREPARATEUR | 4 | Order preparers |
+| ROLE_VIEWER | 2 | Read-only viewers |
+
+**5 Test Employees** (created automatically):
+
+| Employee | Email | Hours/Day | Efficiency | Roles |
+|----------|-------|-----------|------------|-------|
+| Sophie Martin | sophie.martin@pcagrade.com | 8h | 1.2 | Grader, Scanner, Viewer |
+| Thomas Dubois | thomas.dubois@pcagrade.com | 6h | 1.0 | Certifier, Preparer |
+| Marie Bernard | marie.bernard@pcagrade.com | 8h | 1.3 | Scanner, Preparer, Viewer |
+| Pierre Petit | pierre.petit@pcagrade.com | 7h | 1.0 | Manager, Admin |
+| Julie Moreau | julie.moreau@pcagrade.com | 5h | 0.8 | Grader, Certifier, Viewer |
 
 ---
 
-### Step 3: Configure Backend (Spring Boot)
+## ⚙️ Backend Setup (Spring Boot)
 
-Create your local configuration file:
+### 1. Clone the Repository
 
 ```bash
-# Copy the template
-cp src/main/resources/application-local.properties.example \
-   src/main/resources/application-local.properties
+git clone <your-repo-url>
+cd planning
 ```
 
-**Edit `src/main/resources/application-local.properties`:**
+### 2. Configure Application Profiles
 
+The application uses different profiles for different environments:
+
+**Development (default):** `application-local.properties`
 ```properties
-# Application
-spring.application.name=pokemon-card-planning
-server.port=8080
-
-# ============================================================
-# DATABASE CONFIGURATION - IMPORTANT!
-# ============================================================
-# Option A: Let Spring create the database (easier)
-spring.datasource.url=jdbc:mariadb://localhost:3306/dev-planning?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
-
-# Option B: Database already created manually
-# spring.datasource.url=jdbc:mariadb://localhost:3306/dev-planning?useSSL=false&allowPublicKeyRetrieval=true
-
-spring.datasource.username=YOUR_DATABASE_USERNAME
-spring.datasource.password=YOUR_DATABASE_PASSWORD
-spring.datasource.driver-class-name=org.mariadb.jdbc.Driver
-
-# ============================================================
-# JPA/HIBERNATE - TABLE CREATION STRATEGY
-# ============================================================
-# IMPORTANT: For first-time setup, use 'update' to create tables
-# After tables exist, you can change to 'validate'
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MariaDBDialect
-spring.jpa.show-sql=true
-spring.jpa.properties.hibernate.format_sql=true
-
-# ============================================================
-# LIQUIBASE - CREATES PLANNING TABLES
-# ============================================================
-# Enable Liquibase to create j_employee, j_planning, j_group, etc.
-spring.liquibase.enabled=true
-spring.liquibase.change-log=classpath:db/changelog/db.changelog-master.yml
-spring.liquibase.contexts=development
-spring.liquibase.default-schema=dev-planning
-
-# ============================================================
-# SYMFONY API - FOR DATA SYNCHRONIZATION
-# ============================================================
-# Update this with your Symfony API URL
-symfony.api.base-url=http://localhost:8000
-symfony.api.timeout=30
-
-# CORS
-spring.web.cors.allowed-origins=http://localhost:3000,http://localhost:5173
-spring.web.cors.allowed-methods=GET,POST,PUT,DELETE,OPTIONS
-spring.web.cors.allowed-headers=*
-
-# Logging
-logging.level.root=INFO
-logging.level.com.pcagrade=DEBUG
-logging.level.org.springframework.web=DEBUG
-logging.level.org.hibernate.SQL=DEBUG
-logging.level.liquibase=INFO
-
-# Planning Configuration
-planning.card.processing.time=3
-planning.employee.break.time=15
-planning.workday.start=08:00
-planning.workday.end=17:00
-
-# Order table compatibility
-order.table.readonly=true
-order.status.integer.mapping=true
-order.adapter.service.enabled=true
+# Created automatically - uses localhost:3306
+spring.profiles.active=local
 ```
 
-**⚠️ CRITICAL SETTINGS for first-time setup:**
-- ✅ `spring.jpa.hibernate.ddl-auto=update` (creates tables)
-- ✅ `spring.liquibase.enabled=true` (creates planning tables)
-- ✅ `createDatabaseIfNotExist=true` (optional, creates database)
+**Docker:** `application-docker.properties`
+```properties
+# For Docker containers - uses database:3306
+spring.profiles.active=docker
+```
 
----
+**Production:** `application-prod.properties`
+```properties
+# For production servers
+spring.profiles.active=prod
+```
 
-### Step 4: Start Backend
+### 3. Compile and Run
 
 ```bash
-# From project root
-./mvnw clean spring-boot:run
+# Compile
+mvn clean compile
+
+# Run with default profile (local)
+mvn spring-boot:run
+
+# OR specify profile explicitly
+mvn spring-boot:run -Dspring.profiles.active=local
 ```
 
-**What happens during first startup:**
+### 4. Verify Backend is Running
 
-1. ✅ Spring Boot connects to MariaDB
-2. ✅ Database `dev-planning` is created (if using `createDatabaseIfNotExist=true`)
-3. ✅ **Liquibase creates planning tables:**
-   - `j_employee`
-   - `j_planning`
-   - `j_order_status_mapping`
-   - `j_priority`
-   - `j_group`
-   - `j_employee_group`
-   - And other planning tables
-4. ✅ Hibernate validates/creates entity tables
-5. ✅ Backend starts on `http://localhost:8080`
-
-**Expected console output:**
-```
-INFO  liquibase.changelog - Creating database dev-planning
-INFO  liquibase.changelog - ChangeSet db/changelog/db.changelog-master.yml::001-create-employee-table::pokemon-card-planning ran successfully
-INFO  liquibase.changelog - ChangeSet db/changelog/db.changelog-master.yml::002-create-planning-table::pokemon-card-planning ran successfully
-...
-INFO  c.p.o.OrderManagementApplication - Started OrderManagementApplication in 12.5 seconds
-```
-
-**Verify backend is running:**
 ```bash
+# Test health endpoint
 curl http://localhost:8080/actuator/health
+
 # Should return: {"status":"UP"}
 ```
 
----
-
-### Step 5: Synchronize Data from Symfony
-
-**⚠️ IMPORTANT:** At this point, planning tables exist, but Symfony tables are **EMPTY**.
-
-You need to synchronize data from the Symfony backend:
+### 5. Test API Endpoints
 
 ```bash
-# Check Symfony API connectivity
-curl http://localhost:8080/api/sync/symfony-health
+# Get all orders
+curl http://localhost:8080/api/orders?page=0&size=10
 
-# Check sync status (will show tables are out of sync)
-curl http://localhost:8080/api/sync/status
+# Get all employees
+curl http://localhost:8080/api/employees
 
-# Sync ALL data from Symfony (orders, cards, translations, certifications)
-curl -X POST http://localhost:8080/api/sync/all
+# Get groups/roles
+curl http://localhost:8080/api/groups
 ```
 
-**Or use the UI:**
-1. Navigate to: `http://localhost:3000/sync` (after frontend setup)
-2. Click "🔍 Check Status"
-3. Click "🚀 Sync All Data"
+### Backend Configuration
 
-**This will:**
-- ✅ Fetch orders from Symfony API
-- ✅ Fetch cards from Symfony API
-- ✅ Fetch card translations
-- ✅ Fetch card certifications
-- ✅ Insert all data into `dev-planning`
+Edit `src/main/resources/application-local.properties` if needed:
 
-**Verify data was synced:**
-```bash
-# Check orders
-curl http://localhost:8080/api/orders | jq '. | length'
-# Should return > 0
+```properties
+# Database
+spring.datasource.url=jdbc:mariadb://localhost:3306/dev-planning?createDatabaseIfNotExist=true
+spring.datasource.username=ia
+spring.datasource.password=foufafou
 
-# Or check database directly
-mysql -u your_username -p dev-planning -e "SELECT COUNT(*) FROM \`order\`;"
+# Auto-create tables
+spring.jpa.hibernate.ddl-auto=update
+
+# Server port
+server.port=8080
+
+# Card processing time (minutes)
+planning.card.processing.time=3
 ```
 
 ---
 
-### Step 6: Setup Frontend (Vue.js)
+## 🎨 Frontend Setup (Vue.js)
+
+### 1. Install Dependencies
 
 ```bash
 cd src/main/frontend
-
-# Install dependencies
 npm install
+```
 
-# Start development server
+### 2. Configure API Base URL
+
+Edit `src/main/frontend/.env` (create if doesn't exist):
+
+```env
+VITE_API_BASE_URL=http://localhost:8080
+```
+
+### 3. Run Development Server
+
+```bash
 npm run dev
 ```
 
-Frontend will be available at: `http://localhost:5173` or `http://localhost:3000`
+The frontend will be available at: **http://localhost:5173** or **http://localhost:3000**
+
+### 4. Build for Production
+
+```bash
+npm run build
+
+# Output will be in src/main/frontend/dist/
+```
+
+### Frontend Features
+
+- **Dashboard** - Overview of orders by priority and status
+- **Orders** - List and filter all orders
+- **Employees & Planning** - View employee schedules
+- **Groups** - Manage employee roles
+- **Global Planning** - Generate and view complete work schedule
 
 ---
 
-## 🧪 Verify Everything Works
+## 🔄 Symfony API
 
-### 1. Backend Health Check
+The Symfony API provides data synchronization from your main Pokemon card database.
+
+### Setup Symfony API
+
+**1. Configure Symfony Routes**
+
+Edit `config/routes/api_routes.yaml`:
+
+```yaml
+# API routes WITHOUT locale prefix
+api_routes:
+    resource: ../src/Controller/Api/
+    type: annotation
+    prefix: /api
+```
+
+**2. Create API Controller**
+
+Create file: `src/Controller/Api/PlanningExportController.php`
+
+Copy the complete controller code from the artifact below this README.
+
+**3. Start Symfony Server**
+
 ```bash
-curl http://localhost:8080/actuator/health
-# Expected: {"status":"UP"}
+cd /path/to/symfony-project
+symfony server:start
 ```
 
-### 2. Check Database Tables
+Symfony API will be available at: **http://localhost:8000**
+
+### Symfony API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/planning/export/health` | Health check |
+| `GET /api/planning/export/orders` | Export orders |
+| `GET /api/planning/export/orders?limit=100` | Limit results |
+| `GET /api/planning/export/orders?exclude_completed=false` | Include completed |
+| `GET /api/planning/export/orders?since_year=2024` | Filter by year |
+| `GET /api/planning/export/cards` | Export card certifications |
+| `GET /api/planning/export/cards?order_id={hex}` | Cards for specific order |
+| `GET /api/planning/export/stats` | Get statistics |
+| `GET /api/planning/export/orders/count` | Count orders |
+| `GET /api/planning/export/cards/count` | Count cards |
+
+### Test Symfony API
+
 ```bash
-mysql -u your_username -p dev-planning
+# Health check
+curl http://localhost:8000/api/planning/export/health
 
-SHOW TABLES;
+# Get orders
+curl http://localhost:8000/api/planning/export/orders?limit=10
+
+# Get statistics
+curl http://localhost:8000/api/planning/export/stats
 ```
 
-**You should see:**
-```
-+---------------------------+
-| Tables_in_dev-planning    |
-+---------------------------+
-| card                      |
-| card_certification        |
-| card_translation          |
-| order                     |
-| j_employee                |
-| j_employee_group          |
-| j_group                   |
-| j_order_status_mapping    |
-| j_planning                |
-| j_priority                |
-| DATABASECHANGELOG         |
-| DATABASECHANGELOGLOCK     |
-+---------------------------+
-```
+### Synchronize Data to Spring Boot
 
-### 3. Test API Endpoints
+Once Symfony API is running, sync data to Spring Boot:
+
 ```bash
-# Employees (should work even if empty)
-curl http://localhost:8080/api/employees
+# Sync orders
+curl -X POST http://localhost:8080/api/sync/orders
 
-# Orders (should return data after sync)
-curl http://localhost:8080/api/orders | jq '. | length'
+# Sync cards
+curl -X POST http://localhost:8080/api/sync/cards
 
-# Sync status
-curl http://localhost:8080/api/sync/status
+# Sync everything
+curl -X POST http://localhost:8080/api/sync/all
 ```
-
-### 4. Test Frontend
-Open `http://localhost:5173` in your browser:
-- ✅ Dashboard should load
-- ✅ Orders page should show orders (after sync)
-- ✅ Employees page should work
-- ✅ Planning page should work
 
 ---
 
-## ⚙️ Configuration for Different Scenarios
+## 💻 Usage
 
-### Scenario A: Fresh Install (No Database)
-```properties
-spring.datasource.url=jdbc:mariadb://localhost:3306/dev-planning?createDatabaseIfNotExist=true
-spring.jpa.hibernate.ddl-auto=update
-spring.liquibase.enabled=true
+### 1. Access the Application
+
+Open your browser and go to: **http://localhost:3000**
+
+### 2. Navigate the Interface
+
+**Dashboard**
+- View order statistics by priority (Express, Fast+, Fast, Classic)
+- See order status breakdown
+- Monitor overall system health
+
+**Orders Page**
+- View all orders with pagination
+- Filter by priority, status, or search terms
+- See card counts and order details
+
+**Employees & Planning**
+- View all employees with their workload
+- Click "View Planning" to see individual schedules
+- Monitor employee availability and assignments
+
+**Groups Page**
+- View all 7 roles
+- Assign/remove roles to employees
+- Manage permissions
+
+**Global Planning**
+- Generate work schedules for all employees
+- View planning by date
+- See task assignments by role (Grader, Certifier, etc.)
+
+### 3. Generate Planning
+
+```bash
+# Via API
+curl -X POST http://localhost:8080/api/planning/generate
+
+# Or use the "Global Planning" page in the UI
 ```
 
-### Scenario B: Database Exists, No Tables
-```properties
-spring.datasource.url=jdbc:mariadb://localhost:3306/dev-planning
-spring.jpa.hibernate.ddl-auto=update
-spring.liquibase.enabled=true
-```
+### 4. Common Workflows
 
-### Scenario C: Everything Exists (Normal Development)
-```properties
-spring.datasource.url=jdbc:mariadb://localhost:3306/dev-planning
-spring.jpa.hibernate.ddl-auto=validate
-spring.liquibase.enabled=false
-```
+**Add a New Employee:**
+1. Go to "Employees & Planning"
+2. Click "Add Employee"
+3. Fill in details (name, email, work hours)
+4. Go to "Groups" page
+5. Assign appropriate roles
+
+**Assign Roles to Employee:**
+1. Go to "Groups" page
+2. Find the employee card
+3. Click role buttons (Processor, Supervisor, Manager)
+4. Or click "Manage Groups" for detailed assignment
+
+**View Employee Schedule:**
+1. Go to "Employees & Planning"
+2. Find the employee
+3. Click "View Planning"
+4. Select date to view schedule
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Problem: "Unknown database 'dev-planning'"
+### Database Connection Issues
 
-**Solution:**
-1. Ensure database was created (Step 2)
-2. Or add `createDatabaseIfNotExist=true` to connection URL
+**Error:** `Access denied for user 'ia'@'localhost'`
 
-### Problem: "Table 'order' doesn't exist"
-
-**Solution:**
 ```bash
-# Sync data from Symfony
-curl -X POST http://localhost:8080/api/sync/all
+# Recreate database user
+mysql -u root -p
+DROP USER IF EXISTS 'ia'@'localhost';
+CREATE USER 'ia'@'localhost' IDENTIFIED BY 'foufafou';
+GRANT ALL PRIVILEGES ON *.* TO 'ia'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
 ```
 
-### Problem: "Liquibase failed"
+**Error:** `Unknown database 'dev-planning'`
 
-**Solution:**
-Check that MariaDB version is compatible (10.6+):
 ```bash
-mysql -V
+# The database should be created automatically
+# If not, check that createDatabaseIfNotExist=true is in the JDBC URL
+# Or create manually:
+mysql -u ia -pfoufafou
+CREATE DATABASE `dev-planning` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+EXIT;
 ```
 
-### Problem: "Cannot connect to Symfony API"
+### Port Already in Use
 
-**Solution:**
-1. Verify Symfony is running: `curl http://localhost:8000/api/export/health`
-2. Update `symfony.api.base-url` in `application-local.properties`
+**Error:** `Port 8080 is already in use`
 
-### Problem: Backend starts but no planning tables
-
-**Solution:**
-Verify Liquibase is enabled:
-```properties
-spring.liquibase.enabled=true
-```
-
-Check logs for Liquibase errors:
 ```bash
-./mvnw spring-boot:run | grep liquibase
+# Find and kill process using port 8080
+lsof -ti:8080 | xargs kill -9
+
+# Or change port in application.properties
+server.port=8081
+```
+
+### No Roles or Employees Created
+
+**Check logs:**
+```bash
+# Look for initialization messages
+grep -i "group\|employee" logs/spring.log
+
+# Should see:
+# ✅ Successfully initialized 7 default roles
+# ✅ Successfully created 5 test employees
+# ✅ Successfully assigned roles to all test employees
+```
+
+**Manual initialization:**
+```bash
+# If automatic initialization failed, run:
+mysql -u ia -pfoufafou dev-planning < scripts/init_groups.sql
+mysql -u ia -pfoufafou dev-planning < scripts/init_employees.sql
+```
+
+### Frontend Not Loading
+
+```bash
+# Clear npm cache and reinstall
+cd src/main/frontend
+rm -rf node_modules package-lock.json
+npm install
+npm run dev
+```
+
+### Symfony API Not Responding
+
+```bash
+# Check Symfony is running
+curl http://localhost:8000/api/planning/export/health
+
+# Restart Symfony
+symfony server:stop
+symfony server:start
+
+# Check logs
+symfony server:log
 ```
 
 ---
 
-## 📝 After First Setup
+## 📚 API Documentation
 
-Once everything works, you can optimize configuration:
+### Spring Boot REST API
 
-**For daily development:**
-```properties
-# Disable Liquibase (tables already exist)
-spring.liquibase.enabled=false
+**Base URL:** `http://localhost:8080`
 
-# Use validate mode (safer)
-spring.jpa.hibernate.ddl-auto=validate
+#### Orders
 
-# Reduce logging
-logging.level.org.hibernate.SQL=WARN
-logging.level.liquibase=INFO
+```bash
+# Get paginated orders
+GET /api/orders?page=0&size=500&delai=F+&status=2
+
+# Get single order
+GET /api/orders/{orderId}
+
+# Get order cards
+GET /api/orders/{orderId}/cards
+```
+
+#### Employees
+
+```bash
+# Get all employees
+GET /api/employees
+
+# Get employee details
+GET /api/employees/{employeeId}
+
+# Create employee
+POST /api/employees
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "john.doe@example.com",
+  "workHoursPerDay": 8.0,
+  "efficiencyRating": 1.0
+}
+
+# Update employee
+PUT /api/employees/{employeeId}
+
+# Delete employee
+DELETE /api/employees/{employeeId}
+```
+
+#### Groups/Roles
+
+```bash
+# Get all groups
+GET /api/groups
+
+# Get employee groups
+GET /api/groups/employee/{employeeId}
+
+# Assign role to employee
+POST /api/groups/assign
+{
+  "employeeId": "abc123...",
+  "groupId": "def456..."
+}
+
+# Remove role from employee
+DELETE /api/groups/remove?employeeId={id}&groupId={id}
+```
+
+#### Planning
+
+```bash
+# Get planning for date
+GET /api/planning?date=2025-10-12
+
+# Get employee planning
+GET /api/planning/employee/{employeeId}?date=2025-10-12
+
+# Generate planning
+POST /api/planning/generate
+
+# Get planning by status
+GET /api/planning/by-status/{status}
+```
+
+#### Synchronization
+
+```bash
+# Sync orders from Symfony
+POST /api/sync/orders
+
+# Sync cards from Symfony
+POST /api/sync/cards
+
+# Sync everything
+POST /api/sync/all
+
+# Get sync statistics
+GET /api/sync/stats
 ```
 
 ---
 
-## 🎉 Summary Checklist
+## 🧪 Testing
 
-- [ ] Cloned repository
-- [ ] Created `dev-planning` database
-- [ ] Created `application-local.properties` with credentials
-- [ ] Set `spring.jpa.hibernate.ddl-auto=update`
-- [ ] Set `spring.liquibase.enabled=true`
-- [ ] Started backend successfully
-- [ ] Verified planning tables were created by Liquibase
-- [ ] Synced data from Symfony API (`/api/sync/all`)
-- [ ] Verified orders and cards exist in database
-- [ ] Installed frontend dependencies
-- [ ] Started frontend successfully
-- [ ] Tested all pages in UI
+### Run Tests
 
-**You're ready to develop!** 🚀
+```bash
+# Backend tests
+mvn test
 
----
+# Frontend tests
+cd src/main/frontend
+npm run test
+```
 
-## 📚 Additional Resources
+### Manual Testing
 
-- **Data Sync Guide:** `API_SYNC_SETUP_GUIDE.md`
-- **Configuration Guide:** `README.md`
-- **Backend Update Guide:** `UPDATE_BACKEND_CONFIG.md`
-- **API Documentation:** `http://localhost:8080/swagger-ui.html` (if Swagger is enabled)
+```bash
+# Test complete workflow
+./test_complete_initialization.sh
+
+# Test database rebuild
+./test_database_rebuild.sh
+```
 
 ---
 
-## 💡 Tips for New Developers
+## 📦 Deployment
 
-1. **Always check sync status** before working with orders:
-   ```bash
-   curl http://localhost:8080/api/sync/status
-   ```
+### Docker Deployment
 
-2. **Use Docker** if you have issues with local MariaDB:
-   ```bash
-   docker run -d --name mariadb \
-     -e MYSQL_ROOT_PASSWORD=root \
-     -e MYSQL_DATABASE=dev-planning \
-     -e MYSQL_USER=ia \
-     -e MYSQL_PASSWORD=foufafou \
-     -p 3306:3306 \
-     mariadb:11.2
-   ```
+```bash
+# Build Docker image
+docker build -t planning-backend .
 
-3. **Keep Symfony tables read-only** in this project - they are synced from Symfony
+# Run with Docker Compose
+docker-compose up -d
+```
 
-4. **Planning tables are managed by this project** - you can modify them
+### Production Build
+
+```bash
+# Build backend JAR
+mvn clean package -DskipTests
+
+# Build frontend
+cd src/main/frontend
+npm run build
+
+# Run in production
+java -jar target/planning-1.0.0.jar --spring.profiles.active=prod
+```
 
 ---
 
-## 🚨 Important Notes
+## 🤝 Contributing
 
-⚠️ **DO NOT commit `application-local.properties`** - it contains credentials
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-⚠️ **DO NOT modify Symfony tables directly** - use the sync API
+---
 
-⚠️ **Liquibase runs only once** - after first startup, tables are created
+## 📄 License
 
-✅ **Re-sync data periodically** to stay up-to-date with Symfony backend
+This project is proprietary software. All rights reserved.
 
-✅ **Use `spring.jpa.hibernate.ddl-auto=validate`** after first setup
+---
+
+## 👥 Team
+
+- **Development Team** - Initial work and maintenance
+- **Product Owner** - Requirements and specifications
+
+---
+
+## 📞 Support
+
+For issues, questions, or contributions:
+- Create an issue on GitHub
+- Contact the development team
+- Check the troubleshooting section above
+
+---
+
+## 🎉 Quick Reference Card
+
+```bash
+# START EVERYTHING
+mvn spring-boot:run                    # Backend (terminal 1)
+cd src/main/frontend && npm run dev    # Frontend (terminal 2)
+symfony server:start                   # Symfony API (terminal 3, optional)
+
+# USEFUL COMMANDS
+mysql -u ia -pfoufafou dev-planning   # Access database
+mvn clean compile                      # Recompile backend
+curl http://localhost:8080/api/orders # Test API
+curl -X POST http://localhost:8080/api/sync/all # Sync from Symfony
+
+# RESET DATABASE
+mysql -u ia -pfoufafou -e "DROP DATABASE \`dev-planning\`;"
+mvn spring-boot:run                    # Recreates everything
+
+# URLS
+http://localhost:3000                  # Frontend UI
+http://localhost:8080                  # Backend API
+http://localhost:8000                  # Symfony API
+```
+
+---
+
+**Made with ❤️ for Pokemon Card Grading Operations**

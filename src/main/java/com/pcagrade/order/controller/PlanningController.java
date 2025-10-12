@@ -139,39 +139,39 @@ public class PlanningController {
         try {
             log.info("📋 Getting planning for employee: {} on date: {}", employeeId, date);
 
-            // ✅ FIX: Add date filter to SQL query
-            String dateFilter = date != null ?
+            // Build date filter
+            String dateFilter = date != null && !date.isEmpty() ?
                     " AND p.planning_date = '" + date + "'" : "";
 
-            // ✅ FIXED: Using columns directly from order table (no card_certification_order)
+            // ✅ FIXED: Using correct column names from actual database schema
             String sql = """
-        SELECT 
-            HEX(p.id) as planningId,
-            HEX(p.order_id) as orderId,
-            p.start_time,
-            p.end_time,
-            p.estimated_duration_minutes as duration,
-            p.delai,
-            p.status,
-            p.planning_date,
-            -- ORDER INFO
-            o.order_number as orderNumber,
-            o.customer_name as clientOrderNumber,
-            o.order_date as orderDate,
-            o.status as orderStatus,
-            -- ✅ Use total_cards from order table directly
-            COALESCE(o.total_cards, o.card_count, 0) as cardCount,
-            -- For compatibility, assume all cards have names
-            COALESCE(o.total_cards, o.card_count, 0) as cardsWithName
-        FROM j_planning p
-        INNER JOIN `order` o ON p.order_id = o.id
-        WHERE HEX(p.employee_id) = ?
-        """ + dateFilter + """
-         ORDER BY p.planning_date ASC, p.start_time ASC
-        """;
-
-            log.info("🔍 Executing query for employeeId: {}, date: {}", employeeId, date);
-            log.info("📝 SQL: {}", sql);
+            SELECT 
+                HEX(p.id) as planningId,
+                HEX(p.order_id) as orderId,
+                p.start_time,
+                p.end_time,
+                p.estimated_duration_minutes as duration,
+                p.delai,
+                p.status,
+                p.planning_date,
+                p.card_count,
+                p.completed,
+                p.progress_percentage,
+                -- ORDER INFO (using correct column names)
+                o.order_number as orderNumber,
+                o.customer_name as clientOrderNumber,
+                o.order_date as orderDate,
+                o.status as orderStatus,
+                o.delai as orderDelai,
+                -- Card count from order table directly
+                COALESCE(o.total_cards, 0) as cardCount,
+                COALESCE(o.total_cards, 0) as cardsWithName
+            FROM j_planning p
+            INNER JOIN `order` o ON p.order_id = o.id
+            WHERE HEX(p.employee_id) = ?
+            """ + dateFilter + """
+            ORDER BY p.planning_date DESC, p.start_time ASC
+            """;
 
             Query query = entityManager.createNativeQuery(sql);
             query.setParameter(1, employeeId.toUpperCase());
@@ -179,48 +179,51 @@ public class PlanningController {
             @SuppressWarnings("unchecked")
             List<Object[]> results = query.getResultList();
 
-            log.info("📋 Query returned {} results", results.size());
+            log.info("📊 Found {} planning entries for employee {}", results.size(), employeeId);
 
             List<Map<String, Object>> orders = new ArrayList<>();
             int totalCards = 0;
             int totalDuration = 0;
 
             for (Object[] row : results) {
-                Map<String, Object> order = new HashMap<>();
                 int i = 0;
+                Map<String, Object> order = new HashMap<>();
 
+                // Planning info
                 order.put("planningId", row[i++]);
                 order.put("orderId", row[i++]);
                 order.put("startTime", row[i++]);
                 order.put("endTime", row[i++]);
 
-                // Duration
                 Number durationNum = (Number) row[i++];
                 int duration = durationNum != null ? durationNum.intValue() : 0;
                 order.put("duration", duration);
                 order.put("durationMinutes", duration);
-                order.put("estimatedDuration", duration);
                 order.put("estimatedDurationMinutes", duration);
 
-                // Delai and status
                 order.put("delai", row[i++]);
                 order.put("status", row[i++]);
                 order.put("planningDate", row[i++]);
+                order.put("cardCount", row[i++]);
+                order.put("completed", row[i++]);
+                order.put("progressPercentage", row[i++]);
+
+                // Order info
                 order.put("orderNumber", row[i++]);
                 order.put("clientOrderNumber", row[i++]);
                 order.put("orderDate", row[i++]);
                 order.put("orderStatus", row[i++]);
+                order.put("orderDelai", row[i++]);
 
-                // Card count from order table
                 Number cardCountNum = (Number) row[i++];
                 int cardCount = cardCountNum != null ? cardCountNum.intValue() : 0;
-                order.put("cardCount", cardCount);
+                order.put("totalCards", cardCount);
 
                 Number cardsWithNameNum = (Number) row[i++];
                 int cardsWithName = cardsWithNameNum != null ? cardsWithNameNum.intValue() : 0;
                 order.put("cardsWithName", cardsWithName);
 
-                // Compatibility fields for frontend
+                // Frontend compatibility fields
                 order.put("id", order.get("orderId"));
                 order.put("showCards", false);
                 order.put("loadingCards", false);
@@ -231,10 +234,11 @@ public class PlanningController {
                 totalDuration += duration;
             }
 
+            // Build response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("orders", orders);
-            response.put("plannings", orders); // For compatibility with frontend
+            response.put("plannings", orders); // For compatibility
             response.put("summary", Map.of(
                     "totalOrders", orders.size(),
                     "totalCards", totalCards,
@@ -245,10 +249,11 @@ public class PlanningController {
 
             log.info("✅ Returning {} orders for employee {} on date {} (Total cards: {})",
                     orders.size(), employeeId, date != null ? date : "ALL", totalCards);
+
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("❌ Error loading employee plannings: {}", e.getMessage(), e);
+            log.error("❌ Error loading employee planning: {}", e.getMessage(), e);
 
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
