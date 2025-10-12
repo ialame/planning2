@@ -530,125 +530,6 @@ public class PlanningController {
         }
     }
 
-    /**
-     * 📊 GET PLANNINGS BY STATUS - Filter plannings by task type
-     * GET /api/planning/by-status/{status}
-     *
-     * @param status Planning status (2=grading, 3=certification, 4=preparation)
-     */
-    @GetMapping("/by-status/{status}")
-    public ResponseEntity<Map<String, Object>> getPlanningsByStatus(@PathVariable int status) {
-        try {
-            log.info("📊 Fetching plannings for status: {}", status);
-
-            // ✅ Query plannings filtered by status
-            String sql = """
-            SELECT 
-                HEX(p.id) as id,
-                HEX(p.order_id) as orderId,
-                HEX(p.employee_id) as employeeId,
-                p.planning_date,
-                p.start_time,
-                p.end_time,
-                p.estimated_duration_minutes,
-                p.delai,
-                p.status,
-                p.completed,
-                p.card_count,
-                p.progress_percentage,
-                p.created_at,
-                p.updated_at,
-                o.num_commande as orderNumber,
-                o.num_commande_client as clientOrderNumber,
-                CONCAT(COALESCE(e.first_name, 'Unknown'), ' ', COALESCE(e.last_name, 'User')) as employeeName,
-                e.email as employeeEmail
-            FROM j_planning p
-            LEFT JOIN `order` o ON p.order_id = o.id  
-            LEFT JOIN j_employee e ON p.employee_id = e.id
-            WHERE p.status = ?
-            ORDER BY p.planning_date ASC, p.start_time ASC
-            """;
-            Query query = entityManager.createNativeQuery(sql);
-            query.setParameter(1, status);
-
-            @SuppressWarnings("unchecked")
-            List<Object[]> results = query.getResultList();
-
-            List<Map<String, Object>> plannings = new ArrayList<>();
-            int totalDuration = 0;
-            int totalCards = 0;
-
-            for (Object[] row : results) {
-                Map<String, Object> planning = new HashMap<>();
-                planning.put("id", row[0]);
-                planning.put("orderId", row[1]);
-                planning.put("employeeId", row[2]);
-                planning.put("planningDate", row[3]);
-                planning.put("startTime", row[4]);
-                planning.put("endTime", row[5]);
-
-                Integer duration = (Integer) row[6];
-                planning.put("estimatedDurationMinutes", duration);
-                planning.put("delai", row[7]);
-                planning.put("status", row[8]);
-                planning.put("completed", row[9]);
-
-                Integer cardCount = (Integer) row[10];
-                planning.put("cardCount", cardCount);
-                planning.put("progressPercentage", row[11]);
-                planning.put("createdAt", row[12]);
-                planning.put("updatedAt", row[13]);
-                planning.put("orderNumber", row[14]);
-                planning.put("clientOrderNumber", row[15]);
-                planning.put("employeeName", row[16]);
-                planning.put("employeeEmail", row[17]);
-
-                // Formatted duration
-                if (duration != null) {
-                    planning.put("formattedDuration", formatDuration(duration));
-                    planning.put("estimatedHours", Math.round(duration / 60.0 * 100.0) / 100.0);
-                    totalDuration += duration;
-                }
-
-                if (cardCount != null) {
-                    totalCards += cardCount;
-                }
-
-                plannings.add(planning);
-            }
-
-            // Determine task type label
-            String taskType = switch (status) {
-                case 2 -> "Grading";
-                case 3 -> "Certification";
-                case 4 -> "Preparation";
-                default -> "Unknown";
-            };
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("plannings", plannings);
-            response.put("total", plannings.size());
-            response.put("status", status);
-            response.put("taskType", taskType);
-            response.put("summary", Map.of(
-                    "totalPlannings", plannings.size(),
-                    "totalCards", totalCards,
-                    "totalDuration", totalDuration,
-                    "totalHours", Math.round(totalDuration / 60.0 * 100.0) / 100.0
-            ));
-
-            log.info("✅ Retrieved {} {} plannings", plannings.size(), taskType);
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("❌ Error fetching plannings by status", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("error", e.getMessage());
-            return ResponseEntity.internalServerError().body(errorResponse);
-        }
-    }
 
     /**
      * Health check
@@ -699,4 +580,120 @@ public class PlanningController {
 
         return ResponseEntity.ok(result);
     }
+
+    /**
+     * FIX for PlanningController - GET /api/planning/by-status/{status}
+     *
+     * This fixes the SQL query to use correct column names:
+     * - order_number instead of num_commande
+     * - customer_name instead of num_commande_client
+     *
+     * LOCATION: src/main/java/com/pcagrade/order/controller/PlanningController.java
+     * REPLACE the getPlanningsByStatus() method with this:
+     */
+
+    @GetMapping("/by-status/{status}")
+    public ResponseEntity<Map<String, Object>> getPlanningsByStatus(@PathVariable int status) {
+        try {
+            log.info("📊 Fetching plannings for status: {}", status);
+
+            // ✅ FIXED: Using correct column names from actual database schema
+            String sql = """
+        SELECT 
+            HEX(p.id) as id,
+            HEX(p.order_id) as orderId,
+            HEX(p.employee_id) as employeeId,
+            p.planning_date,
+            p.start_time,
+            p.end_time,
+            p.estimated_duration_minutes,
+            p.delai,
+            p.status,
+            p.completed,
+            p.card_count,
+            p.progress_percentage,
+            p.created_at,
+            p.updated_at,
+            o.order_number as orderNumber,
+            o.customer_name as clientOrderNumber,
+            CONCAT(COALESCE(e.first_name, 'Unknown'), ' ', COALESCE(e.last_name, 'User')) as employeeName,
+            e.email as employeeEmail
+        FROM j_planning p
+        LEFT JOIN `order` o ON p.order_id = o.id  
+        LEFT JOIN j_employee e ON p.employee_id = e.id
+        WHERE p.status = ?
+        ORDER BY p.planning_date ASC, p.start_time ASC
+        """;
+
+            Query query = entityManager.createNativeQuery(sql);
+            query.setParameter(1, status);
+
+            @SuppressWarnings("unchecked")
+            List<Object[]> results = query.getResultList();
+
+            List<Map<String, Object>> plannings = new ArrayList<>();
+            int totalCards = 0;
+            int totalMinutes = 0;
+
+            for (Object[] row : results) {
+                Map<String, Object> planning = new HashMap<>();
+
+                planning.put("id", row[0]);
+                planning.put("orderId", row[1]);
+                planning.put("employeeId", row[2]);
+                planning.put("planningDate", row[3] != null ? row[3].toString() : null);
+                planning.put("startTime", row[4] != null ? row[4].toString() : null);
+                planning.put("endTime", row[5] != null ? row[5].toString() : null);
+
+                int duration = row[6] != null ? ((Number) row[6]).intValue() : 0;
+                planning.put("estimatedDurationMinutes", duration);
+
+                planning.put("delai", row[7]);
+                planning.put("status", row[8]);
+                planning.put("completed", row[9]);
+
+                int cardCount = row[10] != null ? ((Number) row[10]).intValue() : 0;
+                planning.put("cardCount", cardCount);
+
+                planning.put("progressPercentage", row[11] != null ? ((Number) row[11]).intValue() : 0);
+                planning.put("createdAt", row[12]);
+                planning.put("updatedAt", row[13]);
+                planning.put("orderNumber", row[14]);
+                planning.put("clientOrderNumber", row[15]);
+                planning.put("employeeName", row[16]);
+                planning.put("employeeEmail", row[17]);
+
+                totalCards += cardCount;
+                totalMinutes += duration;
+
+                plannings.add(planning);
+            }
+
+            // Summary statistics
+            Map<String, Object> summary = new HashMap<>();
+            summary.put("totalPlannings", plannings.size());
+            summary.put("totalCards", totalCards);
+            summary.put("totalMinutes", totalMinutes);
+            summary.put("totalHours", Math.round(totalMinutes / 60.0 * 100.0) / 100.0);
+            summary.put("status", status);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("plannings", plannings);
+            response.put("summary", summary);
+
+            log.info("✅ Found {} plannings for status {}", plannings.size(), status);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("❌ Error fetching plannings by status {}", status, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            errorResponse.put("plannings", new ArrayList<>());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+
 }

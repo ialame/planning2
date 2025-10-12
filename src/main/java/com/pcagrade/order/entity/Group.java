@@ -1,5 +1,6 @@
 package com.pcagrade.order.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.pcagrade.order.util.AbstractUlidEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -77,6 +78,7 @@ public class Group extends AbstractUlidEntity {
      */
     @ManyToMany(mappedBy = "groups", fetch = FetchType.LAZY)
     @ToString.Exclude
+    @JsonIgnoreProperties({"groups", "plannings", "hibernateLazyInitializer", "handler"})  // ← AJOUTER CETTE LIGNE
     private List<Employee> employees = new ArrayList<>();
 
     // ========== BUSINESS METHODS ==========
