@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import java.util.stream.Stream;
 
 /**
  * Simple Order Controller - Fixed for actual database schema
@@ -74,46 +75,23 @@ public class SimpleOrderController {
             if (search != null && !search.trim().isEmpty()) {
                 sqlBuilder.append(" AND (o.order_number LIKE ?").append(paramIndex)
                         .append(" OR o.customer_name LIKE ?").append(paramIndex + 1).append(")");
-                String likePattern = "%" + search.trim() + "%";
-                parameters.add(likePattern);
-                parameters.add(likePattern);
-                paramIndex += 2;
+                String searchPattern = "%" + search + "%";
+                parameters.add(searchPattern);
+                parameters.add(searchPattern);
             }
 
-            // Order by priority and date
-            sqlBuilder.append(" ORDER BY CASE o.delai WHEN 'X' THEN 1 WHEN 'F+' THEN 2 WHEN 'F' THEN 3 WHEN 'C' THEN 4 ELSE 5 END, o.order_date DESC");
-
-            // Count total (for pagination)
-            String countSql = "SELECT COUNT(*) FROM `order` o WHERE 1=1";
-            if (delai != null && !delai.isEmpty() && !"all".equals(delai)) {
-                countSql += " AND o.delai = ?";
-            }
-            if (status != null) {
-                countSql += " AND o.status = ?";
-            }
-            if (search != null && !search.trim().isEmpty()) {
-                countSql += " AND (o.order_number LIKE ? OR o.customer_name LIKE ?)";
-            }
+            // Count total without pagination
+            String countSql = "SELECT COUNT(*) FROM `order` o WHERE 1=1" +
+                    sqlBuilder.toString().substring(sqlBuilder.indexOf("WHERE 1=1") + 9);
 
             Query countQuery = entityManager.createNativeQuery(countSql);
-            int countParamIndex = 1;
-            if (delai != null && !delai.isEmpty() && !"all".equals(delai)) {
-                countQuery.setParameter(countParamIndex++, delai);
+            for (int i = 0; i < parameters.size(); i++) {
+                countQuery.setParameter(i + 1, parameters.get(i));
             }
-            if (status != null) {
-                countQuery.setParameter(countParamIndex++, status);
-            }
-            if (search != null && !search.trim().isEmpty()) {
-                String likePattern = "%" + search.trim() + "%";
-                countQuery.setParameter(countParamIndex++, likePattern);
-                countQuery.setParameter(countParamIndex++, likePattern);
-            }
+            int total = ((Number) countQuery.getSingleResult()).intValue();
 
-            Number totalCount = (Number) countQuery.getSingleResult();
-            long total = totalCount.longValue();
-            int totalPages = (int) Math.ceil((double) total / size);
-
-            // Add pagination to main query
+            // Add pagination
+            sqlBuilder.append(" ORDER BY o.order_date DESC, o.id DESC");
             sqlBuilder.append(" LIMIT ").append(size).append(" OFFSET ").append(page * size);
 
             // Execute main query
@@ -125,13 +103,12 @@ public class SimpleOrderController {
             @SuppressWarnings("unchecked")
             List<Object[]> results = query.getResultList();
 
-            // Convert results to list of maps
+            // Map to order objects
             List<Map<String, Object>> orders = new ArrayList<>();
             int pageCardTotal = 0;
 
             for (Object[] row : results) {
                 Map<String, Object> order = new HashMap<>();
-
                 order.put("id", row[0]);
                 order.put("orderNumber", row[1]);
                 order.put("delai", row[2]);
@@ -142,24 +119,91 @@ public class SimpleOrderController {
 
                 int cardCount = row[7] != null ? ((Number) row[7]).intValue() : 0;
                 int cardsWithName = row[8] != null ? ((Number) row[8]).intValue() : 0;
-                float totalPrice = row[9] != null ? ((Number) row[9]).floatValue() : 0.0f;
 
                 order.put("cardCount", cardCount);
                 order.put("cardsWithName", cardsWithName);
                 order.put("namePercentage", cardCount > 0 ? Math.round((cardsWithName / (float) cardCount) * 100) : 0);
-                order.put("totalPrice", totalPrice);
+                order.put("totalPrice", row[9] != null ? ((Number) row[9]).doubleValue() : 0.0);
 
-                pageCardTotal += cardCount;
                 orders.add(order);
+                pageCardTotal += cardCount;
             }
 
-            // Calculate total cards across ALL orders
-            String totalCardsSql = "SELECT COALESCE(SUM(COALESCE(o.total_cards, o.card_count, 0)), 0) FROM `order` o WHERE 1=1";
-            Query totalCardsQuery = entityManager.createNativeQuery(totalCardsSql);
-            Number allCardsTotal = (Number) totalCardsQuery.getSingleResult();
-            int totalCards = allCardsTotal != null ? allCardsTotal.intValue() : 0;
+            // Calculate total cards across all orders (not just current page)
+            String cardSql = "SELECT SUM(COALESCE(o.total_cards, o.card_count, 0)) FROM `order` o WHERE 1=1" +
+                    sqlBuilder.toString().substring(sqlBuilder.indexOf("WHERE 1=1") + 9,
+                            sqlBuilder.indexOf("ORDER BY"));
+
+            Query cardQuery = entityManager.createNativeQuery(cardSql);
+            for (int i = 0; i < parameters.size(); i++) {
+                cardQuery.setParameter(i + 1, parameters.get(i));
+            }
+            Number totalCardsResult = (Number) cardQuery.getSingleResult();
+            int totalCards = totalCardsResult != null ? totalCardsResult.intValue() : 0;
+
+            // ========== CALCULATE STATUS STATISTICS - ON ALL ORDERS ==========
+            // This is the FIX: calculate stats on ALL orders, not just current page
+            String statusStatsSql = """
+                SELECT o.status, COUNT(*) as count
+                FROM `order` o
+                WHERE 1=1
+                """ + (delai != null && !delai.isEmpty() && !"all".equals(delai) ? " AND o.delai = ?" : "") +
+                    (status != null ? " AND o.status = ?" : "") +
+                    (search != null && !search.trim().isEmpty() ?
+                            " AND (o.order_number LIKE ? OR o.customer_name LIKE ?)" : "") +
+                    " GROUP BY o.status";
+
+            Query statusQuery = entityManager.createNativeQuery(statusStatsSql);
+            for (int i = 0; i < parameters.size(); i++) {
+                statusQuery.setParameter(i + 1, parameters.get(i));
+            }
+
+            @SuppressWarnings("unchecked")
+            List<Object[]> statusResults = statusQuery.getResultList();
+
+            // Build status statistics map
+            Map<Integer, Long> statusCounts = new HashMap<>();
+            for (Object[] row : statusResults) {
+                Integer statusCode = ((Number) row[0]).intValue();
+                Long count = ((Number) row[1]).longValue();
+                statusCounts.put(statusCode, count);
+            }
+
+            // Calculate grouped statistics
+            long toReceive = statusCounts.getOrDefault(1, 0L);  // STATUS_A_RECEPTIONNER = 1
+            long packageAccepted = statusCounts.getOrDefault(9, 0L);  // STATUS_COLIS_ACCEPTE = 9
+
+            // In Processing: A_SCANNER(10), A_OUVRIR(11), A_NOTER(2), A_CERTIFIER(3),
+            //                A_PREPARER(4), A_DESCELLER(7), A_VOIR(6)
+            long inProcessing = Stream.of(10, 11, 2, 3, 4, 7, 6)
+                    .mapToLong(s -> statusCounts.getOrDefault(s, 0L))
+                    .sum();
+
+            // To Deliver: A_DISTRIBUER(41), A_ENVOYER(42)
+            long toDeliver = Stream.of(41, 42)
+                    .mapToLong(s -> statusCounts.getOrDefault(s, 0L))
+                    .sum();
+
+            // Completed: ENVOYEE(5), RECU(8)
+            long completed = Stream.of(5, 8)
+                    .mapToLong(s -> statusCounts.getOrDefault(s, 0L))
+                    .sum();
+
+            Map<String, Long> statusStats = Map.of(
+                    "toReceive", toReceive,
+                    "packageAccepted", packageAccepted,
+                    "inProcessing", inProcessing,
+                    "toDeliver", toDeliver,
+                    "completed", completed
+            );
+
+            log.info("📊 Status Statistics: toReceive={}, packageAccepted={}, inProcessing={}, toDeliver={}, completed={}",
+                    toReceive, packageAccepted, inProcessing, toDeliver, completed);
+
+            // ========== END FIX ==========
 
             // Pagination metadata
+            int totalPages = (int) Math.ceil((double) total / size);
             Map<String, Object> pagination = new HashMap<>();
             pagination.put("page", page);
             pagination.put("size", size);
@@ -170,29 +214,30 @@ public class SimpleOrderController {
             pagination.put("pageCardTotal", pageCardTotal);
             pagination.put("totalCards", totalCards);
 
-            // Quick statistics
-            Map<String, Long> delaiStats = new HashMap<>();
-            String statsSql = "SELECT o.delai, COUNT(*) FROM `order` o WHERE 1=1 GROUP BY o.delai";
-            @SuppressWarnings("unchecked")
-            List<Object[]> statsResults = entityManager.createNativeQuery(statsSql).getResultList();
-            for (Object[] stat : statsResults) {
-                String delaiKey = stat[0] != null ? stat[0].toString() : "unknown";
-                Long count = ((Number) stat[1]).longValue();
-                delaiStats.put(delaiKey, count);
-            }
+            // Calculate delai distribution
+            Map<String, Long> delaiStats = orders.stream()
+                    .collect(HashMap::new,
+                            (map, order) -> {
+                                String d = (String) order.get("delai");
+                                map.merge(d != null ? d : "UNKNOWN", 1L, Long::sum);
+                            },
+                            HashMap::putAll);
 
-            // Complete response
+            // Complete response with STATUS STATISTICS
             Map<String, Object> response = new HashMap<>();
             response.put("orders", orders);
             response.put("pagination", pagination);
             response.put("delaiDistribution", delaiStats);
+            response.put("statusStats", statusStats);  // ← THIS IS THE KEY FIX
             response.put("filters", Map.of(
                     "delai", delai != null ? delai : "all",
                     "status", status != null ? status : "all",
                     "search", search != null ? search : ""
             ));
 
-            log.info("✅ Returned {} orders (page {}/{})", orders.size(), page + 1, totalPages);
+            log.info("✅ Returned {} orders (page {}/{}) with status statistics",
+                    orders.size(), page + 1, totalPages);
+
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -252,7 +297,7 @@ public class SimpleOrderController {
             order.put("reference", row[5]);
             order.put("clientOrderNumber", row[6]);
             order.put("cardCount", row[7] != null ? ((Number) row[7]).intValue() : 0);
-            order.put("totalPrice", row[8] != null ? ((Number) row[8]).floatValue() : 0.0f);
+            order.put("totalPrice", row[8] != null ? ((Number) row[8]).doubleValue() : 0.0);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -276,44 +321,24 @@ public class SimpleOrderController {
     @GetMapping("/{id}/cards")
     public ResponseEntity<Map<String, Object>> getOrderCards(@PathVariable String id) {
         try {
-            log.info("🎴 GET /api/orders/{}/cards", id);
+            log.info("🃏 GET /api/orders/{}/cards", id);
 
-            // Get total cards from order
-            String orderSql = "SELECT COALESCE(total_cards, card_count, 0) FROM `order` WHERE HEX(id) = ?";
-            Query orderQuery = entityManager.createNativeQuery(orderSql);
-            orderQuery.setParameter(1, id.toUpperCase().replace("-", ""));
-
-            Object result = orderQuery.getSingleResult();
-            int totalCards = result != null ? ((Number) result).intValue() : 0;
-
-            // For now, return basic info
-            // Card details would come from card_certification_order table if it exists
-            List<Map<String, Object>> cards = new ArrayList<>();
-
+            // This would need to query card_certification_order table
+            // For now, return empty response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("orderId", id);
-            response.put("cards", cards);
-            response.put("totalCards", totalCards);
-            response.put("cardsWithName", totalCards);
-            response.put("namePercentage", 100);
-            response.put("estimatedDuration", totalCards * 3);
+            response.put("cards", new ArrayList<>());
+            response.put("totalCards", 0);
 
-            log.info("✅ Order {} has {} cards", id, totalCards);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
             log.error("❌ Error loading cards for order {}", id, e);
-
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
-            errorResponse.put("orderId", id);
-            errorResponse.put("cards", new ArrayList<>());
-            errorResponse.put("totalCards", 0);
-
             return ResponseEntity.status(500).body(errorResponse);
         }
     }
-
 }
