@@ -261,7 +261,6 @@
                   <input
                     type="date"
                     v-model="selectedDate"
-                    @change="loadPlanningForSelectedDate"
                     class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
                   />
                   <div class="text-sm text-gray-500">
@@ -309,9 +308,11 @@
       </div>
     </div>
 
-    <!-- ✅ EMPLOYEE DETAIL VIEW -->
+
+  <!-- ✅ EMPLOYEE DETAIL VIEW -->
   <div v-if="selectedEmployeeId" class="space-y-6">
     <EmployeeDetailPage
+      :key="`${selectedEmployeeId}-${selectedDate}`"
       :employeeId="selectedEmployeeId"
       :selectedDate="selectedDate"
       :mode="currentView"
@@ -330,11 +331,11 @@ import { API_BASE_URL, API_ENDPOINTS } from '@/config/api'
 // ========== STATE ==========
 const currentView = ref<'management' | 'planning'>('management')
 const selectedEmployeeId = ref<string | null>(null)
-//const selectedDate = ref(new Date().toISOString().split('T')[0])
-const selectedDate = ref('2025-06-01') // Use the planning date instead of today
 const loading = ref(false)
 const showAddForm = ref(false)
+const selectedDate = ref(new Date().toISOString().split('T')[0])
 
+const isCheckingOtherDates = ref(false) // ← NOUVEAU : empêche la récursion
 // Employee data
 const employees = ref<Employee[]>([])
 const newEmployee = ref<NewEmployee>({
@@ -535,7 +536,6 @@ const loadEmployeePlannings = async (employeeId: string) => {
     loading.value = true
     console.log('📋 Loading plannings for employee:', employeeId, 'for date:', selectedDate.value)
 
-    // Use the selected date (which should be 2025-06-01 to match the planning)
     const response = await fetch(`${API_BASE_URL}/api/planning/employee/${employeeId}?date=${selectedDate.value}`)
 
     if (response.ok) {
@@ -551,16 +551,26 @@ const loadEmployeePlannings = async (employeeId: string) => {
       }
 
       const orderCount = data.orders?.length || 0
-      if (orderCount === 0) {
-        // Try loading without date filter to see if data exists for other dates
+
+      // ✅ FIX: Only check other dates if not already checking
+      if (orderCount === 0 && !isCheckingOtherDates.value) {
         await checkForOrdersOnOtherDates(employeeId)
-      } else {
+      } else if (orderCount > 0) {
         showNotification(`✅ Loaded ${orderCount} orders for employee on ${selectedDate.value}`, 'success')
+      } else if (isCheckingOtherDates.value) {
+        // Already checked, no orders found anywhere
+        showNotification('No orders found for this employee on any date. Generate planning first.', 'info')
       }
 
     } else if (response.status === 404) {
       console.log('ℹ️ No plannings found for employee:', employeeId, 'on date:', selectedDate.value)
-      await checkForOrdersOnOtherDates(employeeId)
+
+      // ✅ FIX: Only check other dates if not already checking
+      if (!isCheckingOtherDates.value) {
+        await checkForOrdersOnOtherDates(employeeId)
+      } else {
+        showNotification('No orders found for this employee on any date. Generate planning first.', 'info')
+      }
     } else {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
@@ -573,13 +583,24 @@ const loadEmployeePlannings = async (employeeId: string) => {
   }
 }
 
+
 // ========== 3. ADD FUNCTION TO CHECK OTHER DATES ==========
 
+// Dans Employees.vue, section <script setup>
+// Remplacez COMPLÈTEMENT la fonction checkForOrdersOnOtherDates par celle-ci :
+
 const checkForOrdersOnOtherDates = async (employeeId: string) => {
+  // Protection contre récursion
+  if (isCheckingOtherDates.value) {
+    console.log('⚠️ Already checking other dates, skipping...')
+    return
+  }
+
   try {
+    isCheckingOtherDates.value = true
     console.log('🔍 Checking for orders on other dates for employee:', employeeId)
 
-    // Try without date filter to see if employee has any orders
+    // Chercher sans filtre de date
     const response = await fetch(`${API_BASE_URL}/api/planning/employee/${employeeId}`)
 
     if (response.ok) {
@@ -587,21 +608,26 @@ const checkForOrdersOnOtherDates = async (employeeId: string) => {
       const totalOrders = data.orders?.length || 0
 
       if (totalOrders > 0) {
-        // Find the dates where this employee has orders
-        const orderDates = [...new Set(data.orders.map(order => order.planningDate))]
+        // Trouver les dates avec des commandes
+        const orderDates = [...new Set(data.orders.map((order: any) => order.planningDate))]
+          .sort()
 
-        showNotification(
-          `Employee has ${totalOrders} orders on other dates: ${orderDates.join(', ')}. Try changing the date filter.`,
-          'info'
-        )
+        console.log('📅 Found orders on dates:', orderDates)
 
-        // Optionally, auto-set to the first available date
         if (orderDates.length > 0) {
-          selectedDate.value = orderDates[0]
-          // Reload with the correct date
-          await loadEmployeePlannings(employeeId)
+          const firstDate = orderDates[0]
+          console.log(`🎯 Auto-selecting first available date: ${firstDate}`)
+
+          showNotification(
+            `Found ${totalOrders} orders. Auto-loading date: ${firstDate}`,
+            'info'
+          )
+
+          // ✅ Changer seulement la date - la key fera le reste
+          selectedDate.value = firstDate
         }
       } else {
+        console.log('ℹ️ No orders found on any date')
         showNotification(
           'No orders found for this employee on any date. Generate planning first.',
           'info'
@@ -609,7 +635,10 @@ const checkForOrdersOnOtherDates = async (employeeId: string) => {
       }
     }
   } catch (error) {
-    console.error('Error checking other dates:', error)
+    console.error('❌ Error checking other dates:', error)
+  } finally {
+    // ✅ Toujours réinitialiser le flag
+    isCheckingOtherDates.value = false
   }
 }
 

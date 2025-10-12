@@ -243,7 +243,6 @@ const totalCards = computed(() => {
 // Calculate total duration from orders
 const totalDuration = computed(() => {
   return orders.value.reduce((sum, order) => {
-    // Try different field names that the API might return
     const duration = order.duration ||
       order.durationMinutes ||
       order.estimatedDurationMinutes ||
@@ -258,10 +257,8 @@ const ordersByDay = computed(() => {
   const grouped: Record<string, any[]> = {}
 
   orders.value.forEach(order => {
-    // Get the planning date
     const date = order.planningDate || order.date
     if (date) {
-      // Extract just the date part (YYYY-MM-DD) from ISO timestamp
       const dateKey = typeof date === 'string' ?
         date.split('T')[0] : date.toString()
 
@@ -272,13 +269,11 @@ const ordersByDay = computed(() => {
     }
   })
 
-  // Sort by date and create day objects
   return Object.keys(grouped)
     .sort()
     .map(date => ({
       date,
       orders: grouped[date],
-      // FIXED: Use correct field names from API response
       totalCards: grouped[date].reduce((sum, o) => sum + (o.cardCount || 0), 0),
       totalDuration: grouped[date].reduce((sum, o) => {
         const duration = o.duration ||
@@ -290,6 +285,7 @@ const ordersByDay = computed(() => {
       }, 0)
     }))
 })
+
 // Methods
 const goBack = () => {
   console.log('Going back to employees list')
@@ -297,49 +293,88 @@ const goBack = () => {
 }
 
 const loadEmployeeData = async () => {
-  if (!props.employeeId) return
+  if (!props.employeeId) {
+    console.warn('⚠️ No employeeId provided')
+    return
+  }
+
   try {
+    console.log('👤 Loading employee data for:', props.employeeId)
     const response = await fetch(`${API_BASE_URL}/api/employees/${props.employeeId}`)
+
     if (response.ok) {
       employeeData.value = await response.json()
+      console.log('✅ Employee data loaded:', employeeData.value)
+    } else {
+      console.error('❌ Failed to load employee data:', response.status)
     }
   } catch (error) {
-    console.error('Error loading employee data:', error)
+    console.error('❌ Error loading employee data:', error)
   }
 }
 
 const loadEmployeeOrders = async () => {
-  if (!props.employeeId) return
+  if (!props.employeeId) {
+    console.warn('⚠️ No employeeId provided for loading orders')
+    return
+  }
+
+  // Prevent multiple simultaneous calls
+  if (loading.value) {
+    console.log('⏳ Already loading, skipping...')
+    return
+  }
 
   loading.value = true
+  console.log('📋 Loading orders for employee:', props.employeeId, 'date:', localSelectedDate.value)
+
   try {
     const url = `${API_BASE_URL}/api/planning/employee/${props.employeeId}?date=${localSelectedDate.value}`
+    console.log('🔗 Fetching from:', url)
+
     const response = await fetch(url)
 
     if (response.ok) {
       const data = await response.json()
-      if (data && data.orders && Array.isArray(data.orders)) {
+      console.log('📦 API Response:', data)
+
+      // Handle successful response
+      if (data.success === false) {
+        console.error('❌ API returned error:', data.error)
+        orders.value = []
+      } else if (data && data.orders && Array.isArray(data.orders)) {
         orders.value = data.orders
+        console.log(`✅ Loaded ${orders.value.length} orders from data.orders`)
       } else if (data && Array.isArray(data.plannings)) {
         orders.value = data.plannings
+        console.log(`✅ Loaded ${orders.value.length} orders from data.plannings`)
       } else if (Array.isArray(data)) {
         orders.value = data
+        console.log(`✅ Loaded ${orders.value.length} orders from data array`)
       } else {
+        console.warn('⚠️ No orders found in response:', data)
         orders.value = []
       }
+
+      if (orders.value.length === 0) {
+        console.log('ℹ️ No orders found for this employee on', localSelectedDate.value)
+      }
     } else {
+      console.error('❌ API error:', response.status, response.statusText)
       orders.value = []
     }
   } catch (error) {
-    console.error('Error loading orders:', error)
+    console.error('❌ Error loading orders:', error)
     orders.value = []
   } finally {
-    loading.value = false  // Important: toujours exécuté
+    loading.value = false
+    console.log('✅ Loading complete')
   }
 }
 
 const handleDateChange = () => {
-  loadEmployeeOrders()  // Rechargement manuel uniquement
+  console.log('📅 Manual date change to:', localSelectedDate.value)
+  loadEmployeeOrders()
 }
 
 const getInitials = (name: string | undefined) => {
@@ -351,10 +386,6 @@ const getInitials = (name: string | undefined) => {
   return name.substring(0, 2).toUpperCase()
 }
 
-// ========== FIXED DATE/TIME FORMATTING METHODS ==========
-// Replace the existing formatting methods in EmployeeDetailPage.vue
-
-// Format duration in minutes to hours/minutes
 const formatDuration = (minutes: number) => {
   if (!minutes) return '0h'
   const hours = Math.floor(minutes / 60)
@@ -362,11 +393,9 @@ const formatDuration = (minutes: number) => {
   return mins > 0 ? `${hours}h${mins}m` : `${hours}h`
 }
 
-// Format date (e.g., "Jun 5, 2025")
 const formatDate = (date: any) => {
   if (!date) return 'N/A'
   try {
-    // Handle both ISO strings and Date objects
     const dateObj = typeof date === 'string' ? new Date(date) : date
     return dateObj.toLocaleDateString('en-US', {
       month: 'short',
@@ -374,173 +403,83 @@ const formatDate = (date: any) => {
       year: 'numeric'
     })
   } catch {
-    return 'N/A'
+    return 'Invalid date'
   }
 }
 
-// Format time from ISO timestamp or time string
 const formatTime = (time: any) => {
   if (!time) return 'N/A'
   try {
-    // If it's already in HH:MM format, return as is
-    if (typeof time === 'string' && time.match(/^\d{2}:\d{2}$/)) {
-      return time
-    }
-
-    // Parse ISO timestamp (e.g., "2025-06-01T07:27:00.000+00:00")
-    const date = new Date(time)
-
-    // Check if date is valid
-    if (isNaN(date.getTime())) {
-      return 'N/A'
-    }
-
-    return date.toLocaleTimeString('en-US', {
+    const timeObj = typeof time === 'string' ? new Date(time) : time
+    return timeObj.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: false
     })
   } catch {
-    return 'N/A'
+    return 'Invalid time'
   }
 }
 
-// Format day name (e.g., "Monday")
 const formatDayName = (date: string) => {
-  if (!date) return 'N/A'
   try {
-    // Extract date part if ISO timestamp
-    const dateStr = date.split('T')[0]
-    const dateObj = new Date(dateStr + 'T00:00:00')
-
-    if (isNaN(dateObj.getTime())) {
-      return 'N/A'
-    }
-
-    return dateObj.toLocaleDateString('en-US', { weekday: 'long' })
+    return new Date(date).toLocaleDateString('en-US', { weekday: 'long' })
   } catch {
-    return 'N/A'
+    return 'Unknown Day'
   }
 }
 
-// Format full date (e.g., "June 1, 2025")
 const formatFullDate = (date: string) => {
-  if (!date) return 'N/A'
   try {
-    // Extract date part if ISO timestamp
-    const dateStr = date.split('T')[0]
-    const dateObj = new Date(dateStr + 'T00:00:00')
-
-    if (isNaN(dateObj.getTime())) {
-      return 'N/A'
-    }
-
-    return dateObj.toLocaleDateString('en-US', {
+    return new Date(date).toLocaleDateString('en-US', {
       month: 'long',
       day: 'numeric',
       year: 'numeric'
     })
   } catch {
-    return 'N/A'
+    return 'Invalid date'
   }
 }
 
-// Calculate total cards for a day
 const calculateDayCards = (dayOrders: any[]) => {
-  if (!dayOrders || !Array.isArray(dayOrders)) return 0
-  return dayOrders.reduce((sum, order) => sum + (order.cardCount || 0), 0)
+  return dayOrders.reduce((sum, o) => sum + (o.cardCount || 0), 0)
 }
 
-// Calculate total duration for a day
 const calculateDayDuration = (dayOrders: any[]) => {
-  if (!dayOrders || !Array.isArray(dayOrders)) return 0
-  return dayOrders.reduce((sum, order) => {
-    const duration = order.duration ||
-      order.durationMinutes ||
-      order.estimatedDurationMinutes ||
-      order.estimatedDuration ||
-      0
+  return dayOrders.reduce((sum, o) => {
+    const duration = o.duration || o.durationMinutes || o.estimatedDurationMinutes || 0
     return sum + duration
   }, 0)
 }
 
-// Get CSS class for priority/delai
-const getDelaiClass = (delai: string) => {
-  if (!delai) return 'default'
-
-  const map: Record<string, string> = {
-    'X': 'excelsior',
-    'F+': 'fast-plus',
-    'F': 'fast',
-    'C': 'classic',
-    'E': 'economy'
-  }
-  return map[delai.toUpperCase()] || 'default'
-}
-
-// Get display label for priority/delai
-const getDelaiLabel = (delai: string) => {
-  if (!delai) return 'Unknown'
-
-  const map: Record<string, string> = {
-    'X': '⚡ Excelsior',
-    'F+': '🚀 Fast+',
-    'F': '⏩ Fast',
-    'C': '📦 Classic',
-    'E': '🐌 Economy'
-  }
-  return map[delai.toUpperCase()] || delai
-}
-
-// Get display label for order status
-const getStatusLabel = (status: number | string) => {
+const getStatusLabel = (status: any) => {
   const statusMap: Record<number, string> = {
-    1: '📥 To be received',
-    9: '✅ Package accepted',
-    10: '📸 To be scanned',
-    11: '📂 To be opened',
-    2: '📝 To be evaluated',
-    3: '🔒 To be encapsulated',
-    4: '📦 To be prepared',
-    7: '🔓 To be unsealed',
-    6: '👀 To be seen',
-    41: '🚚 To be delivered',
-    42: '📮 To be sent',
-    5: '✈️ Sent',
-    8: '🎉 Received'
+    1: 'Received',
+    2: 'To Grade',
+    3: 'To Certify',
+    4: 'To Prepare',
+    5: 'Prepared',
+    6: 'Quality Check',
+    7: 'Ready to Ship',
+    10: 'To Scan',
+    11: 'Scanned'
   }
-
   const statusNum = typeof status === 'string' ? parseInt(status) : status
   return statusMap[statusNum] || `Status ${status}`
 }
 
-// Toggle order cards visibility and load if needed
 const toggleOrderCards = async (order: any) => {
-  // Toggle visibility
   order.showCards = !order.showCards
-
-  // If hiding, just return
-  if (!order.showCards) {
+  if (!order.showCards || (order.cards && order.cards.length > 0)) {
     return
   }
-
-  // If already loaded, just show
-  if (order.cards && order.cards.length > 0) {
-    return
-  }
-
-  // If already loading, don't start another request
   if (order.loadingCards) {
     return
   }
 
-  // Load cards from API
   order.loadingCards = true
-
   try {
-    // Use orderId from the order object
     const orderId = order.orderId || order.id
-
     if (!orderId) {
       console.error('❌ No orderId found in order:', order)
       order.cards = []
@@ -548,40 +487,26 @@ const toggleOrderCards = async (order: any) => {
     }
 
     console.log('🃏 Loading cards for order:', orderId)
-
-    // Try the planning endpoint first (more complete data)
     let url = `${API_BASE_URL}/api/planning/order/${orderId}/cards`
-    console.log('🔗 Fetching from:', url)
-
     let response = await fetch(url)
 
-    // If planning endpoint fails, try orders endpoint
     if (!response.ok) {
       console.log('⚠️ Planning endpoint failed, trying orders endpoint...')
       url = `${API_BASE_URL}/api/orders/${orderId}/cards`
-      console.log('🔗 Fetching from:', url)
       response = await fetch(url)
     }
 
     if (response.ok) {
       const data = await response.json()
-      console.log('✅ Cards API response:', data)
-
-      // Handle different response formats
       if (data.success && Array.isArray(data.cards)) {
-        // Format from planning endpoint: {success: true, cards: [...]}
         order.cards = data.cards
-        console.log(`✅ Loaded ${order.cards.length} cards from planning endpoint`)
       } else if (Array.isArray(data)) {
-        // Format from orders endpoint: [...]
         order.cards = data
-        console.log(`✅ Loaded ${order.cards.length} cards from orders endpoint`)
       } else {
         console.warn('⚠️ Unexpected response format:', data)
         order.cards = []
       }
 
-      // Ensure each card has the required fields
       order.cards = order.cards.map((card: any) => ({
         id: card.id,
         name: card.name || card.cardName || 'Unnamed Card',
@@ -591,12 +516,10 @@ const toggleOrderCards = async (order: any) => {
         grade: card.grade || '',
         quantity: card.quantity || card.amount || 1
       }))
-
     } else {
       console.error('❌ API error:', response.status, response.statusText)
       order.cards = []
     }
-
   } catch (error) {
     console.error('❌ Error loading cards:', error)
     order.cards = []
@@ -605,13 +528,56 @@ const toggleOrderCards = async (order: any) => {
   }
 }
 
+/// ========== HELPER FUNCTIONS FOR DISPLAY ==========
 
-// PAS DE WATCH - chargement uniquement au montage
+const getDelaiClass = (delai: string) => {
+  const delaiMap: Record<string, string> = {
+    'X': 'bg-red-100 text-red-800',      // Express - 1 jour
+    'F+': 'bg-orange-100 text-orange-800', // Fast+ - 1 semaine
+    'F': 'bg-yellow-100 text-yellow-800',  // Fast - 2 semaines
+    'C': 'bg-blue-100 text-blue-800',     // Classic - 1 mois
+    'E': 'bg-gray-100 text-gray-800'      // Economy - 3 mois
+  }
+  return delaiMap[delai] || 'bg-gray-100 text-gray-800'
+}
+
+const getDelaiLabel = (delai: string) => {
+  const delaiMap: Record<string, string> = {
+    'X': '🚀 Express (1 day)',
+    'F+': '⚡ Fast+ (1 week)',
+    'F': '🏃 Fast (2 weeks)',
+    'C': '📦 Classic (1 month)',
+    'E': '🐌 Economy (3 months)'
+  }
+  return delaiMap[delai] || delai
+}
+
+const getStatusClass = (status: number) => {
+  const statusMap: Record<number, string> = {
+    1: 'bg-gray-100 text-gray-800',
+    2: 'bg-yellow-100 text-yellow-800',   // To Grade
+    3: 'bg-blue-100 text-blue-800',       // To Certify
+    4: 'bg-purple-100 text-purple-800',   // To Prepare
+    5: 'bg-green-100 text-green-800',     // Prepared
+    10: 'bg-orange-100 text-orange-800'   // To Scan
+  }
+  return statusMap[status] || 'bg-gray-100 text-gray-800'
+}
+
+// ========== LIFECYCLE ==========
 onMounted(() => {
+  console.log('🎯 EmployeeDetailPage mounted')
+  console.log('   Employee ID:', props.employeeId)
+  console.log('   Selected Date:', localSelectedDate.value)
+  console.log('   Mode:', props.mode)
+
   loadEmployeeData()
   loadEmployeeOrders()
 })
 </script>
+
+<!-- Le template reste identique -->
+
 
 
 <style scoped>

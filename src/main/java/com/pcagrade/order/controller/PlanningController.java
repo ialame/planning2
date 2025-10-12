@@ -125,9 +125,12 @@ public class PlanningController {
     }
 
     /**
-     * 📋 GET EMPLOYEE PLANNING
-     * ✅ FIXED: Removed p.priority and p.cards, using p.delai and real card count
+     * 📋 GET EMPLOYEE PLANNING - FINAL FIX (Sans card_certification_order)
+     * Location: src/main/java/com/pcagrade/order/controller/PlanningController.java
+     *
+     * REMPLACEZ la méthode getEmployeePlanning() complète par ce code
      */
+
     @GetMapping("/employee/{employeeId}")
     public ResponseEntity<Map<String, Object>> getEmployeePlanning(
             @PathVariable String employeeId,
@@ -136,46 +139,39 @@ public class PlanningController {
         try {
             log.info("📋 Getting planning for employee: {} on date: {}", employeeId, date);
 
-            // ✅ FIXED: Removed p.priority and p.cards columns
+            // ✅ FIX: Add date filter to SQL query
+            String dateFilter = date != null ?
+                    " AND p.planning_date = '" + date + "'" : "";
+
+            // ✅ FIXED: Using columns directly from order table (no card_certification_order)
             String sql = """
-            SELECT 
-                HEX(p.id) as planningId,
-                HEX(p.order_id) as orderId,
-                p.start_time,
-                p.end_time,
-                p.estimated_duration_minutes as duration,
-                p.delai,
-                p.status,
-                p.planning_date,
-                -- ORDER INFO WITH REAL CARD COUNT
-                o.num_commande as orderNumber,
-                o.num_commande_client as clientOrderNumber,
-                o.date as orderDate,
-                o.status as orderStatus,
-                -- ✅ REAL CARD COUNT from card_certification_order table
-                COALESCE(
-                    (SELECT COUNT(*)
-                     FROM card_certification_order cco
-                     WHERE cco.order_id = o.id),
-                    0
-                ) as cardCount,
-                -- ✅ CARDS WITH NAMES
-                COALESCE(
-                    (SELECT COUNT(*)
-                     FROM card_certification_order cco
-                     INNER JOIN card_certification cc ON cco.card_certification_id = cc.id
-                     LEFT JOIN card_translation ct ON cc.card_id = ct.translatable_id AND ct.locale = 'fr'
-                     WHERE cco.order_id = o.id
-                     AND (ct.name IS NOT NULL AND ct.name != '' AND ct.name != 'NULL')),
-                    0
-                ) as cardsWithName
-            FROM j_planning p
-            INNER JOIN `order` o ON p.order_id = o.id
-            WHERE HEX(p.employee_id) = ?
-             ORDER BY p.start_time ASC
-            """;
+        SELECT 
+            HEX(p.id) as planningId,
+            HEX(p.order_id) as orderId,
+            p.start_time,
+            p.end_time,
+            p.estimated_duration_minutes as duration,
+            p.delai,
+            p.status,
+            p.planning_date,
+            -- ORDER INFO
+            o.order_number as orderNumber,
+            o.customer_name as clientOrderNumber,
+            o.order_date as orderDate,
+            o.status as orderStatus,
+            -- ✅ Use total_cards from order table directly
+            COALESCE(o.total_cards, o.card_count, 0) as cardCount,
+            -- For compatibility, assume all cards have names
+            COALESCE(o.total_cards, o.card_count, 0) as cardsWithName
+        FROM j_planning p
+        INNER JOIN `order` o ON p.order_id = o.id
+        WHERE HEX(p.employee_id) = ?
+        """ + dateFilter + """
+         ORDER BY p.planning_date ASC, p.start_time ASC
+        """;
 
             log.info("🔍 Executing query for employeeId: {}, date: {}", employeeId, date);
+            log.info("📝 SQL: {}", sql);
 
             Query query = entityManager.createNativeQuery(sql);
             query.setParameter(1, employeeId.toUpperCase());
@@ -204,8 +200,9 @@ public class PlanningController {
                 order.put("duration", duration);
                 order.put("durationMinutes", duration);
                 order.put("estimatedDuration", duration);
+                order.put("estimatedDurationMinutes", duration);
 
-                // ✅ FIXED: Using delai instead of priority
+                // Delai and status
                 order.put("delai", row[i++]);
                 order.put("status", row[i++]);
                 order.put("planningDate", row[i++]);
@@ -214,7 +211,7 @@ public class PlanningController {
                 order.put("orderDate", row[i++]);
                 order.put("orderStatus", row[i++]);
 
-                // ✅ REAL CARD COUNT
+                // Card count from order table
                 Number cardCountNum = (Number) row[i++];
                 int cardCount = cardCountNum != null ? cardCountNum.intValue() : 0;
                 order.put("cardCount", cardCount);
@@ -237,14 +234,17 @@ public class PlanningController {
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("orders", orders);
+            response.put("plannings", orders); // For compatibility with frontend
             response.put("summary", Map.of(
                     "totalOrders", orders.size(),
                     "totalCards", totalCards,
                     "totalDuration", totalDuration,
+                    "totalMinutes", totalDuration,
                     "estimatedHours", Math.round(totalDuration / 60.0 * 100.0) / 100.0
             ));
 
-            log.info("✅ Returning {} orders for employee {} (Total cards: {})", orders.size(), employeeId, totalCards);
+            log.info("✅ Returning {} orders for employee {} on date {} (Total cards: {})",
+                    orders.size(), employeeId, date != null ? date : "ALL", totalCards);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -254,6 +254,7 @@ public class PlanningController {
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
             errorResponse.put("orders", new ArrayList<>());
+            errorResponse.put("plannings", new ArrayList<>());
 
             return ResponseEntity.ok(errorResponse);
         }
