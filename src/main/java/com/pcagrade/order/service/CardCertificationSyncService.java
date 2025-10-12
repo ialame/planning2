@@ -217,4 +217,10 @@ public class CardCertificationSyncService {
         if (value instanceof Number) return ((Number) value).intValue() != 0;
         return Boolean.parseBoolean(value.toString());
     }
+
+
+    public long getTotalCards() {
+        return cardCertificationRepository.count();
+    }
+
 }

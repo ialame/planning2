@@ -474,63 +474,136 @@ public class PlanningController {
 
     /**
      * 🃏 GET ORDER CARDS
+     * Location: src/main/java/com/pcagrade/order/controller/PlanningController.java
+     *
+     * Replace the existing getOrderCards method with this version
+     *
+     * Fixes: Handles Boolean fields correctly, doesn't try to cast Boolean to Number
      */
     @GetMapping("/order/{orderId}/cards")
     public ResponseEntity<Map<String, Object>> getOrderCards(@PathVariable String orderId) {
         try {
             log.info("🃏 Fetching cards for order: {}", orderId);
 
+            // Query with explicit type casting for booleans
             String sql = """
             SELECT 
                 HEX(cc.id) as id,
                 cc.code_barre,
-                COALESCE(ct.name, CONCAT('Card #', cc.code_barre)) as name,
-                COALESCE(ct.label_name, CONCAT('Label #', cc.code_barre)) as label_name,
+                cc.card_name,
+                COALESCE(cc.custom_label, cc.code_barre) as label_name,
                 3 as duration,
-                COALESCE(cc.annotation, 0) as amount
-            FROM card_certification_order cco
-            INNER JOIN card_certification cc ON cco.card_certification_id = cc.id
-            LEFT JOIN card_translation ct ON cc.card_id = ct.translatable_id AND ct.locale = 'fr'
-            WHERE HEX(cco.order_id) = ?
+                CAST(cc.grading_completed AS SIGNED) as grading_completed,
+                CAST(cc.certification_completed AS SIGNED) as certification_completed,
+                CAST(cc.scanning_completed AS SIGNED) as scanning_completed,
+                CAST(cc.packaging_completed AS SIGNED) as packaging_completed
+            FROM card_certification cc
+            WHERE HEX(cc.order_id) = ?
+                AND cc.deleted = 0
+            ORDER BY cc.id
             """;
 
             Query query = entityManager.createNativeQuery(sql);
-            query.setParameter(1, orderId.toUpperCase());
+            query.setParameter(1, orderId.toUpperCase().replace("-", ""));
 
             @SuppressWarnings("unchecked")
             List<Object[]> results = query.getResultList();
 
             List<Map<String, Object>> cards = new ArrayList<>();
+            int totalDuration = 0;
 
             for (Object[] row : results) {
                 Map<String, Object> card = new HashMap<>();
+
+                // Basic info (row[0] to row[4])
                 card.put("id", row[0]);
                 card.put("barcode", row[1]);
-                card.put("name", row[2]);
+                card.put("code_barre", row[1]); // Alias for compatibility
+
+                // Card name
+                String cardName = row[2] != null ? row[2].toString() : null;
+                card.put("name", cardName != null ? cardName : "Card #" + row[1]);
+                card.put("cardName", cardName);
+
+                // Label
                 card.put("labelName", row[3]);
-                card.put("duration", row[4]);
-                card.put("amount", row[5] != null ? ((Number) row[5]).doubleValue() : 0.0);
+                card.put("label_name", row[3]); // Alias for compatibility
+
+                // Duration (always 3 minutes per card in this system)
+                int duration = row[4] != null ? ((Number) row[4]).intValue() : 3;
+                card.put("duration", duration);
+
+                // Amount/Quantity (default to 1 since we don't have this field)
+                int amount = 1;
+                card.put("amount", amount);
+                card.put("quantity", amount);
+
+                // Processing status - now correctly handled as integers (row[5] to row[8])
+                boolean gradingCompleted = row[5] != null && ((Number) row[5]).intValue() == 1;
+                boolean certificationCompleted = row[6] != null && ((Number) row[6]).intValue() == 1;
+                boolean scanningCompleted = row[7] != null && ((Number) row[7]).intValue() == 1;
+                boolean packagingCompleted = row[8] != null && ((Number) row[8]).intValue() == 1;
+
+                card.put("gradingCompleted", gradingCompleted);
+                card.put("certificationCompleted", certificationCompleted);
+                card.put("scanningCompleted", scanningCompleted);
+                card.put("packagingCompleted", packagingCompleted);
+
+                // Calculate status text based on completion
+                String status;
+                if (packagingCompleted) {
+                    status = "completed";
+                } else if (scanningCompleted) {
+                    status = "scanning_done";
+                } else if (certificationCompleted) {
+                    status = "certification_done";
+                } else if (gradingCompleted) {
+                    status = "grading_done";
+                } else {
+                    status = "pending";
+                }
+                card.put("status", status);
+
+                // Grade placeholder (not available in current schema)
+                card.put("grade", "N/A");
 
                 cards.add(card);
+                totalDuration += (duration * amount);
             }
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("cards", cards);
-            response.put("total", cards.size());
+            response.put("totalCards", cards.size());
 
-            log.info("✅ Retrieved {} cards for order {}", cards.size(), orderId);
+            long cardsWithName = cards.stream()
+                    .filter(c -> c.get("cardName") != null && !c.get("cardName").toString().isEmpty())
+                    .count();
+            response.put("cardsWithName", cardsWithName);
+
+            response.put("estimatedDuration", totalDuration);
+
+            int namePercentage = cards.isEmpty() ? 0 :
+                    (int) ((cardsWithName * 100.0) / cards.size());
+            response.put("namePercentage", namePercentage);
+
+            log.info("✅ Retrieved {} cards for order {} (Duration: {} min, {}% with names)",
+                    cards.size(), orderId, totalDuration, namePercentage);
+
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("❌ Error fetching order cards", e);
+            log.error("❌ Error fetching cards for order {}: {}", orderId, e.getMessage(), e);
+
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
-            return ResponseEntity.internalServerError().body(errorResponse);
+            errorResponse.put("cards", new ArrayList<>());
+            errorResponse.put("totalCards", 0);
+
+            return ResponseEntity.status(500).body(errorResponse);
         }
     }
-
 
     /**
      * Health check
