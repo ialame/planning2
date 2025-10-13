@@ -318,7 +318,7 @@ const filters = ref({
 })
 
 const showNotification = inject('showNotification')
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://146.190.204.228:8080'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
 // Helper functions
 const getDelaiColor = (delai) => {

@@ -334,7 +334,7 @@
 <script setup lang="ts">
 import { ref, onMounted, inject } from 'vue'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://146.190.204.228:8080'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 const showNotification = inject('showNotification', (msg: string, type: string) => console.log(msg))
 
 // State

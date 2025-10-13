@@ -71,7 +71,7 @@ This system manages the complete workflow for Pokemon card grading operations:
 ┌─────────────────────────────────────────────────────────────┐
 │                    MARIADB DATABASE                         │
 │                    (localhost:3306)                         │
-│                    dev-planning                             │
+│                    planningdb                             │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          │ Data Sync
@@ -124,8 +124,8 @@ mysql -u root -p
 ```
 
 ```sql
-CREATE USER 'ia'@'localhost' IDENTIFIED BY 'foufafou';
-GRANT ALL PRIVILEGES ON *.* TO 'ia'@'localhost';
+CREATE USER 'xyz'@'localhost' IDENTIFIED BY 'abc123';
+GRANT ALL PRIVILEGES ON *.* TO 'xyz'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
@@ -135,7 +135,7 @@ EXIT;
 ```bash
 # Clone repository
 git clone <your-repo-url>
-cd planning
+cd planning2
 
 # Create local configuration from template
 cp src/main/resources/application-local.properties.example \
@@ -148,8 +148,8 @@ nano src/main/resources/application-local.properties
 Update the following in `application-local.properties`:
 
 ```properties
-spring.datasource.username=ia
-spring.datasource.password=foufafou
+spring.datasource.username=xyz
+spring.datasource.password=abc123
 ```
 
 ### Step 3: Start Backend
@@ -159,7 +159,7 @@ mvn spring-boot:run
 ```
 
 The backend will automatically:
-- ✅ Create database `dev-planning`
+- ✅ Create database `planningdb`
 - ✅ Run Liquibase migrations
 - ✅ Create all tables
 - ✅ Populate initial data (roles, employees)
@@ -189,7 +189,7 @@ mvn spring-boot:run
 ```
 
 **What happens automatically:**
-1. Creates database `dev-planning` (via `createDatabaseIfNotExist=true`)
+1. Creates database `planningdb` (via `createDatabaseIfNotExist=true`)
 2. Runs Liquibase changesets to create tables
 3. Populates initial data (roles, status mappings)
 4. Application creates test employees via `DataInitializer`
@@ -199,12 +199,12 @@ mvn spring-boot:run
 If you prefer manual control:
 
 ```bash
-mysql -u ia -pfoufafou << 'EOF'
-CREATE DATABASE IF NOT EXISTS `dev-planning` 
+mysql -u xyz -pabc123 << 'EOF'
+CREATE DATABASE IF NOT EXISTS `planningdb` 
   CHARACTER SET utf8mb4 
   COLLATE utf8mb4_unicode_ci;
 
-USE `dev-planning`;
+USE `planningdb`;
 
 -- Tables will be created by Liquibase automatically
 -- Just start the Spring Boot application
@@ -278,9 +278,9 @@ Edit and update:
 
 ```properties
 # Database Configuration
-spring.datasource.url=jdbc:mariadb://localhost:3306/dev-planning?createDatabaseIfNotExist=true
-spring.datasource.username=ia
-spring.datasource.password=foufafou
+spring.datasource.url=jdbc:mariadb://localhost:3306/planningdb?createDatabaseIfNotExist=true
+spring.datasource.username=xyz
+spring.datasource.password=abs123
 
 # Liquibase Configuration
 spring.liquibase.enabled=true
@@ -294,7 +294,7 @@ spring.web.cors.allowed-origins=http://localhost:3000,http://localhost:5173
 **Docker:** `application-docker.properties`
 
 ```properties
-spring.datasource.url=jdbc:mariadb://database:3306/dev-planning
+spring.datasource.url=jdbc:mariadb://database:3306/planningdb
 spring.profiles.active=docker
 spring.liquibase.contexts=docker
 ```
@@ -1005,9 +1005,9 @@ The project uses several configuration files that **must NOT** be committed to G
 
 ```properties
 # Database Configuration
-spring.datasource.url=jdbc:mariadb://localhost:3306/dev-planning?createDatabaseIfNotExist=true
-spring.datasource.username=ia
-spring.datasource.password=foufafou
+spring.datasource.url=jdbc:mariadb://localhost:3306/planningdb?createDatabaseIfNotExist=true
+spring.datasource.username=xyz
+spring.datasource.password=abc123
 spring.datasource.driver-class-name=org.mariadb.jdbc.Driver
 
 # JPA/Hibernate
@@ -1191,7 +1191,7 @@ The project uses **contexts** to control which changesets run in each environmen
 
 ```bash
 # Check which changesets have been applied
-mysql -u ia -pfoufafou dev-planning
+mysql -u xyz -pabc123 planningdb
 
 SELECT * FROM DATABASECHANGELOG ORDER BY DATEEXECUTED DESC;
 
@@ -1311,8 +1311,8 @@ mvn spring-boot:run
 
 ```bash
 # Drop database and start fresh
-mysql -u ia -pfoufafou
-DROP DATABASE `dev-planning`;
+mysql -u xyz -pabc123
+DROP DATABASE `planningdb`;
 EXIT;
 
 # Restart application - everything will be recreated
@@ -1396,25 +1396,25 @@ curl -X POST http://localhost:8080/api/planning/generate
 
 ### Database Issues
 
-**Error:** `Access denied for user 'ia'@'localhost'`
+**Error:** `Access denied for user 'xyz'@'localhost'`
 
 ```bash
 # Recreate database user
 mysql -u root -p
-DROP USER IF EXISTS 'ia'@'localhost';
-CREATE USER 'ia'@'localhost' IDENTIFIED BY 'foufafou';
-GRANT ALL PRIVILEGES ON *.* TO 'ia'@'localhost';
+DROP USER IF EXISTS 'xyz'@'localhost';
+CREATE USER 'xyz'@'localhost' IDENTIFIED BY 'abc123';
+GRANT ALL PRIVILEGES ON *.* TO 'xyz'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
 
-**Error:** `Unknown database 'dev-planning'`
+**Error:** `Unknown database 'planningdb'`
 
 The database should be created automatically. If not:
 
 ```bash
-mysql -u ia -pfoufafou
-CREATE DATABASE `dev-planning` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+mysql -u xyz -pabc123
+CREATE DATABASE `planningdb` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 EXIT;
 
 # Then restart Spring Boot
@@ -1428,7 +1428,7 @@ mvn spring-boot:run
 mvn liquibase:clearCheckSums
 
 # Or drop and recreate
-mysql -u ia -pfoufafou -e "DROP DATABASE \`dev-planning\`;"
+mysql -u xyz -pabc123 -e "DROP DATABASE \`planningdb\`;"
 mvn spring-boot:run
 ```
 
@@ -1772,8 +1772,8 @@ For issues, questions, or contributions:
 # ========== INITIAL SETUP ==========
 # 1. Create database user
 mysql -u root -p
-CREATE USER 'ia'@'localhost' IDENTIFIED BY 'foufafou';
-GRANT ALL PRIVILEGES ON *.* TO 'ia'@'localhost';
+CREATE USER 'xyz'@'localhost' IDENTIFIED BY 'abc123';
+GRANT ALL PRIVILEGES ON *.* TO 'xyz'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 
@@ -1791,7 +1791,7 @@ symfony server:start                   # Symfony API (terminal 3, optional)
 
 # ========== USEFUL COMMANDS ==========
 # Database
-mysql -u ia -pfoufafou dev-planning                   # Access DB
+mysql -u xyz -pabc123 planningdb                   # Access DB
 SELECT * FROM DATABASECHANGELOG;                      # Check Liquibase
 
 # Backend
@@ -1803,7 +1803,7 @@ curl http://localhost:8080/actuator/liquibase        # Liquibase status
 curl -X POST http://localhost:8080/api/sync/all      # Sync from Symfony
 
 # ========== RESET DATABASE ==========
-mysql -u ia -pfoufafou -e "DROP DATABASE \`dev-planning\`;"
+mysql -u xyz -pabc123 -e "DROP DATABASE \`planningdb\`;"
 mvn spring-boot:run                                   # Recreates everything
 
 # ========== LIQUIBASE ==========

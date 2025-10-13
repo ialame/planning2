@@ -173,7 +173,7 @@ pokemon-planning-*.yaml
 
 latex/
 
-.env
+src/main/frontend/.env
 
 dev/
 
