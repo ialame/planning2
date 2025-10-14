@@ -60,8 +60,8 @@ public class Order extends AbstractUlidEntity {
     /**
      * Order creation date
      */
-    @Column(name = "order_date")
-    private LocalDate orderDate;
+    @Column(name = "date")
+    private LocalDate Date;
 
     /**
      * Total number of cards in this order

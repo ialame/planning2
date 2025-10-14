@@ -160,7 +160,7 @@ public class PlanningController {
                 -- ORDER INFO (using correct column names)
                 o.order_number as orderNumber,
                 o.customer_name as clientOrderNumber,
-                o.order_date as orderDate,
+                o.date as date,
                 o.status as orderStatus,
                 o.delai as orderDelai,
                 -- Card count from order table directly

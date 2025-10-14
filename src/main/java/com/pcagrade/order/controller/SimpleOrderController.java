@@ -48,7 +48,7 @@ public class SimpleOrderController {
                     o.order_number as orderNumber, 
                     o.delai, 
                     o.status,
-                    o.order_date as creationDate,
+                    o.date as creationDate,
                     o.symfony_order_id as reference,
                     o.customer_name as clientOrderNumber,
                     COALESCE(o.total_cards, 0) as cardCount,
@@ -91,7 +91,7 @@ public class SimpleOrderController {
             int total = ((Number) countQuery.getSingleResult()).intValue();
 
             // Add pagination
-            sqlBuilder.append(" ORDER BY o.order_date DESC, o.id DESC");
+            sqlBuilder.append(" ORDER BY o.date DESC, o.id DESC");
             sqlBuilder.append(" LIMIT ").append(size).append(" OFFSET ").append(page * size);
 
             // Execute main query
@@ -265,7 +265,7 @@ public class SimpleOrderController {
                     o.order_number as orderNumber,
                     o.delai,
                     o.status,
-                    o.order_date as creationDate,
+                    o.date as creationDate,
                     o.symfony_order_id as reference,
                     o.customer_name as clientOrderNumber,
                     COALESCE(o.total_cards, 0) as cardCount,

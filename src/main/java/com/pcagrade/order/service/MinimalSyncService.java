@@ -90,7 +90,7 @@ public class MinimalSyncService {
         order.setOrderNumber(getString(orderData, "order_number"));
         order.setCustomerName(getString(orderData, "customer_name"));
         order.setDeliveryDate(getString(orderData, "delivery_date")); // This is the delai code
-        order.setOrderDate(parseDate(getString(orderData, "order_date")));
+        order.setDate(parseDate(getString(orderData, "date")));
         order.setTotalCards(getInteger(orderData, "total_cards"));
         order.setStatus(getInteger(orderData, "status"));
         order.setPrice(getFloat(orderData, "price"));

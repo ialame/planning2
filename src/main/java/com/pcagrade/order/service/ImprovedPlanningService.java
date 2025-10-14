@@ -193,7 +193,7 @@ public class ImprovedPlanningService {
 
     /**
      * Get orders by status (NO date filter)
-     * ✅ FIXED: Use order.total_cards and order.order_date, removed annulee/paused filters
+     * ✅ FIXED: Use order.total_cards and order.date, removed annulee/paused filters
      */
     private List<Map<String, Object>> getOrdersByStatus(int status) {
         try {
@@ -203,7 +203,7 @@ public class ImprovedPlanningService {
                 o.order_number as orderNumber,
                 COALESCE(o.total_cards, 0) as cardCount,
                 o.delai,
-                o.order_date as orderDate
+                o.date as date
             FROM `order` o
             WHERE o.status = ?
             ORDER BY
@@ -215,7 +215,7 @@ public class ImprovedPlanningService {
                     WHEN 'E' THEN 1
                     ELSE 0
                 END DESC,
-                o.order_date ASC
+                o.date ASC
             """;
 
             Query query = entityManager.createNativeQuery(sql);

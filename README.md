@@ -517,7 +517,7 @@ class PlanningExportController extends AbstractController
                     o.num_commande as order_number,
                     CONCAT(COALESCE(c.prenom, ''), ' ', COALESCE(c.nom, '')) as customer_name,
                     o.delai as delivery_date,
-                    o.date as order_date,
+                    o.date as date,
                     COUNT(cco.card_certification_id) as total_cards,
                     o.status,
                     COALESCE(i.total_ttc, 0.0) as price,
@@ -567,11 +567,11 @@ class PlanningExportController extends AbstractController
                     $order['delivery_date'] = $order['delivery_date']->format('Y-m-d');
                 }
 
-                if (isset($order['order_date'])) {
-                    if ($order['order_date'] instanceof \DateTime) {
-                        $order['order_date'] = $order['order_date']->format('Y-m-d');
-                    } elseif (is_string($order['order_date'])) {
-                        $order['order_date'] = substr($order['order_date'], 0, 10);
+                if (isset($order['date'])) {
+                    if ($order['date'] instanceof \DateTime) {
+                        $order['date'] = $order['date']->format('Y-m-d');
+                    } elseif (is_string($order['date'])) {
+                        $order['date'] = substr($order['date'], 0, 10);
                     }
                 }
 
