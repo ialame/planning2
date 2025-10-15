@@ -1,11 +1,11 @@
 <template>
-  <div class="employees-with-groups">
+  <div class="employees-with-teams">
     <!-- Header -->
     <div class="mb-8">
       <div class="flex justify-between items-center">
         <div>
           <h1 class="text-3xl font-bold text-gray-900">👤 Employee Role Management</h1>
-          <p class="text-gray-600 mt-1">Assign and manage employee group memberships</p>
+          <p class="text-gray-600 mt-1">Assign and manage employee team memberships</p>
         </div>
         <div class="flex space-x-3">
           <select
@@ -117,19 +117,19 @@
           <div class="flex-1 mx-8">
             <div class="flex flex-wrap gap-2">
               <span
-                v-for="group in employee.groups"
-                :key="group.id"
+                v-for="team in employee.teams"
+                :key="team.id"
                 :class="[
                   'inline-flex items-center px-3 py-1 rounded-full text-sm font-medium',
-                  getPermissionBadgeColor(group.permissionLevel)
+                  getPermissionBadgeColor(team.permissionLevel)
                 ]"
               >
-                <span class="mr-1">{{ getGroupIcon(group.permissionLevel) }}</span>
-                {{ group.name }}
-                <span class="ml-1 text-xs">({{ group.permissionLevel }})</span>
+                <span class="mr-1">{{ getGroupIcon(team.permissionLevel) }}</span>
+                {{ team.name }}
+                <span class="ml-1 text-xs">({{ team.permissionLevel }})</span>
               </span>
               <span
-                v-if="employee.groups.length === 0"
+                v-if="employee.teams.length === 0"
                 class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800"
               >
                 No roles assigned
@@ -186,11 +186,11 @@
       <p class="text-gray-600">Loading employees...</p>
     </div>
 
-    <!-- Employee Group Management Modal -->
+    <!-- Employee Team Management Modal -->
     <EmployeeGroupManagementModal
       v-if="selectedEmployee"
       :employee="selectedEmployee"
-      :current-groups="selectedEmployee.groups"
+      :current-teams="selectedEmployee.teams"
       @close="selectedEmployee = null"
       @updated="onEmployeeGroupsUpdated"
     />
@@ -221,7 +221,7 @@ interface Employee {
   active: boolean
   workHoursPerDay: number
   efficiencyRating: number
-  groups: Group[]
+  teams: Group[]
 }
 
 interface Group {
@@ -274,7 +274,7 @@ const filteredEmployees = computed(() => {
     filtered = filtered.filter(emp =>
       emp.fullName.toLowerCase().includes(search) ||
       emp.email.toLowerCase().includes(search) ||
-      emp.groups.some(g => g.name.toLowerCase().includes(search))
+      emp.teams.some(g => g.name.toLowerCase().includes(search))
     )
   }
 
@@ -287,7 +287,7 @@ const filteredEmployees = computed(() => {
         case 'manager': return highestLevel >= 5 && highestLevel < 8
         case 'processor': return highestLevel >= 3 && highestLevel < 5
         case 'viewer': return highestLevel >= 1 && highestLevel < 3
-        case 'unassigned': return emp.groups.length === 0
+        case 'unassigned': return emp.teams.length === 0
         default: return true
       }
     })
@@ -325,27 +325,27 @@ const loadEmployees = async () => {
         return
       }
 
-      // Load groups for each employee
+      // Load teams for each employee
       const employeesWithGroups = await Promise.all(
         employeeList.map(async (emp: Employee) => {
           try {
-            const groupsResponse = await fetch(`${API_BASE_URL}/api/v2/groups/employee/${emp.id}`)
+            const groupsResponse = await fetch(`${API_BASE_URL}/api/v2/teams/employee/${emp.id}`)
             if (groupsResponse.ok) {
               const groupsData = await groupsResponse.json()
-              emp.groups = groupsData.groups || []
+              emp.teams = groupsData.teams || []
             } else {
-              emp.groups = []
+              emp.teams = []
             }
           } catch (error) {
-            console.error(`Error loading groups for employee ${emp.id}:`, error)
-            emp.groups = []
+            console.error(`Error loading teams for employee ${emp.id}:`, error)
+            emp.teams = []
           }
           return emp
         })
       )
 
       employees.value = employeesWithGroups
-      console.log(`✅ Final result: ${employees.value.length} employees with groups loaded`)
+      console.log(`✅ Final result: ${employees.value.length} employees with teams loaded`)
     } else {
       console.error('❌ Failed to load employees:', response.status, response.statusText)
     }
@@ -379,8 +379,8 @@ const getEmployeeInitials = (employee: Employee) => {
 }
 
 const getHighestPermissionLevel = (employee: Employee) => {
-  if (employee.groups.length === 0) return 0
-  return Math.max(...employee.groups.map(g => g.permissionLevel))
+  if (employee.teams.length === 0) return 0
+  return Math.max(...employee.teams.map(g => g.permissionLevel))
 }
 
 const getPrimaryRole = (employee: Employee) => {
@@ -420,7 +420,7 @@ const generateEmployeeRolesCSV = () => {
   const rows = employees.value.map(emp => [
     emp.fullName,
     emp.email,
-    emp.groups.map(g => g.name).join('; '),
+    emp.teams.map(g => g.name).join('; '),
     getHighestPermissionLevel(emp),
     getPrimaryRole(emp),
     emp.active ? 'Active' : 'Inactive'
@@ -445,12 +445,12 @@ const downloadCSV = (content: string, filename: string) => {
 // Dans EmployeesWithGroups.vue, remplacez ces méthodes par :
 
 const manageEmployeeGroups = (employee: Employee) => {
-  console.log('🔧 Managing groups for employee:', employee)
+  console.log('🔧 Managing teams for employee:', employee)
   console.log('Employee data:', {
     id: employee.id,
     name: employee.fullName,
     email: employee.email,
-    groups: employee.groups
+    teams: employee.teams
   })
 
   selectedEmployee.value = employee
@@ -460,7 +460,7 @@ const manageEmployeeGroups = (employee: Employee) => {
 const viewEmployeeDetails = (employee: Employee) => {
   console.log('👁️ Viewing details for employee:', employee)
   // Pour l'instant, juste un log - vous pouvez implementer une modal de détails plus tard
-  alert(`Employee Details:\n\nName: ${employee.fullName}\nEmail: ${employee.email}\nWork Hours: ${employee.workHoursPerDay}h/day\nGroups: ${employee.groups.length}`)
+  alert(`Employee Details:\n\nName: ${employee.fullName}\nEmail: ${employee.email}\nWork Hours: ${employee.workHoursPerDay}h/day\nGroups: ${employee.teams.length}`)
 }
 // ========== LIFECYCLE ==========
 onMounted(() => {

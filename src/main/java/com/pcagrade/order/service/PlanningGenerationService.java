@@ -38,7 +38,7 @@ public class PlanningGenerationService {
             // ========== CLEAN FIRST ==========
             if (cleanFirst) {
                 try {
-                    String deleteQuery = "DELETE FROM j_planning";
+                    String deleteQuery = "DELETE FROM planning";
                     Query deleteQ = entityManager.createNativeQuery(deleteQuery);
                     int deleted = deleteQ.executeUpdate();
                     entityManager.flush(); // Force immediate execution
@@ -103,7 +103,7 @@ public class PlanningGenerationService {
 
                 // ========== SIMPLE INSERT ==========
                 String insertQuery = """
-                    INSERT INTO j_planning (
+                    INSERT INTO planning (
                         id, order_id, employee_id, planning_date, start_time,
                         estimated_duration_minutes, status, card_count, created_at, updated_at
                     ) VALUES (

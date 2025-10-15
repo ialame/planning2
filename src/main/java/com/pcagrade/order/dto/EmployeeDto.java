@@ -87,13 +87,13 @@ public class EmployeeDto {
         @Schema(description = "Employee basic information")
         private EmployeeBasic employeeBasic;
 
-        @Schema(description = "List of groups this employee belongs to")
+        @Schema(description = "List of teams this employee belongs to")
         private List<GroupDto.GroupInfo> groups;
 
         @Schema(description = "List of active group names", example = "[\"ADMIN\", \"MANAGER\"]")
         private List<String> activeGroupNames;
 
-        @Schema(description = "Highest permission level from all groups", example = "10")
+        @Schema(description = "Highest permission level from all teams", example = "10")
         private Integer highestPermissionLevel;
 
         @Schema(description = "Whether employee has admin privileges", example = "true")
@@ -137,7 +137,7 @@ public class EmployeeDto {
         @Schema(description = "Whether employee is active", example = "true")
         private Boolean active;
 
-        @Schema(description = "Number of groups", example = "3")
+        @Schema(description = "Number of teams", example = "3")
         private Integer groupCount;
 
         @Schema(description = "Highest permission level", example = "7")
@@ -318,7 +318,7 @@ public class EmployeeDto {
         @Schema(description = "Number of employees with manager privileges", example = "8")
         private Long managerEmployees;
 
-        @Schema(description = "Number of employees without any groups", example = "2")
+        @Schema(description = "Number of employees without any teams", example = "2")
         private Long employeesWithoutGroups;
 
         @Schema(description = "Distribution of employees by permission level")

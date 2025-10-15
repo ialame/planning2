@@ -180,7 +180,7 @@ public class ImprovedPlanningService {
      */
     private void cleanExistingPlanning(LocalDate planningDate) {
         try {
-            String deleteSql = "DELETE FROM j_planning WHERE planning_date = ?";
+            String deleteSql = "DELETE FROM planning WHERE planning_date = ?";
             Query query = entityManager.createNativeQuery(deleteSql);
             query.setParameter(1, planningDate);
             int deleted = query.executeUpdate();
@@ -256,7 +256,7 @@ public class ImprovedPlanningService {
     }
 
     /**
-     * Get employees by role (using j_employee_group and j_group)
+     * Get employees by role (using employee_group and team)
      */
     private List<Map<String, Object>> getEmployeesByRole(String roleName) {
         try {
@@ -267,9 +267,9 @@ public class ImprovedPlanningService {
                     e.last_name as lastName,
                     e.work_hours_per_day as workHoursPerDay,
                     g.name as role
-                FROM j_employee e
-                INNER JOIN j_employee_group eg ON e.id = eg.employee_id
-                INNER JOIN j_group g ON eg.group_id = g.id
+                FROM employee e
+                INNER JOIN employee_group eg ON e.id = eg.employee_id
+                INNER JOIN team g ON eg.group_id = g.id
                 WHERE g.name = ?
                   AND e.active = 1
                   AND g.active = 1
@@ -471,7 +471,7 @@ public class ImprovedPlanningService {
 
         try {
             String sql = """
-                INSERT INTO j_planning 
+                INSERT INTO planning 
                 (id, order_id, employee_id, planning_date, start_time, end_time,
                  estimated_duration_minutes, status, 
                  completed, card_count, delai, created_at, updated_at)

@@ -10,12 +10,12 @@ databaseChangeLog:
         - onFail: MARK_RAN
         - not:
             - tableExists:
-                tableName: j_planning
+                tableName: planning
 
       changes:
         # Create main table
         - createTable:
-            tableName: j_planning
+            tableName: planning
             columns:
               # Primary key
               - column:
@@ -122,10 +122,10 @@ databaseChangeLog:
 
         # Create foreign key to employee
         - addForeignKeyConstraint:
-            baseTableName: j_planning
+            baseTableName: planning
             baseColumnNames: employee_id
             constraintName: fk_planning_employee
-            referencedTableName: j_employee
+            referencedTableName: employee
             referencedColumnNames: id
             onDelete: CASCADE
             onUpdate: CASCADE
@@ -135,7 +135,7 @@ databaseChangeLog:
 
         # Create indexes for performance
         - createIndex:
-            tableName: j_planning
+            tableName: planning
             indexName: idx_planning_employee_date
             columns:
               - column:
@@ -144,42 +144,42 @@ databaseChangeLog:
                   name: planning_date
 
         - createIndex:
-            tableName: j_planning
+            tableName: planning
             indexName: idx_planning_order
             columns:
               - column:
                   name: order_id
 
         - createIndex:
-            tableName: j_planning
+            tableName: planning
             indexName: idx_planning_date
             columns:
               - column:
                   name: planning_date
 
         - createIndex:
-            tableName: j_planning
+            tableName: planning
             indexName: idx_planning_status
             columns:
               - column:
                   name: status
 
         - createIndex:
-            tableName: j_planning
+            tableName: planning
             indexName: idx_planning_delai
             columns:
               - column:
                   name: delai
 
         - createIndex:
-            tableName: j_planning
+            tableName: planning
             indexName: idx_planning_start_time
             columns:
               - column:
                   name: start_time
 
         - createIndex:
-            tableName: j_planning
+            tableName: planning
             indexName: idx_planning_employee_time
             columns:
               - column:
@@ -192,4 +192,4 @@ databaseChangeLog:
       # Rollback instructions
       rollback:
         - dropTable:
-            tableName: j_planning
+            tableName: planning

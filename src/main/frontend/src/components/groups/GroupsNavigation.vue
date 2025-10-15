@@ -1,5 +1,5 @@
 <template>
-  <div class="groups-navigation">
+  <div class="teams-navigation">
     <!-- Navigation Header -->
     <div class="bg-white shadow-sm border-b border-gray-200">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -19,10 +19,10 @@
             </button>
             <span class="text-gray-400">/</span>
             <button
-              @click="currentView = 'groups'"
+              @click="currentView = 'teams'"
               :class="[
                 'px-3 py-1 rounded-lg transition-colors',
-                currentView === 'groups'
+                currentView === 'teams'
                   ? 'bg-blue-100 text-blue-700 font-medium'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
               ]"
@@ -58,7 +58,7 @@
             </button>
             <div class="h-4 w-px bg-gray-300"></div>
             <button
-              v-if="currentView === 'groups'"
+              v-if="currentView === 'teams'"
               @click="showCreateGroup = true"
               class="btn-primary text-sm"
             >
@@ -76,13 +76,13 @@
       <div v-if="currentView === 'overview'">
         <GroupOverview
           :stats="stats"
-          @view-groups="currentView = 'groups'"
+          @view-teams="currentView = 'teams'"
           @view-employees="currentView = 'employees'"
         />
       </div>
 
       <!-- Groups Management -->
-      <div v-else-if="currentView === 'groups'">
+      <div v-else-if="currentView === 'teams'">
         <GroupManagement @updated="refreshData" />
       </div>
 
@@ -92,7 +92,7 @@
       </div>
     </div>
 
-    <!-- Create Group Modal -->
+    <!-- Create Team Modal -->
     <CreateGroupModal
       v-if="showCreateGroup"
       @close="showCreateGroup = false"
@@ -130,7 +130,7 @@ interface PermissionLevelInfo {
 }
 
 // ========== STATE ==========
-const currentView = ref<'overview' | 'groups' | 'employees'>('overview')
+const currentView = ref<'overview' | 'teams' | 'employees'>('overview')
 const loading = ref(false)
 const lastUpdated = ref('')
 const showCreateGroup = ref(false)
@@ -161,7 +161,7 @@ const permissionLevels: PermissionLevelInfo[] = [
 const loadStats = async () => {
   loading.value = true
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/statistics`)
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams/statistics`)
     if (response.ok) {
       const data = await response.json()
 
@@ -186,11 +186,11 @@ const loadStats = async () => {
 const calculateAveragePermissionLevel = (groupStats: any[]) => {
   if (groupStats.length === 0) return 0
 
-  const totalWeightedLevel = groupStats.reduce((sum, group) => {
-    return sum + (group.permissionLevel * group.employeeCount)
+  const totalWeightedLevel = groupStats.reduce((sum, team) => {
+    return sum + (team.permissionLevel * team.employeeCount)
   }, 0)
 
-  const totalEmployees = groupStats.reduce((sum, group) => sum + group.employeeCount, 0)
+  const totalEmployees = groupStats.reduce((sum, team) => sum + team.employeeCount, 0)
 
   return totalEmployees > 0 ? Math.round((totalWeightedLevel / totalEmployees) * 10) / 10 : 0
 }

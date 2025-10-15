@@ -16,7 +16,7 @@
 
       <!-- Form -->
       <form @submit.prevent="createGroup" class="px-6 py-4">
-        <!-- Group Name -->
+        <!-- Team Name -->
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-2">
             Group Name <span class="text-red-500">*</span>
@@ -43,7 +43,7 @@
           </label>
           <textarea
             v-model="formData.description"
-            placeholder="Describe the role and responsibilities of this group..."
+            placeholder="Describe the role and responsibilities of this team..."
             rows="3"
             class="input-field resize-none"
             maxlength="255"
@@ -129,7 +129,7 @@
           >
             <span v-if="loading">⏳</span>
             <Plus v-else class="w-4 h-4 mr-2" />
-            {{ loading ? 'Creating...' : 'Create Group' }}
+            {{ loading ? 'Creating...' : 'Create Team' }}
           </button>
         </div>
       </form>
@@ -193,7 +193,7 @@ const validateName = () => {
   const name = formData.value.name.trim()
 
   if (!name) {
-    errors.value.name = 'Group name is required'
+    errors.value.name = 'Team name is required'
     nameValidation.value.isValid = false
     nameValidation.value.suggested = ''
     return
@@ -203,7 +203,7 @@ const validateName = () => {
   const validFormat = /^[A-Z_][A-Z0-9_]*$/.test(name)
 
   if (!validFormat) {
-    errors.value.name = 'Group name must be uppercase with underscores only (A-Z, 0-9, _)'
+    errors.value.name = 'Team name must be uppercase with underscores only (A-Z, 0-9, _)'
     nameValidation.value.isValid = false
 
     // Suggest corrected format
@@ -247,7 +247,7 @@ const createGroup = async () => {
         nameValidation.value.suggested = error.suggestedName
         errors.value.name = error.error
       } else {
-        errors.value.name = error.error || 'Error creating group'
+        errors.value.name = error.error || 'Error creating team'
       }
     }
   } catch (error) {

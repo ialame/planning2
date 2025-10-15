@@ -6,7 +6,7 @@
         <div class="flex justify-between items-center">
           <div>
             <h2 class="text-lg font-semibold text-gray-900">Manage Group Members</h2>
-            <p class="text-sm text-gray-600">{{ group?.name }} - {{ group?.description }}</p>
+            <p class="text-sm text-gray-600">{{ team?.name }} - {{ team?.description }}</p>
           </div>
           <button
             @click="$emit('close')"
@@ -145,7 +145,7 @@
       <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
         <div class="flex justify-between items-center">
           <div class="text-sm text-gray-600">
-            <span class="font-medium">{{ currentMembers.length }}</span> member(s) assigned to this group
+            <span class="font-medium">{{ currentMembers.length }}</span> member(s) assigned to this team
           </div>
           <div class="flex space-x-3">
             <button
@@ -207,7 +207,7 @@ interface Employee {
 
 // ========== PROPS & EMITS ==========
 const props = defineProps<{
-  group: Group | null
+  team: Group | null
   employees: Employee[]
 }>()
 
@@ -249,18 +249,18 @@ const hasChanges = computed(() => {
 
 // ========== METHODS ==========
 const loadGroupMembers = async () => {
-  if (!props.group) return
+  if (!props.team) return
 
   loading.value = true
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/${props.group.id}?includeEmployees=true`)
+    const response = await fetch(`${API_BASE_URL}/api/v2/groups/${props.team.id}?includeEmployees=true`)
     if (response.ok) {
       const data = await response.json()
       currentMembers.value = data.employees || []
       originalMemberIds.value = currentMembers.value.map(m => m.id)
     }
   } catch (error) {
-    console.error('Error loading group members:', error)
+    console.error('Error loading team members:', error)
   } finally {
     loading.value = false
   }
@@ -285,7 +285,7 @@ const addAllAvailable = () => {
 }
 
 const removeAllMembers = () => {
-  if (confirm('Are you sure you want to remove all members from this group?')) {
+  if (confirm('Are you sure you want to remove all members from this team?')) {
     currentMembers.value = []
   }
 }
@@ -294,12 +294,12 @@ const removeAllMembers = () => {
 // Dans EmployeeAssignmentModal.vue, remplacez ENTIÈREMENT la méthode saveChanges par ceci :
 
 const saveChanges = async () => {
-  if (!props.group || !hasChanges.value) return
+  if (!props.team || !hasChanges.value) return
 
   loading.value = true
   try {
-    console.log('🔄 Saving group member changes...')
-    console.log('Group:', props.group.id)
+    console.log('🔄 Saving team member changes...')
+    console.log('Team:', props.team.id)
     console.log('Current members:', currentMembers.value.map(m => `${m.id} (${m.fullName})`))
     console.log('Original members:', originalMemberIds.value)
 
@@ -319,9 +319,9 @@ const saveChanges = async () => {
 
     // Ajouter les nouveaux employés
     for (const employee of employeesToAdd) {
-      console.log(`➕ Adding ${employee.fullName} to group ${props.group.name}`)
+      console.log(`➕ Adding ${employee.fullName} to team ${props.team.name}`)
       promises.push(
-        fetch(`${API_BASE_URL}/api/v2/groups/${props.group.id}/employees/${employee.id}`, {
+        fetch(`${API_BASE_URL}/api/v2/groups/${props.team.id}/employees/${employee.id}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         }).then(async response => {
@@ -329,7 +329,7 @@ const saveChanges = async () => {
             const errorText = await response.text()
             throw new Error(`Failed to add employee ${employee.fullName}: ${response.status} - ${errorText}`)
           }
-          console.log(`✅ Successfully added ${employee.fullName} to group`)
+          console.log(`✅ Successfully added ${employee.fullName} to team`)
           return response.json()
         })
       )
@@ -340,9 +340,9 @@ const saveChanges = async () => {
       const employee = props.employees.find(e => e.id === employeeId)
       const employeeName = employee ? employee.fullName : employeeId
 
-      console.log(`➖ Removing ${employeeName} from group ${props.group.name}`)
+      console.log(`➖ Removing ${employeeName} from team ${props.team.name}`)
       promises.push(
-        fetch(`${API_BASE_URL}/api/v2/groups/${props.group.id}/employees/${employeeId}`, {
+        fetch(`${API_BASE_URL}/api/v2/groups/${props.team.id}/employees/${employeeId}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' }
         }).then(async response => {
@@ -350,7 +350,7 @@ const saveChanges = async () => {
             const errorText = await response.text()
             throw new Error(`Failed to remove employee ${employeeName}: ${response.status} - ${errorText}`)
           }
-          console.log(`✅ Successfully removed ${employeeName} from group`)
+          console.log(`✅ Successfully removed ${employeeName} from team`)
           return response.json()
         })
       )

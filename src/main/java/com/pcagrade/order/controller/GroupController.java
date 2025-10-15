@@ -1,6 +1,6 @@
 package com.pcagrade.order.controller;
 
-import com.pcagrade.order.entity.Group;
+import com.pcagrade.order.entity.Team;
 import com.pcagrade.order.service.GroupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,12 +20,12 @@ import org.springframework.web.bind.annotation.*;
 import java.util.*;
 
 /**
- * Group Controller - Role Management API
- * RESTful API for managing groups and roles
+ * Team Controller - Role Management API
+ * RESTful API for managing teams and roles
  */
 @RestController
 @RequestMapping("/api/groups")
-@Tag(name = "Group Management", description = "API for managing groups and roles")
+@Tag(name = "Team Management", description = "API for managing teams and roles")
 @Slf4j
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"})
 public class GroupController {
@@ -37,10 +37,10 @@ public class GroupController {
 
     /**
      * 📋 GET ALL GROUPS
-     * Endpoint: GET /api/groups
+     * Endpoint: GET /api/teams
      */
     @GetMapping
-    @Operation(summary = "Get all active groups", description = "Retrieve all active groups with optional pagination")
+    @Operation(summary = "Get all active teams", description = "Retrieve all active teams with optional pagination")
     @ApiResponse(responseCode = "200", description = "Groups retrieved successfully")
     public ResponseEntity<Map<String, Object>> getAllGroups(
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
@@ -50,22 +50,22 @@ public class GroupController {
             @Parameter(description = "Search term") @RequestParam(required = false) String search) {
 
         try {
-            log.info("🔍 Getting groups - page: {}, size: {}, sortBy: {}, search: '{}'",
+            log.info("🔍 Getting teams - page: {}, size: {}, sortBy: {}, search: '{}'",
                     page, size, sortBy, search);
 
             Map<String, Object> response = new HashMap<>();
 
             if (page < 0 || size <= 0) {
-                // Return all groups without pagination
-                List<Group> groups;
+                // Return all teams without pagination
+                List<Team> teams;
                 if (search != null && !search.trim().isEmpty()) {
-                    groups = groupService.searchGroups(search.trim());
+                    teams = groupService.searchGroups(search.trim());
                 } else {
-                    groups = groupService.getAllActiveGroups();
+                    teams = groupService.getAllActiveGroups();
                 }
 
-                response.put("groups", groups);
-                response.put("totalElements", groups.size());
+                response.put("groups", teams);
+                response.put("totalElements", teams.size());
                 response.put("totalPages", 1);
                 response.put("currentPage", 0);
                 response.put("hasNext", false);
@@ -75,19 +75,19 @@ public class GroupController {
                 Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
                 Pageable pageable = PageRequest.of(page, size, sort);
 
-                Page<Group> groupPage;
+                Page<Team> groupPage;
                 if (search != null && !search.trim().isEmpty()) {
                     // For search, we need to implement pagination manually since searchGroups returns List
-                    List<Group> allGroups = groupService.searchGroups(search.trim());
-                    int start = Math.min(page * size, allGroups.size());
-                    int end = Math.min(start + size, allGroups.size());
-                    List<Group> paginatedGroups = allGroups.subList(start, end);
+                    List<Team> allTeams = groupService.searchGroups(search.trim());
+                    int start = Math.min(page * size, allTeams.size());
+                    int end = Math.min(start + size, allTeams.size());
+                    List<Team> paginatedTeams = allTeams.subList(start, end);
 
-                    response.put("groups", paginatedGroups);
-                    response.put("totalElements", allGroups.size());
-                    response.put("totalPages", (int) Math.ceil((double) allGroups.size() / size));
+                    response.put("groups", paginatedTeams);
+                    response.put("totalElements", allTeams.size());
+                    response.put("totalPages", (int) Math.ceil((double) allTeams.size() / size));
                     response.put("currentPage", page);
-                    response.put("hasNext", end < allGroups.size());
+                    response.put("hasNext", end < allTeams.size());
                     response.put("hasPrevious", page > 0);
                 } else {
                     groupPage = groupService.getAllActiveGroups(pageable);
@@ -101,42 +101,42 @@ public class GroupController {
                 }
             }
 
-            log.debug("✅ Successfully retrieved {} groups",
-                    ((List<?>) response.get("groups")).size());
+            log.debug("✅ Successfully retrieved {} teams",
+                    ((List<?>) response.get("teams")).size());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("❌ Error getting groups", e);
+            log.error("❌ Error getting teams", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error retrieving groups: " + e.getMessage()));
+                    .body(Map.of("error", "Error retrieving teams: " + e.getMessage()));
         }
     }
 
     /**
      * 🔍 GET GROUP BY ID
-     * Endpoint: GET /api/groups/{id}
+     * Endpoint: GET /api/teams/{id}
      */
     @GetMapping("/{id}")
     @Operation(summary = "Get group by ID", description = "Retrieve a specific group by its ID")
-    @ApiResponse(responseCode = "200", description = "Group found")
-    @ApiResponse(responseCode = "404", description = "Group not found")
+    @ApiResponse(responseCode = "200", description = "Team found")
+    @ApiResponse(responseCode = "404", description = "Team not found")
     public ResponseEntity<Map<String, Object>> getGroupById(@PathVariable String id) {
         try {
             log.info("🔍 Getting group by ID: {}", id);
 
             UUID groupId = UUID.fromString(id);
-            Optional<Group> groupOpt = groupService.findById(groupId);
+            Optional<Team> groupOpt = groupService.findById(groupId);
 
             if (groupOpt.isPresent()) {
-                Group group = groupOpt.get();
+                Team team = groupOpt.get();
                 Map<String, Object> response = new HashMap<>();
-                response.put("group", group);
+                response.put("group", team);
                 response.put("employeeCount", groupService.countActiveEmployeesInGroup(groupId));
 
-                log.debug("✅ Group found: {}", group.getName());
+                log.debug("✅ Team found: {}", team.getName());
                 return ResponseEntity.ok(response);
             } else {
-                log.warn("⚠️ Group not found: {}", id);
+                log.warn("⚠️ Team not found: {}", id);
                 return ResponseEntity.notFound().build();
             }
 
@@ -153,100 +153,100 @@ public class GroupController {
 
     /**
      * ➕ CREATE NEW GROUP
-     * Endpoint: POST /api/groups
+     * Endpoint: POST /api/teams
      */
     @PostMapping
-    @Operation(summary = "Create new group", description = "Create a new group/role")
-    @ApiResponse(responseCode = "201", description = "Group created successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid group data")
-    public ResponseEntity<Map<String, Object>> createGroup(@Valid @RequestBody Group group) {
+    @Operation(summary = "Create new team", description = "Create a new team/role")
+    @ApiResponse(responseCode = "201", description = "Team created successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid team data")
+    public ResponseEntity<Map<String, Object>> createGroup(@Valid @RequestBody Team team) {
         try {
-            log.info("➕ Creating new group: {}", group.getName());
+            log.info("➕ Creating new team: {}", team.getName());
 
-            Group createdGroup = groupService.createGroup(group);
+            Team createdTeam = groupService.createGroup(team);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Group created successfully");
-            response.put("group", createdGroup);
+            response.put("message", "Team created successfully");
+            response.put("group", createdTeam);
 
-            log.info("✅ Group created successfully: {} (ID: {})",
-                    createdGroup.getName(), createdGroup.getUlidString());
+            log.info("✅ Team created successfully: {} (ID: {})",
+                    createdTeam.getName(), createdTeam.getUlidString());
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (IllegalArgumentException e) {
-            log.warn("⚠️ Invalid group data: {}", e.getMessage());
+            log.warn("⚠️ Invalid team data: {}", e.getMessage());
             return ResponseEntity.badRequest()
                     .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.error("❌ Error creating group", e);
+            log.error("❌ Error creating team", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error creating group: " + e.getMessage()));
+                    .body(Map.of("error", "Error creating team: " + e.getMessage()));
         }
     }
 
     /**
      * ✏️ UPDATE GROUP
-     * Endpoint: PUT /api/groups/{id}
+     * Endpoint: PUT /api/teams/{id}
      */
     @PutMapping("/{id}")
-    @Operation(summary = "Update group", description = "Update an existing group")
-    @ApiResponse(responseCode = "200", description = "Group updated successfully")
-    @ApiResponse(responseCode = "404", description = "Group not found")
+    @Operation(summary = "Update team", description = "Update an existing team")
+    @ApiResponse(responseCode = "200", description = "Team updated successfully")
+    @ApiResponse(responseCode = "404", description = "Team not found")
     public ResponseEntity<Map<String, Object>> updateGroup(
             @PathVariable String id,
-            @Valid @RequestBody Group group) {
+            @Valid @RequestBody Team team) {
         try {
-            log.info("✏️ Updating group: {}", id);
+            log.info("✏️ Updating team: {}", id);
 
             UUID groupId = UUID.fromString(id);
-            Optional<Group> existingGroupOpt = groupService.findById(groupId);
+            Optional<Team> existingGroupOpt = groupService.findById(groupId);
 
             if (existingGroupOpt.isEmpty()) {
-                log.warn("⚠️ Group not found for update: {}", id);
+                log.warn("⚠️ Team not found for update: {}", id);
                 return ResponseEntity.notFound().build();
             }
 
-            group.setId(groupId);
-            Group updatedGroup = groupService.updateGroup(group);
+            team.setId(groupId);
+            Team updatedTeam = groupService.updateGroup(team);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Group updated successfully");
-            response.put("group", updatedGroup);
+            response.put("message", "Team updated successfully");
+            response.put("group", updatedTeam);
 
-            log.info("✅ Group updated successfully: {} (ID: {})",
-                    updatedGroup.getName(), updatedGroup.getUlidString());
+            log.info("✅ Team updated successfully: {} (ID: {})",
+                    updatedTeam.getName(), updatedTeam.getUlidString());
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {
-            log.warn("⚠️ Invalid group data: {}", e.getMessage());
+            log.warn("⚠️ Invalid team data: {}", e.getMessage());
             return ResponseEntity.badRequest()
                     .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.error("❌ Error updating group: {}", id, e);
+            log.error("❌ Error updating team: {}", id, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error updating group: " + e.getMessage()));
+                    .body(Map.of("error", "Error updating team: " + e.getMessage()));
         }
     }
 
     /**
      * 🗑️ DELETE GROUP
-     * Endpoint: DELETE /api/groups/{id}
+     * Endpoint: DELETE /api/teams/{id}
      */
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete group", description = "Deactivate a group (soft delete)")
-    @ApiResponse(responseCode = "200", description = "Group deleted successfully")
-    @ApiResponse(responseCode = "404", description = "Group not found")
+    @ApiResponse(responseCode = "200", description = "Team deleted successfully")
+    @ApiResponse(responseCode = "404", description = "Team not found")
     public ResponseEntity<Map<String, Object>> deleteGroup(@PathVariable String id) {
         try {
             log.info("🗑️ Deleting group: {}", id);
 
             UUID groupId = UUID.fromString(id);
-            Optional<Group> groupOpt = groupService.findById(groupId);
+            Optional<Team> groupOpt = groupService.findById(groupId);
 
             if (groupOpt.isEmpty()) {
-                log.warn("⚠️ Group not found for deletion: {}", id);
+                log.warn("⚠️ Team not found for deletion: {}", id);
                 return ResponseEntity.notFound().build();
             }
 
@@ -254,9 +254,9 @@ public class GroupController {
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Group deleted successfully");
+            response.put("message", "Team deleted successfully");
 
-            log.info("✅ Group deleted successfully: {}", id);
+            log.info("✅ Team deleted successfully: {}", id);
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {
@@ -274,23 +274,23 @@ public class GroupController {
 
     /**
      * 👥 GET GROUPS FOR EMPLOYEE
-     * Endpoint: GET /api/groups/employee/{employeeId}
+     * Endpoint: GET /api/teams/employee/{employeeId}
      */
     @GetMapping("/employee/{employeeId}")
-    @Operation(summary = "Get groups for employee", description = "Get all groups assigned to an employee")
+    @Operation(summary = "Get teams for employee", description = "Get all teams assigned to an employee")
     public ResponseEntity<Map<String, Object>> getGroupsForEmployee(@PathVariable String employeeId) {
         try {
-            log.info("👥 Getting groups for employee: {}", employeeId);
+            log.info("👥 Getting teams for employee: {}", employeeId);
 
             UUID empId = UUID.fromString(employeeId);
-            List<Group> groups = groupService.getGroupsForEmployee(empId);
+            List<Team> teams = groupService.getGroupsForEmployee(empId);
 
             Map<String, Object> response = new HashMap<>();
-            response.put("groups", groups);
+            response.put("groups", teams);
             response.put("employeeId", employeeId);
-            response.put("totalGroups", groups.size());
+            response.put("totalGroups", teams.size());
 
-            log.debug("✅ Found {} groups for employee: {}", groups.size(), employeeId);
+            log.debug("✅ Found {} teams for employee: {}", teams.size(), employeeId);
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {
@@ -298,15 +298,15 @@ public class GroupController {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "Invalid employee ID format"));
         } catch (Exception e) {
-            log.error("❌ Error getting groups for employee: {}", employeeId, e);
+            log.error("❌ Error getting teams for employee: {}", employeeId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error retrieving groups: " + e.getMessage()));
+                    .body(Map.of("error", "Error retrieving teams: " + e.getMessage()));
         }
     }
 
     /**
      * 🔗 ASSIGN EMPLOYEE TO GROUP
-     * Endpoint: POST /api/groups/{groupId}/employees/{employeeId}
+     * Endpoint: POST /api/teams/{groupId}/employees/{employeeId}
      */
     @PostMapping("/{groupId}/employees/{employeeId}")
     @Operation(summary = "Assign employee to group", description = "Add an employee to a group")
@@ -343,7 +343,7 @@ public class GroupController {
 
     /**
      * ✂️ REMOVE EMPLOYEE FROM GROUP
-     * Endpoint: DELETE /api/groups/{groupId}/employees/{employeeId}
+     * Endpoint: DELETE /api/teams/{groupId}/employees/{employeeId}
      */
     @DeleteMapping("/{groupId}/employees/{employeeId}")
     @Operation(summary = "Remove employee from group", description = "Remove an employee from a group")
@@ -380,15 +380,15 @@ public class GroupController {
 
     /**
      * 🔄 UPDATE EMPLOYEE GROUPS
-     * Endpoint: PUT /api/groups/employee/{employeeId}
+     * Endpoint: PUT /api/teams/employee/{employeeId}
      */
     @PutMapping("/employee/{employeeId}")
-    @Operation(summary = "Update employee groups", description = "Replace all groups for an employee")
+    @Operation(summary = "Update employee teams", description = "Replace all teams for an employee")
     public ResponseEntity<Map<String, Object>> updateEmployeeGroups(
             @PathVariable String employeeId,
             @RequestBody Map<String, Object> request) {
         try {
-            log.info("🔄 Updating groups for employee: {}", employeeId);
+            log.info("🔄 Updating teams for employee: {}", employeeId);
 
             UUID empId = UUID.fromString(employeeId);
 
@@ -406,7 +406,7 @@ public class GroupController {
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Employee groups updated successfully");
+            response.put("message", "Employee teams updated successfully");
             response.put("employeeId", employeeId);
             response.put("groupIds", groupIds);
 
@@ -418,9 +418,9 @@ public class GroupController {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.error("❌ Error updating employee groups", e);
+            log.error("❌ Error updating employee teams", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error updating groups: " + e.getMessage()));
+                    .body(Map.of("error", "Error updating teams: " + e.getMessage()));
         }
     }
 
@@ -428,51 +428,51 @@ public class GroupController {
 
     /**
      * 🔧 INITIALIZE DEFAULT GROUPS
-     * Endpoint: POST /api/groups/init-defaults
+     * Endpoint: POST /api/teams/init-defaults
      */
     @PostMapping("/init-defaults")
-    @Operation(summary = "Initialize default groups", description = "Create standard groups if they don't exist")
+    @Operation(summary = "Initialize default teams", description = "Create standard teams if they don't exist")
     public ResponseEntity<Map<String, Object>> initializeDefaultGroups() {
         try {
-            log.info("🔧 Initializing default groups");
+            log.info("🔧 Initializing default teams");
 
             groupService.initializeDefaultGroups();
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Default groups initialized successfully");
+            response.put("message", "Default teams initialized successfully");
 
-            log.info("✅ Default groups initialized successfully");
+            log.info("✅ Default teams initialized successfully");
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("❌ Error initializing default groups", e);
+            log.error("❌ Error initializing default teams", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error initializing groups: " + e.getMessage()));
+                    .body(Map.of("error", "Error initializing teams: " + e.getMessage()));
         }
     }
 
     /**
      * 📊 GET GROUP STATISTICS
-     * Endpoint: GET /api/groups/statistics
+     * Endpoint: GET /api/teams/statistics
      */
     @GetMapping("/statistics")
-    @Operation(summary = "Get group statistics", description = "Get statistics about groups and their members")
+    @Operation(summary = "Get group statistics", description = "Get statistics about teams and their members")
     public ResponseEntity<Map<String, Object>> getGroupStatistics() {
         try {
             log.info("📊 Getting group statistics");
 
             List<Object[]> stats = groupService.getGroupStatistics();
-            List<Group> emptyGroups = groupService.getEmptyGroups();
+            List<Team> emptyTeams = groupService.getEmptyGroups();
 
             Map<String, Object> response = new HashMap<>();
             response.put("groupStatistics", stats);
-            response.put("emptyGroups", emptyGroups);
+            response.put("emptyGroups", emptyTeams);
             response.put("totalGroups", stats.size());
-            response.put("emptyGroupsCount", emptyGroups.size());
+            response.put("emptyGroupsCount", emptyTeams.size());
 
-            log.debug("✅ Statistics retrieved: {} total groups, {} empty groups",
-                    stats.size(), emptyGroups.size());
+            log.debug("✅ Statistics retrieved: {} total teams, {} empty teams",
+                    stats.size(), emptyTeams.size());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {

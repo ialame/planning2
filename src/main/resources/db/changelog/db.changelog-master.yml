@@ -5,10 +5,10 @@ databaseChangeLog:
   # ===============================================
   #
   # MANAGED TABLES (by Liquibase):
-  # - j_employee
-  # - j_planning
-  # - j_group
-  # - j_employee_group
+  # - employee
+  # - planning
+  # - team
+  # - employee_team
   # - j_status_workflow
   # - j_delai_priority_mapping
   #
@@ -40,14 +40,14 @@ databaseChangeLog:
   # (To be created when needed)
   # ========================================
   
-  # Group/Role table
+  # Team/Role table
   # - include:
-  #     file: db/changelog/changes/003-create-group-table.yml
+  #     file: db/changelog/changes/003-create-team-table.yml
   #     context: development,docker,production
   
-  # Employee-Group junction table
+  # Employee-Team junction table
   # - include:
-  #     file: db/changelog/changes/004-create-employee-group-table.yml
+  #     file: db/changelog/changes/004-create-employee-team-table.yml
   #     context: development,docker,production
   
   # ========================================
@@ -69,9 +69,9 @@ databaseChangeLog:
   # INITIAL DATA
   # ========================================
   
-  # Initial groups/roles data
+  # Initial teams/roles data
   # - include:
-  #     file: db/changelog/data/001-initial-groups.yml
+  #     file: db/changelog/data/001-initial-teams.yml
   #     context: development,docker,production
   
   # Initial status workflow data

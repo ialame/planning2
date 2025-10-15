@@ -43,7 +43,7 @@ public class EmployeesPlanningController {
                     COALESCE(work_hours_per_day, 8) as workHoursPerDay,
                     creation_date as creationDate,
                     modification_date as modificationDate
-                FROM j_employee
+                FROM employee
                 ORDER BY first_name ASC, last_name ASC
                 """;
 
@@ -120,8 +120,8 @@ public class EmployeesPlanningController {
                         COALESCE(SUM(p.estimated_duration_minutes), 0) / 
                         (COALESCE(e.work_hours_per_day, 8) * 60.0), 2
                     ) as workloadRatio
-                FROM j_employee e
-                LEFT JOIN j_planning p ON e.id = p.employee_id""" + dateFilter + """
+                FROM employee e
+                LEFT JOIN planning p ON e.id = p.employee_id""" + dateFilter + """
                 GROUP BY e.id, e.first_name, e.last_name, e.email, e.active, e.work_hours_per_day
                 ORDER BY workloadRatio DESC, name ASC
                 """;
@@ -215,7 +215,7 @@ public class EmployeesPlanningController {
                     COALESCE(e.work_hours_per_day, 8) as workHoursPerDay,
                     e.creation_date as creationDate,
                     e.modification_date as modificationDate
-                FROM j_employee e
+                FROM employee e
                 WHERE HEX(e.id) = ?
                 """;
 
@@ -290,7 +290,7 @@ public class EmployeesPlanningController {
                 p.card_count,
                 p.progress_percentage,
                 ROUND(p.estimated_duration_minutes / 60.0, 2) as estimatedHours
-            FROM j_planning p
+            FROM planning p
             LEFT JOIN `order` o ON p.order_id = o.id
             WHERE HEX(p.employee_id) = ?"""
                     + dateFilter + """

@@ -18,7 +18,7 @@ This guide explains how to synchronize data from your **Symfony backend (dev)** 
 │                 │           │                  │
 │  - orders       │           │  - orders        │
 │  - cards        │           │  - cards         │
-│  - etc.         │           │  - j_planning    │
+│  - etc.         │           │  - planning    │
 └─────────────────┘           └──────────────────┘
 ```
 
@@ -26,7 +26,7 @@ This guide explains how to synchronize data from your **Symfony backend (dev)** 
 - **dev** database is managed by Symfony (read-only for Spring Boot)
 - **dev-planning** database is managed by Spring Boot (read/write)
 - Synchronization copies data from dev → dev-planning
-- Planning tables (j_employee, j_planning, etc.) only exist in dev-planning
+- Planning tables (employee, planning, etc.) only exist in dev-planning
 
 ---
 

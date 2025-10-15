@@ -17,7 +17,7 @@ import java.util.List;
  * Represents an employee in the Pokemon card processing system
  */
 @Entity
-@Table(name = "j_employee")
+@Table(name = "employee")
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
@@ -92,17 +92,17 @@ public class Employee extends AbstractUlidEntity {
     private List<Planning> plannings = new ArrayList<>();
 
     /**
-     * Many-to-many relationship with Group (roles)
+     * Many-to-many relationship with Team (roles)
      */
     @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(
-            name = "j_employee_group",
+            name = "employee_team",
             joinColumns = @JoinColumn(name = "employee_id", referencedColumnName = "id"),
-            inverseJoinColumns = @JoinColumn(name = "group_id", referencedColumnName = "id")
+            inverseJoinColumns = @JoinColumn(name = "team_id", referencedColumnName = "id")
     )
     @ToString.Exclude
     @Builder.Default
-    private List<Group> groups = new ArrayList<>();
+    private List<Team> teams = new ArrayList<>();
 
     // ========== BUSINESS METHODS ==========
 
@@ -152,35 +152,35 @@ public class Employee extends AbstractUlidEntity {
     // ========== GROUP/ROLE MANAGEMENT METHODS ==========
 
     /**
-     * Add group to this employee
-     * @param group the group to add
+     * Add team to this employee
+     * @param team the team to add
      */
-    public void addGroup(Group group) {
-        if (group != null && !this.groups.contains(group)) {
-            this.groups.add(group);
-            group.getEmployees().add(this);
+    public void addTeam(Team team) {
+        if (team != null && !this.teams.contains(team)) {
+            this.teams.add(team);
+            team.getEmployees().add(this);
         }
     }
 
     /**
-     * Remove group from this employee
-     * @param group the group to remove
+     * Remove team from this employee
+     * @param team the team to remove
      */
-    public void removeGroup(Group group) {
-        if (group != null && this.groups.contains(group)) {
-            this.groups.remove(group);
-            group.getEmployees().remove(this);
+    public void removeTeam(Team team) {
+        if (team != null && this.teams.contains(team)) {
+            this.teams.remove(team);
+            team.getEmployees().remove(this);
         }
     }
 
     /**
-     * Check if employee belongs to a specific group
-     * @param groupName the group name to check
-     * @return true if employee belongs to the group
+     * Check if employee belongs to a specific team
+     * @param teamName the team name to check
+     * @return true if employee belongs to the team
      */
-    public boolean hasGroup(String groupName) {
-        return groups.stream()
-                .anyMatch(group -> group.getName().equalsIgnoreCase(groupName));
+    public boolean hasTeam(String teamName) {
+        return teams.stream()
+                .anyMatch(team -> team.getName().equalsIgnoreCase(teamName));
     }
 
     /**
@@ -188,8 +188,8 @@ public class Employee extends AbstractUlidEntity {
      * @return true if employee has admin privileges
      */
     public boolean isAdmin() {
-        return groups.stream()
-                .anyMatch(Group::isAdminGroup);
+        return teams.stream()
+                .anyMatch(Team::isAdminGroup);
     }
 
     /**
@@ -197,18 +197,18 @@ public class Employee extends AbstractUlidEntity {
      * @return true if employee has manager privileges
      */
     public boolean isManager() {
-        return groups.stream()
-                .anyMatch(Group::isManagerGroup);
+        return teams.stream()
+                .anyMatch(Team::isManagerGroup);
     }
 
     /**
-     * Get highest permission level from all groups
-     * @return highest permission level, or 1 if no groups
+     * Get highest permission level from all teams
+     * @return highest permission level, or 1 if no teams
      */
     public int getHighestPermissionLevel() {
-        return groups.stream()
-                .filter(Group::getActive)
-                .mapToInt(Group::getPermissionLevel)
+        return teams.stream()
+                .filter(Team::getActive)
+                .mapToInt(Team::getPermissionLevel)
                 .max()
                 .orElse(1);
     }
@@ -227,9 +227,9 @@ public class Employee extends AbstractUlidEntity {
      * @return list of group names where employee is member
      */
     public List<String> getActiveGroupNames() {
-        return groups.stream()
-                .filter(Group::getActive)
-                .map(Group::getName)
+        return teams.stream()
+                .filter(Team::getActive)
+                .map(Team::getName)
                 .sorted()
                 .toList();
     }

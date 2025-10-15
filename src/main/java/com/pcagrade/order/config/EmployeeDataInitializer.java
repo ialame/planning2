@@ -33,18 +33,18 @@ public class EmployeeDataInitializer implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) throws Exception {
         try {
-            log.info("🔍 Checking if j_employee table needs initialization...");
+            log.info("🔍 Checking if employee table needs initialization...");
 
             Long count = (Long) entityManager.createNativeQuery(
-                    "SELECT COUNT(*) FROM j_employee"
+                    "SELECT COUNT(*) FROM employee"
             ).getSingleResult();
 
             if (count > 0) {
-                log.info("✅ j_employee table already contains {} employees - skipping initialization", count);
+                log.info("✅ employee table already contains {} employees - skipping initialization", count);
                 return;
             }
 
-            log.info("📝 j_employee table is empty - creating 5 test employees...");
+            log.info("📝 employee table is empty - creating 5 test employees...");
             createTestEmployees();
             log.info("✅ Successfully created 5 test employees");
 
@@ -121,7 +121,7 @@ public class EmployeeDataInitializer implements ApplicationRunner {
 
         try {
             String sql = """
-                INSERT INTO j_employee 
+                INSERT INTO employee 
                     (id, first_name, last_name, email, work_hours_per_day, efficiency_rating, active, creation_date, modification_date)
                 VALUES 
                     (UNHEX(REPLACE(UUID(), '-', '')), ?, ?, ?, ?, ?, 1, NOW(), NOW())

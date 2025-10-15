@@ -3,7 +3,7 @@ package com.pcagrade.order.service.mapper;
 import com.pcagrade.order.dto.EmployeeDto;
 import com.pcagrade.order.dto.GroupDto;
 import com.pcagrade.order.entity.Employee;
-import com.pcagrade.order.entity.Group;
+import com.pcagrade.order.entity.Team;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Group Mapper Service
- * Handles mapping between Group entities and DTOs
+ * Team Mapper Service
+ * Handles mapping between Team entities and DTOs
  */
 @Service
 @Slf4j
@@ -21,35 +21,35 @@ public class GroupMapperService {
     // ========== GROUP ENTITY TO DTO MAPPING ==========
 
     /**
-     * Convert Group entity to GroupInfo DTO
-     * @param group the group entity
+     * Convert Team entity to GroupInfo DTO
+     * @param team the team entity
      * @return GroupInfo DTO
      */
-    public GroupDto.GroupInfo toGroupInfo(Group group) {
-        if (group == null) {
+    public GroupDto.GroupInfo toGroupInfo(Team team) {
+        if (team == null) {
             return null;
         }
 
         return GroupDto.GroupInfo.builder()
-                .id(group.getUlidString())
-                .name(group.getName())
-                .description(group.getDescription())
-                .active(group.getActive())
-                .permissionLevel(group.getPermissionLevel())
-                .employeeCount((long) (group.getEmployees() != null ? group.getEmployees().size() : 0))
-                .creationDate(group.getCreationDate())
-                .modificationDate(group.getModificationDate())
+                .id(team.getUlidString())
+                .name(team.getName())
+                .description(team.getDescription())
+                .active(team.getActive())
+                .permissionLevel(team.getPermissionLevel())
+                .employeeCount((long) (team.getEmployees() != null ? team.getEmployees().size() : 0))
+                .creationDate(team.getCreationDate())
+                .modificationDate(team.getModificationDate())
                 .build();
     }
 
     /**
-     * Convert Group entity to GroupInfo DTO with employee count
-     * @param group the group entity
+     * Convert Team entity to GroupInfo DTO with employee count
+     * @param team the team entity
      * @param employeeCount actual employee count from database
      * @return GroupInfo DTO
      */
-    public GroupDto.GroupInfo toGroupInfo(Group group, Long employeeCount) {
-        GroupDto.GroupInfo groupInfo = toGroupInfo(group);
+    public GroupDto.GroupInfo toGroupInfo(Team team, Long employeeCount) {
+        GroupDto.GroupInfo groupInfo = toGroupInfo(team);
         if (groupInfo != null && employeeCount != null) {
             groupInfo.setEmployeeCount(employeeCount);
         }
@@ -57,40 +57,40 @@ public class GroupMapperService {
     }
 
     /**
-     * Convert Group entity to GroupWithEmployees DTO
-     * @param group the group entity
+     * Convert Team entity to GroupWithEmployees DTO
+     * @param team the team entity
      * @return GroupWithEmployees DTO
      */
-    public GroupDto.GroupWithEmployees toGroupWithEmployees(Group group) {
-        if (group == null) {
+    public GroupDto.GroupWithEmployees toGroupWithEmployees(Team team) {
+        if (team == null) {
             return null;
         }
 
-        List<EmployeeDto.EmployeeBasic> employees = group.getEmployees() != null ?
-                group.getEmployees().stream()
+        List<EmployeeDto.EmployeeBasic> employees = team.getEmployees() != null ?
+                team.getEmployees().stream()
                         .filter(Employee::getActive)
                         .map(this::toEmployeeBasic)
                         .collect(Collectors.toList()) :
                 List.of();
 
         return GroupDto.GroupWithEmployees.builder()
-                .groupInfo(toGroupInfo(group))
+                .groupInfo(toGroupInfo(team))
                 .employees(employees)
                 .totalEmployees(employees.size())
                 .build();
     }
 
     /**
-     * Convert list of Group entities to GroupInfo DTOs
-     * @param groups list of group entities
+     * Convert list of Team entities to GroupInfo DTOs
+     * @param teams list of group entities
      * @return list of GroupInfo DTOs
      */
-    public List<GroupDto.GroupInfo> toGroupInfoList(List<Group> groups) {
-        if (groups == null) {
+    public List<GroupDto.GroupInfo> toGroupInfoList(List<Team> teams) {
+        if (teams == null) {
             return List.of();
         }
 
-        return groups.stream()
+        return teams.stream()
                 .map(this::toGroupInfo)
                 .collect(Collectors.toList());
     }
@@ -98,16 +98,16 @@ public class GroupMapperService {
     // ========== DTO TO GROUP ENTITY MAPPING ==========
 
     /**
-     * Convert CreateGroupRequest DTO to Group entity
+     * Convert CreateGroupRequest DTO to Team entity
      * @param request the create request DTO
-     * @return Group entity
+     * @return Team entity
      */
-    public Group fromCreateRequest(GroupDto.CreateGroupRequest request) {
+    public Team fromCreateRequest(GroupDto.CreateGroupRequest request) {
         if (request == null) {
             return null;
         }
 
-        return Group.builder()
+        return Team.builder()
                 .name(request.getName())
                 .description(request.getDescription())
                 .permissionLevel(request.getPermissionLevel())
@@ -116,27 +116,27 @@ public class GroupMapperService {
     }
 
     /**
-     * Update Group entity from UpdateGroupRequest DTO
-     * @param group the group entity to update
+     * Update Team entity from UpdateGroupRequest DTO
+     * @param team the team entity to update
      * @param request the update request DTO
-     * @return updated Group entity
+     * @return updated Team entity
      */
-    public Group updateFromRequest(Group group, GroupDto.UpdateGroupRequest request) {
-        if (group == null || request == null) {
-            return group;
+    public Team updateFromRequest(Team team, GroupDto.UpdateGroupRequest request) {
+        if (team == null || request == null) {
+            return team;
         }
 
         if (request.getDescription() != null) {
-            group.setDescription(request.getDescription());
+            team.setDescription(request.getDescription());
         }
         if (request.getPermissionLevel() != null) {
-            group.setPermissionLevel(request.getPermissionLevel());
+            team.setPermissionLevel(request.getPermissionLevel());
         }
         if (request.getActive() != null) {
-            group.setActive(request.getActive());
+            team.setActive(request.getActive());
         }
 
-        return group;
+        return team;
     }
 
     // ========== EMPLOYEE MAPPING HELPERS ==========
@@ -182,7 +182,7 @@ public class GroupMapperService {
                 .initials(employee.getInitials())
                 .email(employee.getEmail())
                 .active(employee.getActive())
-                .groupCount(employee.getGroups() != null ? employee.getGroups().size() : 0)
+                .groupCount(employee.getTeams() != null ? employee.getTeams().size() : 0)
                 .highestPermissionLevel(employee.getHighestPermissionLevel())
                 .primaryRole(getPrimaryRoleName(employee.getHighestPermissionLevel()))
                 .efficiencyRating(employee.getEfficiencyRating())
@@ -200,9 +200,9 @@ public class GroupMapperService {
             return null;
         }
 
-        List<GroupDto.GroupInfo> groups = employee.getGroups() != null ?
-                employee.getGroups().stream()
-                        .filter(Group::getActive)
+        List<GroupDto.GroupInfo> groups = employee.getTeams() != null ?
+                employee.getTeams().stream()
+                        .filter(Team::getActive)
                         .map(this::toGroupInfo)
                         .collect(Collectors.toList()) :
                 List.of();
@@ -322,7 +322,7 @@ public class GroupMapperService {
             return false;
         }
 
-        // Group name should be uppercase with underscores only
+        // Team name should be uppercase with underscores only
         return name.matches("^[A-Z_][A-Z0-9_]*$");
     }
 

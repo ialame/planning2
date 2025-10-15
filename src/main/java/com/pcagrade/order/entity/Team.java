@@ -12,24 +12,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Group Entity - Role Management
+ * Team Entity - Role Management
  * Represents a group/role in the Pokemon card processing system
  */
 @Entity
-@Table(name = "j_group")
+@Table(name = "group")
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Group extends AbstractUlidEntity {
+public class Team extends AbstractUlidEntity {
 
     /**
-     * Group name (e.g., "ADMIN", "MANAGER", "PROCESSOR", "VIEWER")
+     * Team name (e.g., "ADMIN", "MANAGER", "PROCESSOR", "VIEWER")
      */
     @Column(name = "name", nullable = false, unique = true, length = 50)
-    @NotBlank(message = "Group name is required")
+    @NotBlank(message = "Team name is required")
     private String name;
 
     /**
@@ -39,7 +39,7 @@ public class Group extends AbstractUlidEntity {
     private String nameUpper;
 
     /**
-     * Group description
+     * Team description
      */
     @Column(name = "description", length = 255)
     private String description;
@@ -53,7 +53,7 @@ public class Group extends AbstractUlidEntity {
     private Boolean active = true;
 
     /**
-     * Group permissions level (1=lowest, 10=highest)
+     * Team permissions level (1=lowest, 10=highest)
      */
     @Column(name = "permission_level")
     @Builder.Default
@@ -76,9 +76,9 @@ public class Group extends AbstractUlidEntity {
     /**
      * Many-to-many relationship with Employee
      */
-    @ManyToMany(mappedBy = "groups", fetch = FetchType.LAZY)
+    @ManyToMany(mappedBy = "teams", fetch = FetchType.LAZY)
     @ToString.Exclude
-    @JsonIgnoreProperties({"groups", "plannings", "hibernateLazyInitializer", "handler"})  // ← AJOUTER CETTE LIGNE
+    @JsonIgnoreProperties({"teams", "plannings", "hibernateLazyInitializer", "handler"})  // ← AJOUTER CETTE LIGNE
     private List<Employee> employees = new ArrayList<>();
 
     // ========== BUSINESS METHODS ==========
@@ -115,7 +115,7 @@ public class Group extends AbstractUlidEntity {
     public void addEmployee(Employee employee) {
         if (employee != null && !this.employees.contains(employee)) {
             this.employees.add(employee);
-            employee.getGroups().add(this);
+            employee.getTeams().add(this);
         }
     }
 
@@ -126,7 +126,7 @@ public class Group extends AbstractUlidEntity {
     public void removeEmployee(Employee employee) {
         if (employee != null && this.employees.contains(employee)) {
             this.employees.remove(employee);
-            employee.getGroups().remove(this);
+            employee.getTeams().remove(this);
         }
     }
 

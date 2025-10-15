@@ -1,5 +1,5 @@
 <template>
-  <div class="group-management-page">
+  <div class="team-management-page">
     <!-- Header -->
     <div class="mb-8">
       <div class="flex justify-between items-center">
@@ -91,7 +91,7 @@
             <input
               v-model="searchTerm"
               type="text"
-              placeholder="Search groups..."
+              placeholder="Search teams..."
               class="input-field pl-10"
             >
           </div>
@@ -120,34 +120,34 @@
     <!-- Groups Grid -->
     <div v-if="!loading && filteredGroups.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div
-        v-for="group in filteredGroups"
-        :key="group.id"
+        v-for="team in filteredGroups"
+        :key="team.id"
         class="card hover:shadow-lg transition-shadow cursor-pointer"
-        @click="selectGroup(group)"
+        @click="selectGroup(team)"
       >
-        <!-- Group Header -->
+        <!-- Team Header -->
         <div class="flex justify-between items-start mb-4">
           <div class="flex items-center space-x-3">
             <div :class="[
               'w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg',
-              getPermissionLevelColor(group.permissionLevel)
+              getPermissionLevelColor(team.permissionLevel)
             ]">
-              {{ getGroupIcon(group.permissionLevel) }}
+              {{ getGroupIcon(team.permissionLevel) }}
             </div>
             <div>
-              <h3 class="font-semibold text-gray-900">{{ group.name }}</h3>
-              <p class="text-sm text-gray-600 truncate">{{ group.description }}</p>
+              <h3 class="font-semibold text-gray-900">{{ team.name }}</h3>
+              <p class="text-sm text-gray-600 truncate">{{ team.description }}</p>
             </div>
           </div>
           <div class="flex space-x-1">
             <button
-              @click.stop="editGroup(group)"
+              @click.stop="editGroup(team)"
               class="p-1 text-gray-400 hover:text-blue-600"
             >
               <Edit3 class="w-4 h-4" />
             </button>
             <button
-              @click.stop="deleteGroup(group.id)"
+              @click.stop="deleteGroup(team.id)"
               class="p-1 text-gray-400 hover:text-red-600"
             >
               <Trash2 class="w-4 h-4" />
@@ -159,29 +159,29 @@
         <div class="mb-3">
           <span :class="[
             'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-            getPermissionBadgeColor(group.permissionLevel)
+            getPermissionBadgeColor(team.permissionLevel)
           ]">
             <Shield class="w-3 h-3 mr-1" />
-            Level {{ group.permissionLevel }} - {{ getPermissionInfo(group.permissionLevel).name }}
+            Level {{ team.permissionLevel }} - {{ getPermissionInfo(team.permissionLevel).name }}
           </span>
         </div>
 
         <!-- Employee Count -->
         <div class="flex justify-between items-center mb-4">
           <span class="text-sm text-gray-600">Members:</span>
-          <span class="font-medium text-gray-900">{{ group.employeeCount }}</span>
+          <span class="font-medium text-gray-900">{{ team.employeeCount }}</span>
         </div>
 
         <!-- Status -->
         <div class="flex justify-between items-center">
           <span :class="[
             'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-            group.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+            team.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
           ]">
-            {{ group.active ? '✅ Active' : '❌ Inactive' }}
+            {{ team.active ? '✅ Active' : '❌ Inactive' }}
           </span>
           <button
-            @click.stop="manageGroupEmployees(group)"
+            @click.stop="manageGroupEmployees(team)"
             class="text-blue-600 hover:text-blue-800 text-sm font-medium"
           >
             Manage Members →
@@ -193,9 +193,9 @@
     <!-- Empty State -->
     <div v-else-if="!loading && filteredGroups.length === 0" class="card text-center py-12">
       <Users class="w-16 h-16 text-gray-400 mx-auto mb-4" />
-      <h3 class="text-lg font-medium text-gray-900 mb-2">No groups found</h3>
+      <h3 class="text-lg font-medium text-gray-900 mb-2">No teams found</h3>
       <p class="text-gray-600 mb-4">
-        {{ searchTerm || permissionFilter ? 'Try adjusting your filters' : 'Create your first group to get started' }}
+        {{ searchTerm || permissionFilter ? 'Try adjusting your filters' : 'Create your first team to get started' }}
       </p>
       <button
         v-if="!searchTerm && !permissionFilter"
@@ -209,10 +209,10 @@
     <!-- Loading State -->
     <div v-if="loading" class="card text-center py-12">
       <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-      <p class="text-gray-600">Loading groups...</p>
+      <p class="text-gray-600">Loading teams...</p>
     </div>
 
-    <!-- Create Group Modal -->
+    <!-- Create Team Modal -->
     <CreateGroupModal
       v-if="showCreateForm"
       @close="showCreateForm = false"
@@ -220,10 +220,10 @@
       :permission-levels="permissionLevels"
     />
 
-    <!-- Group Detail Modal -->
+    <!-- Team Detail Modal -->
     <GroupDetailModal
       v-if="selectedGroup"
-      :group="selectedGroup"
+      :team="selectedGroup"
       @close="selectedGroup = null"
       @updated="onGroupUpdated"
       @deleted="onGroupDeleted"
@@ -232,7 +232,7 @@
     <!-- Employee Assignment Modal -->
     <EmployeeAssignmentModal
       v-if="showEmployeeAssignment"
-      :group="selectedGroupForAssignment"
+      :team="selectedGroupForAssignment"
       :employees="employees"
       @close="showEmployeeAssignment = false"
       @updated="onAssignmentUpdated"
@@ -297,7 +297,7 @@ interface Notification {
 }
 
 // ========== STATE ==========
-const groups = ref<Group[]>([])
+const teams = ref<Group[]>([])
 const employees = ref<Employee[]>([])
 const selectedGroup = ref<Group | null>(null)
 const selectedGroupForAssignment = ref<Group | null>(null)
@@ -324,25 +324,25 @@ const permissionLevels: PermissionLevelInfo[] = [
 
 // ========== COMPUTED ==========
 const stats = computed(() => ({
-  totalGroups: groups.value.length,
-  adminGroups: groups.value.filter(g => g.permissionLevel >= 8).length,
-  managerGroups: groups.value.filter(g => g.permissionLevel >= 5 && g.permissionLevel < 8).length,
-  totalMembers: groups.value.reduce((sum, g) => sum + g.employeeCount, 0)
+  totalGroups: teams.value.length,
+  adminGroups: teams.value.filter(g => g.permissionLevel >= 8).length,
+  managerGroups: teams.value.filter(g => g.permissionLevel >= 5 && g.permissionLevel < 8).length,
+  totalMembers: teams.value.reduce((sum, g) => sum + g.employeeCount, 0)
 }))
 
 const filteredGroups = computed(() => {
-  let filtered = groups.value
+  let filtered = teams.value
 
   if (searchTerm.value) {
     const search = searchTerm.value.toLowerCase()
-    filtered = filtered.filter(group =>
-      group.name.toLowerCase().includes(search) ||
-      group.description.toLowerCase().includes(search)
+    filtered = filtered.filter(team =>
+      team.name.toLowerCase().includes(search) ||
+      team.description.toLowerCase().includes(search)
     )
   }
 
   if (permissionFilter.value !== null) {
-    filtered = filtered.filter(group => group.permissionLevel === permissionFilter.value)
+    filtered = filtered.filter(team => team.permissionLevel === permissionFilter.value)
   }
 
   return filtered.sort((a, b) => b.permissionLevel - a.permissionLevel)
@@ -352,13 +352,13 @@ const filteredGroups = computed(() => {
 const loadGroups = async () => {
   loading.value = true
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups?includeEmployeeCount=true`)
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams?includeEmployeeCount=true`)
     if (response.ok) {
       const data = await response.json()
-      groups.value = data.groups || []
+      teams.value = data.teams || []
     }
   } catch (error) {
-    showNotification('Error loading groups', 'error')
+    showNotification('Error loading teams', 'error')
   } finally {
     loading.value = false
   }
@@ -378,48 +378,48 @@ const loadEmployees = async () => {
 
 const initializeDefaultGroups = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/init-defaults`, {
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams/init-defaults`, {
       method: 'POST'
     })
 
     if (response.ok) {
-      showNotification('Default groups initialized successfully!', 'success')
+      showNotification('Default teams initialized successfully!', 'success')
       await loadGroups()
     }
   } catch (error) {
-    showNotification('Error initializing default groups', 'error')
+    showNotification('Error initializing default teams', 'error')
   }
 }
 
 const deleteGroup = async (groupId: string) => {
-  if (!confirm('Are you sure you want to delete this group?')) return
+  if (!confirm('Are you sure you want to delete this team?')) return
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/${groupId}`, {
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams/${groupId}`, {
       method: 'DELETE'
     })
 
     if (response.ok) {
-      showNotification('Group deleted successfully!', 'success')
+      showNotification('Team deleted successfully!', 'success')
       await loadGroups()
     } else {
-      showNotification('Error deleting group', 'error')
+      showNotification('Error deleting team', 'error')
     }
   } catch (error) {
-    showNotification('Error deleting group', 'error')
+    showNotification('Error deleting team', 'error')
   }
 }
 
-const selectGroup = (group: Group) => {
-  selectedGroup.value = group
+const selectGroup = (team: Group) => {
+  selectedGroup.value = team
 }
 
-const editGroup = (group: Group) => {
-  selectedGroup.value = group
+const editGroup = (team: Group) => {
+  selectedGroup.value = team
 }
 
-const manageGroupEmployees = (group: Group) => {
-  selectedGroupForAssignment.value = group
+const manageGroupEmployees = (team: Group) => {
+  selectedGroupForAssignment.value = team
   showEmployeeAssignment.value = true
 }
 

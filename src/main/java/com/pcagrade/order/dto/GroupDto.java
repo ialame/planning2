@@ -13,32 +13,32 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Group DTO Classes for API communication
+ * Team DTO Classes for API communication
  */
 public class GroupDto {
 
     /**
-     * Basic Group Information DTO
+     * Basic Team Information DTO
      */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Schema(description = "Group information")
+    @Schema(description = "Team information")
     public static class GroupInfo {
 
-        @Schema(description = "Group ID (ULID format)", example = "01HKQJ9X4YMQR8QY8X4HQJF4ZW")
+        @Schema(description = "Team ID (ULID format)", example = "01HKQJ9X4YMQR8QY8X4HQJF4ZW")
         private String id;
 
-        @NotBlank(message = "Group name is required")
-        @Size(min = 2, max = 50, message = "Group name must be between 2 and 50 characters")
-        @Pattern(regexp = "^[A-Z_][A-Z0-9_]*$", message = "Group name must be uppercase with underscores only")
-        @Schema(description = "Group name (uppercase, underscores allowed)", example = "CARD_PROCESSOR")
+        @NotBlank(message = "Team name is required")
+        @Size(min = 2, max = 50, message = "Team name must be between 2 and 50 characters")
+        @Pattern(regexp = "^[A-Z_][A-Z0-9_]*$", message = "Team name must be uppercase with underscores only")
+        @Schema(description = "Team name (uppercase, underscores allowed)", example = "CARD_PROCESSOR")
         private String name;
 
         @Size(max = 255, message = "Description cannot exceed 255 characters")
-        @Schema(description = "Group description", example = "Employees responsible for processing Pokemon cards")
+        @Schema(description = "Team description", example = "Employees responsible for processing Pokemon cards")
         private String description;
 
         @NotNull(message = "Active status is required")
@@ -63,17 +63,17 @@ public class GroupDto {
     }
 
     /**
-     * Group with Employee Details DTO
+     * Team with Employee Details DTO
      */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Schema(description = "Group with employee details")
+    @Schema(description = "Team with employee details")
     public static class GroupWithEmployees {
 
-        @Schema(description = "Group basic information")
+        @Schema(description = "Team basic information")
         private GroupInfo groupInfo;
 
         @Schema(description = "List of employees in this group")
@@ -84,7 +84,7 @@ public class GroupDto {
     }
 
     /**
-     * Group Creation Request DTO
+     * Team Creation Request DTO
      */
     @Data
     @NoArgsConstructor
@@ -93,14 +93,14 @@ public class GroupDto {
     @Schema(description = "Request to create a new group")
     public static class CreateGroupRequest {
 
-        @NotBlank(message = "Group name is required")
-        @Size(min = 2, max = 50, message = "Group name must be between 2 and 50 characters")
-        @Pattern(regexp = "^[A-Z_][A-Z0-9_]*$", message = "Group name must be uppercase with underscores only")
-        @Schema(description = "Group name", example = "QUALITY_CONTROL", required = true)
+        @NotBlank(message = "Team name is required")
+        @Size(min = 2, max = 50, message = "Team name must be between 2 and 50 characters")
+        @Pattern(regexp = "^[A-Z_][A-Z0-9_]*$", message = "Team name must be uppercase with underscores only")
+        @Schema(description = "Team name", example = "QUALITY_CONTROL", required = true)
         private String name;
 
         @Size(max = 255, message = "Description cannot exceed 255 characters")
-        @Schema(description = "Group description", example = "Quality control team for card grading")
+        @Schema(description = "Team description", example = "Quality control team for card grading")
         private String description;
 
         @Min(value = 1, message = "Permission level must be at least 1")
@@ -113,7 +113,7 @@ public class GroupDto {
     }
 
     /**
-     * Group Update Request DTO
+     * Team Update Request DTO
      */
     @Data
     @NoArgsConstructor
@@ -123,7 +123,7 @@ public class GroupDto {
     public static class UpdateGroupRequest {
 
         @Size(max = 255, message = "Description cannot exceed 255 characters")
-        @Schema(description = "Group description", example = "Updated description for the group")
+        @Schema(description = "Team description", example = "Updated description for the group")
         private String description;
 
         @Min(value = 1, message = "Permission level must be at least 1")
@@ -136,13 +136,13 @@ public class GroupDto {
     }
 
     /**
-     * Employee-Group Assignment Request DTO
+     * Employee-Team Assignment Request DTO
      */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    @Schema(description = "Request to assign employee to groups")
+    @Schema(description = "Request to assign employee to teams")
     public static class EmployeeGroupAssignmentRequest {
 
         @NotNull(message = "Employee ID is required")
@@ -154,20 +154,20 @@ public class GroupDto {
     }
 
     /**
-     * Group Statistics DTO
+     * Team Statistics DTO
      */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Schema(description = "Group statistics information")
+    @Schema(description = "Team statistics information")
     public static class GroupStatistics {
 
-        @Schema(description = "Group ID", example = "01HKQJ9X4YMQR8QY8X4HQJF4ZW")
+        @Schema(description = "Team ID", example = "01HKQJ9X4YMQR8QY8X4HQJF4ZW")
         private String groupId;
 
-        @Schema(description = "Group name", example = "ADMIN")
+        @Schema(description = "Team name", example = "ADMIN")
         private String groupName;
 
         @Schema(description = "Number of employees in group", example = "5")
@@ -184,13 +184,13 @@ public class GroupDto {
     }
 
     /**
-     * Group Search Request DTO
+     * Team Search Request DTO
      */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    @Schema(description = "Group search parameters")
+    @Schema(description = "Team search parameters")
     public static class GroupSearchRequest {
 
         @Schema(description = "Search term for name or description", example = "processor")
@@ -209,7 +209,7 @@ public class GroupDto {
         @Schema(description = "Filter by active status", example = "true")
         private Boolean active;
 
-        @Schema(description = "Include only groups with employees", example = "true")
+        @Schema(description = "Include only teams with employees", example = "true")
         private Boolean hasEmployees;
 
         @Min(value = 0, message = "Page number cannot be negative")

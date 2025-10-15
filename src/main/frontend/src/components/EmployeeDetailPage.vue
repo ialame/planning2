@@ -97,7 +97,7 @@
         </h2>
 
         <!-- FIXED: Correct v-for syntax for array of objects -->
-        <div v-for="dayGroup in ordersByDay" :key="dayGroup.date" class="day-group">
+        <div v-for="dayGroup in ordersByDay" :key="dayGroup.date" class="day-team">
           <div class="day-header">
             <div class="day-date">
               <!-- Use dayGroup.date instead of date -->
@@ -252,7 +252,7 @@ const totalDuration = computed(() => {
   }, 0)
 })
 
-// Group orders by day with FIXED field mapping
+// Team orders by day with FIXED field mapping
 const ordersByDay = computed(() => {
   const grouped: Record<string, any[]> = {}
 
@@ -791,7 +791,7 @@ onMounted(() => {
   border-bottom: 2px solid #f3f4f6;
 }
 
-.day-group {
+.day-team {
   margin-bottom: 32px;
 }
 

@@ -39,11 +39,11 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
 
             // Check if any employee-group assignments exist
             Long count = (Long) entityManager.createNativeQuery(
-                    "SELECT COUNT(*) FROM j_employee_group"
+                    "SELECT COUNT(*) FROM employee_group"
             ).getSingleResult();
 
             if (count > 0) {
-                log.info("✅ j_employee_group table already contains {} assignments - skipping initialization", count);
+                log.info("✅ employee_group table already contains {} assignments - skipping initialization", count);
                 return;
             }
 
@@ -72,11 +72,11 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
         // Get employees by email (predictable)
         Map<String, String> employees = getEmployeeIds();
 
-        // Get groups by name
+        // Get teams by name
         Map<String, String> groups = getGroupIds();
 
         if (employees.isEmpty() || groups.isEmpty()) {
-            log.warn("⚠️ No employees or groups found - skipping role assignment");
+            log.warn("⚠️ No employees or teams found - skipping role assignment");
             return;
         }
 
@@ -120,7 +120,7 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
      * Get employee IDs by email
      */
     private Map<String, String> getEmployeeIds() {
-        String sql = "SELECT email, HEX(id) FROM j_employee";
+        String sql = "SELECT email, HEX(id) FROM employee";
 
         @SuppressWarnings("unchecked")
         List<Object[]> results = entityManager.createNativeQuery(sql).getResultList();
@@ -136,7 +136,7 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
      * Get group IDs by name
      */
     private Map<String, String> getGroupIds() {
-        String sql = "SELECT name, HEX(id) FROM j_group";
+        String sql = "SELECT name, HEX(id) FROM group";
 
         @SuppressWarnings("unchecked")
         List<Object[]> results = entityManager.createNativeQuery(sql).getResultList();
@@ -164,7 +164,7 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
 
             try {
                 String sql = """
-                    INSERT INTO j_employee_group (employee_id, group_id)
+                    INSERT INTO employee_group (employee_id, group_id)
                     VALUES (UNHEX(?), UNHEX(?))
                     """;
 

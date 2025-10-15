@@ -140,7 +140,7 @@ public class EmployeeService {
      */
     public List<Map<String, Object>> getAllActiveEmployees() {
         try {
-            log.debug("Loading active employees from j_employee table...");
+            log.debug("Loading active employees from employee table...");
 
             String sql = """
             SELECT 
@@ -151,7 +151,7 @@ public class EmployeeService {
                 COALESCE(e.work_hours_per_day, 8) as workHoursPerDay,
                 COALESCE(e.active, 1) as active,
                 e.creation_date as creationDate
-            FROM j_employee e
+            FROM employee e
             WHERE COALESCE(e.active, 1) = 1
             ORDER BY e.last_name, e.first_name
         """;

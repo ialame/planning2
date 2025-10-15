@@ -1,11 +1,11 @@
 <template>
-  <div class="group-overview">
+  <div class="team-overview">
     <!-- Header -->
     <div class="bg-white rounded-lg shadow-md p-6 mb-6">
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-2xl font-bold text-gray-900">Groups Overview</h2>
-          <p class="text-gray-600 mt-1">Manage employee groups and permissions</p>
+          <p class="text-gray-600 mt-1">Manage employee teams and permissions</p>
         </div>
       </div>
     </div>
@@ -72,7 +72,7 @@
           </div>
           <div>
             <p class="text-sm text-gray-600">Empty Groups</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ stats.emptyGroups }}</p>
+            <p class="text-2xl font-semibold text-gray-900">{{ stats.emptyTeams }}</p>
           </div>
         </div>
       </div>
@@ -97,14 +97,14 @@
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <button
-          @click="$emit('view-groups')"
+          @click="$emit('view-teams')"
           class="p-4 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors text-left"
         >
           <div class="flex items-center space-x-3 mb-2">
             <Users class="w-6 h-6 text-blue-600" />
             <span class="font-medium text-gray-900">Manage Groups</span>
           </div>
-          <p class="text-sm text-gray-600">Create, edit, and organize groups</p>
+          <p class="text-sm text-gray-600">Create, edit, and organize teams</p>
         </button>
 
         <button
@@ -115,7 +115,7 @@
             <UserPlus class="w-6 h-6 text-green-600" />
             <span class="font-medium text-gray-900">Assign Roles</span>
           </div>
-          <p class="text-sm text-gray-600">Assign employees to groups</p>
+          <p class="text-sm text-gray-600">Assign employees to teams</p>
         </button>
 
         <button
@@ -127,7 +127,7 @@
             <Settings class="w-6 h-6 text-purple-600" />
             <span class="font-medium text-gray-900">Setup Defaults</span>
           </div>
-          <p class="text-sm text-gray-600">Initialize standard groups</p>
+          <p class="text-sm text-gray-600">Initialize standard teams</p>
         </button>
       </div>
     </div>
@@ -153,7 +153,7 @@ interface GroupStats {
   adminGroups: number
   managerGroups: number
   totalMembers: number
-  emptyGroups: number
+  emptyTeams: number
   averagePermissionLevel: number
 }
 
@@ -163,7 +163,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'view-groups': []
+  'view-teams': []
   'view-employees': []
 }>()
 
@@ -176,7 +176,7 @@ const initializeDefaultGroups = async () => {
 
   loading.value = true
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/initialize-defaults`, {
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams/initialize-defaults`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -184,13 +184,13 @@ const initializeDefaultGroups = async () => {
     })
 
     if (response.ok) {
-      // Success - groups initialized
-      console.log('Default groups initialized successfully')
+      // Success - teams initialized
+      console.log('Default teams initialized successfully')
     } else {
-      console.error('Failed to initialize default groups')
+      console.error('Failed to initialize default teams')
     }
   } catch (error) {
-    console.error('Error initializing default groups:', error)
+    console.error('Error initializing default teams:', error)
   } finally {
     loading.value = false
   }
@@ -202,7 +202,7 @@ const initializeDefaultGroups = async () => {
   @apply bg-white rounded-lg shadow-md p-4;
 }
 
-.group-overview {
+.team-overview {
   @apply space-y-6;
 }
 </style>

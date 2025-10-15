@@ -47,7 +47,7 @@ public class PlanningController {
     @GetMapping
     public ResponseEntity<Map<String, Object>> getAllPlannings() {
         try {
-            log.info("📋 Fetching all plannings from j_planning table");
+            log.info("📋 Fetching all plannings from planning table");
 
             // ✅ FIXED: Removed p.priority, replaced p.estimated_card_count with p.card_count
             String sql = """
@@ -67,9 +67,9 @@ public class PlanningController {
                     p.updated_at,
                     o.num_commande as orderNumber,
                     CONCAT(COALESCE(e.first_name, 'Unknown'), ' ', COALESCE(e.last_name, 'User')) as employeeName
-                FROM j_planning p
+                FROM planning p
                 LEFT JOIN `order` o ON p.order_id = o.id  
-                LEFT JOIN j_employee e ON p.employee_id = e.id
+                LEFT JOIN employee e ON p.employee_id = e.id
                 ORDER BY p.planning_date ASC, p.start_time ASC
                 """;
 
@@ -166,7 +166,7 @@ public class PlanningController {
                 -- Card count from order table directly
                 COALESCE(o.total_cards, 0) as cardCount,
                 COALESCE(o.total_cards, 0) as cardsWithName
-            FROM j_planning p
+            FROM planning p
             INNER JOIN `order` o ON p.order_id = o.id
             WHERE HEX(p.employee_id) = ?
             """ + dateFilter + """
@@ -293,8 +293,8 @@ public class PlanningController {
                     COUNT(p.id) as taskCount,
                     COALESCE(SUM(p.card_count), 0) as cardCount,
                     ROUND(COALESCE(SUM(p.estimated_duration_minutes), 0) / (COALESCE(e.work_hours_per_day, 8) * 60.0), 2) as workloadRatio
-                FROM j_employee e
-                LEFT JOIN j_planning p ON e.id = p.employee_id""" + dateFilter + """
+                FROM employee e
+                LEFT JOIN planning p ON e.id = p.employee_id""" + dateFilter + """
                 GROUP BY e.id, e.first_name, e.last_name, e.email, e.active, e.work_hours_per_day
                 ORDER BY workloadRatio DESC, name ASC
                 """;
@@ -361,13 +361,13 @@ public class PlanningController {
     @Transactional
     public ResponseEntity<Map<String, Object>> cleanupPlannings() {
         try {
-            log.info("🗑️ Cleaning up j_planning table");
+            log.info("🗑️ Cleaning up planning table");
 
-            String countSql = "SELECT COUNT(*) FROM j_planning";
+            String countSql = "SELECT COUNT(*) FROM planning";
             Query countQuery = entityManager.createNativeQuery(countSql);
             Number beforeCount = (Number) countQuery.getSingleResult();
 
-            String deleteSql = "DELETE FROM j_planning";
+            String deleteSql = "DELETE FROM planning";
             Query deleteQuery = entityManager.createNativeQuery(deleteSql);
             int deletedRows = deleteQuery.executeUpdate();
 
@@ -404,7 +404,7 @@ public class PlanningController {
                     COUNT(DISTINCT order_id) as ordersPlanned,
                     SUM(estimated_duration_minutes) as totalMinutes,
                     SUM(card_count) as totalCards
-                FROM j_planning
+                FROM planning
                 """;
 
             Query query = entityManager.createNativeQuery(sql);
@@ -646,9 +646,9 @@ public class PlanningController {
         // Get employee roles
         String roleSql = """
         SELECT g.group_name, COUNT(DISTINCT e.id)
-        FROM j_employee e
-        INNER JOIN j_employee_group eg ON e.id = eg.employee_id
-        INNER JOIN j_group g ON eg.group_id = g.id
+        FROM employee e
+        INNER JOIN employee_group eg ON e.id = eg.employee_id
+        INNER JOIN team g ON eg.group_id = g.id
         WHERE e.active = 1 AND g.active = 1
         GROUP BY g.group_name
     """;
@@ -697,9 +697,9 @@ public class PlanningController {
             o.customer_name as clientOrderNumber,
             CONCAT(COALESCE(e.first_name, 'Unknown'), ' ', COALESCE(e.last_name, 'User')) as employeeName,
             e.email as employeeEmail
-        FROM j_planning p
+        FROM planning p
         LEFT JOIN `order` o ON p.order_id = o.id  
-        LEFT JOIN j_employee e ON p.employee_id = e.id
+        LEFT JOIN employee e ON p.employee_id = e.id
         WHERE p.status = ?
         ORDER BY p.planning_date ASC, p.start_time ASC
         """;

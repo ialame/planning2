@@ -60,7 +60,7 @@
                 <input
                   v-model="searchTerm"
                   type="text"
-                  placeholder="Search groups..."
+                  placeholder="Search teams..."
                   class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
               </div>
@@ -81,35 +81,35 @@
         <div class="max-h-96 overflow-y-auto">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div
-              v-for="group in filteredGroups"
-              :key="group.id"
+              v-for="team in filteredGroups"
+              :key="team.id"
               :class="[
                 'p-4 border-2 rounded-lg cursor-pointer transition-all',
-                isGroupSelected(group)
+                isGroupSelected(team)
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-200 hover:border-gray-300'
               ]"
-              @click="toggleGroup(group)"
+              @click="toggleGroup(team)"
             >
               <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center space-x-3">
                   <div :class="[
                     'w-10 h-10 rounded-full flex items-center justify-center text-white font-bold',
-                    getPermissionLevelColor(group.permissionLevel)
+                    getPermissionLevelColor(team.permissionLevel)
                   ]">
-                    {{ getGroupIcon(group.permissionLevel) }}
+                    {{ getGroupIcon(team.permissionLevel) }}
                   </div>
                   <div>
-                    <h4 class="font-medium text-gray-900">{{ group.name }}</h4>
-                    <p class="text-sm text-gray-600 truncate">{{ group.description }}</p>
+                    <h4 class="font-medium text-gray-900">{{ team.name }}</h4>
+                    <p class="text-sm text-gray-600 truncate">{{ team.description }}</p>
                   </div>
                 </div>
                 <div class="flex items-center space-x-2">
                   <input
                     type="checkbox"
-                    :checked="isGroupSelected(group)"
+                    :checked="isGroupSelected(team)"
                     @click.stop
-                    @change="toggleGroup(group)"
+                    @change="toggleGroup(team)"
                     class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   >
                 </div>
@@ -118,23 +118,23 @@
               <div class="flex justify-between items-center">
                 <span :class="[
                   'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-                  getPermissionBadgeColor(group.permissionLevel)
+                  getPermissionBadgeColor(team.permissionLevel)
                 ]">
                   <Shield class="w-3 h-3 mr-1" />
-                  Level {{ group.permissionLevel }}
+                  Level {{ team.permissionLevel }}
                 </span>
                 <span class="text-xs text-gray-500">
-                  {{ group.employeeCount }} members
+                  {{ team.employeeCount }} members
                 </span>
               </div>
 
               <!-- Change Indicator -->
-              <div v-if="getGroupChangeType(group)" class="mt-2">
+              <div v-if="getGroupChangeType(team)" class="mt-2">
                 <span :class="[
                   'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-                  getGroupChangeType(group) === 'added' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  getGroupChangeType(team) === 'added' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                 ]">
-                  {{ getGroupChangeType(group) === 'added' ? '+ Will be added' : '- Will be removed' }}
+                  {{ getGroupChangeType(team) === 'added' ? '+ Will be added' : '- Will be removed' }}
                 </span>
               </div>
             </div>
@@ -144,7 +144,7 @@
         <!-- Empty State -->
         <div v-if="filteredGroups.length === 0" class="text-center py-8">
           <Users class="w-12 h-12 text-gray-400 mx-auto mb-2" />
-          <p class="text-gray-500">No groups found</p>
+          <p class="text-gray-500">No teams found</p>
           <p class="text-sm text-gray-400">Try adjusting your search or filters</p>
         </div>
       </div>
@@ -153,7 +153,7 @@
       <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
         <div class="flex justify-between items-center">
           <div class="text-sm text-gray-600">
-            <span class="font-medium">{{ selectedGroups.length }}</span> groups selected
+            <span class="font-medium">{{ selectedGroups.length }}</span> teams selected
             <span v-if="hasChanges" class="ml-2 text-orange-600 font-medium">
               ({{ changesCount }} changes pending)
             </span>
@@ -242,14 +242,14 @@ const filteredGroups = computed(() => {
 
   if (searchTerm.value) {
     const search = searchTerm.value.toLowerCase()
-    filtered = filtered.filter(group =>
-      group.name.toLowerCase().includes(search) ||
-      group.description.toLowerCase().includes(search)
+    filtered = filtered.filter(team =>
+      team.name.toLowerCase().includes(search) ||
+      team.description.toLowerCase().includes(search)
     )
   }
 
   if (permissionFilter.value !== null) {
-    filtered = filtered.filter(group => group.permissionLevel >= permissionFilter.value!)
+    filtered = filtered.filter(team => team.permissionLevel >= permissionFilter.value!)
   }
 
   return filtered.sort((a, b) => b.permissionLevel - a.permissionLevel)
@@ -306,17 +306,17 @@ const formatUuidFromHex = (hexUuid: string): string => {
 const loadAllGroups = async () => {
   loading.value = true
   try {
-    console.log('🔄 Loading all available groups...')
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups?includeEmployeeCount=true`)
+    console.log('🔄 Loading all available teams...')
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams?includeEmployeeCount=true`)
     if (response.ok) {
       const data = await response.json()
-      allGroups.value = data.groups || []
-      console.log('✅ Loaded all groups:', allGroups.value.length)
+      allGroups.value = data.teams || []
+      console.log('✅ Loaded all teams:', allGroups.value.length)
     } else {
-      console.error('❌ Failed to load groups:', response.status)
+      console.error('❌ Failed to load teams:', response.status)
     }
   } catch (error) {
-    console.error('❌ Error loading groups:', error)
+    console.error('❌ Error loading teams:', error)
   } finally {
     loading.value = false
   }
@@ -327,49 +327,49 @@ const loadAllGroups = async () => {
  */
 const loadEmployeeCurrentGroups = async () => {
   try {
-    console.log('🔄 Loading current groups for employee:', props.employee.id)
+    console.log('🔄 Loading current teams for employee:', props.employee.id)
 
     // ✅ MÊME PATTERN : Utiliser l'ID directement comme pour les employés
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/employee/${props.employee.id}`)
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams/employee/${props.employee.id}`)
 
     if (response.ok) {
       const data = await response.json()
-      const currentGroups = data.groups || []
-      console.log('✅ Loaded current groups for employee:', currentGroups)
+      const currentGroups = data.teams || []
+      console.log('✅ Loaded current teams for employee:', currentGroups)
 
       selectedGroups.value = [...currentGroups]
       originalGroupIds.value = currentGroups.map(g => g.id)
 
-      console.log('📋 Selected groups initialized:', selectedGroups.value.length)
+      console.log('📋 Selected teams initialized:', selectedGroups.value.length)
     } else {
-      console.log('ℹ️ No current groups found for employee')
+      console.log('ℹ️ No current teams found for employee')
       selectedGroups.value = []
       originalGroupIds.value = []
     }
   } catch (error) {
-    console.error('❌ Error loading employee current groups:', error)
+    console.error('❌ Error loading employee current teams:', error)
     selectedGroups.value = []
     originalGroupIds.value = []
   }
 }
-const isGroupSelected = (group: Group) => {
-  return selectedGroups.value.some(g => g.id === group.id)
+const isGroupSelected = (team: Group) => {
+  return selectedGroups.value.some(g => g.id === team.id)
 }
 
-const toggleGroup = (group: Group) => {
-  if (isGroupSelected(group)) {
-    selectedGroups.value = selectedGroups.value.filter(g => g.id !== group.id)
-    console.log('➖ Removed group:', group.name)
+const toggleGroup = (team: Group) => {
+  if (isGroupSelected(team)) {
+    selectedGroups.value = selectedGroups.value.filter(g => g.id !== team.id)
+    console.log('➖ Removed team:', team.name)
   } else {
-    selectedGroups.value.push(group)
-    console.log('➕ Added group:', group.name)
+    selectedGroups.value.push(team)
+    console.log('➕ Added team:', team.name)
   }
   console.log('📋 Current selection:', selectedGroups.value.map(g => g.name))
 }
 
-const getGroupChangeType = (group: Group) => {
-  const wasSelected = originalGroupIds.value.includes(group.id)
-  const isSelected = isGroupSelected(group)
+const getGroupChangeType = (team: Group) => {
+  const wasSelected = originalGroupIds.value.includes(team.id)
+  const isSelected = isGroupSelected(team)
 
   if (!wasSelected && isSelected) return 'added'
   if (wasSelected && !isSelected) return 'removed'
@@ -406,7 +406,7 @@ const saveChanges = async () => {
 
   loading.value = true
   try {
-    console.log('🔄 Saving group changes for employee:', props.employee.id)
+    console.log('🔄 Saving team changes for employee:', props.employee.id)
     console.log('📋 Groups to assign:', selectedGroups.value.map(g => g.id))
 
     const currentIds = new Set(selectedGroups.value.map(g => g.id))
@@ -417,19 +417,19 @@ const saveChanges = async () => {
     // Groups to remove
     const groupsToRemove = originalGroupIds.value.filter(id => !currentIds.has(id))
 
-    console.log('➕ Adding to groups:', groupsToAdd.map(g => g.name))
-    console.log('➖ Removing from groups:', groupsToRemove.map(id => {
-      const group = allGroups.value.find(g => g.id === id)
-      return group ? group.name : id
+    console.log('➕ Adding to teams:', groupsToAdd.map(g => g.name))
+    console.log('➖ Removing from teams:', groupsToRemove.map(id => {
+      const team = allGroups.value.find(g => g.id === id)
+      return team ? team.name : id
     }))
 
     const promises = []
 
-    // Add to new groups
-    for (const group of groupsToAdd) {
-      console.log(`📤 POST ${API_BASE_URL}/api/v2/groups/${group.id}/employees/${props.employee.id}`)
+    // Add to new teams
+    for (const team of groupsToAdd) {
+      console.log(`📤 POST ${API_BASE_URL}/api/v2/teams/${team.id}/employees/${props.employee.id}`)
       promises.push(
-        fetch(`${API_BASE_URL}/api/v2/groups/${group.id}/employees/${props.employee.id}`, {
+        fetch(`${API_BASE_URL}/api/v2/teams/${team.id}/employees/${props.employee.id}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -438,23 +438,23 @@ const saveChanges = async () => {
         }).then(async response => {
           if (!response.ok) {
             const errorText = await response.text()
-            console.error(`❌ Failed to add to group ${group.name}:`, response.status, errorText)
-            throw new Error(`Failed to add to group ${group.name}: ${response.status} - ${errorText}`)
+            console.error(`❌ Failed to add to team ${team.name}:`, response.status, errorText)
+            throw new Error(`Failed to add to team ${team.name}: ${response.status} - ${errorText}`)
           }
-          console.log(`✅ Successfully added to group: ${group.name}`)
+          console.log(`✅ Successfully added to team: ${team.name}`)
           return response.json()
         })
       )
     }
 
-    // Remove from old groups
+    // Remove from old teams
     for (const groupId of groupsToRemove) {
-      const group = allGroups.value.find(g => g.id === groupId)
-      const groupName = group ? group.name : groupId
+      const team = allGroups.value.find(g => g.id === groupId)
+      const groupName = team ? team.name : groupId
 
-      console.log(`📤 DELETE ${API_BASE_URL}/api/v2/groups/${groupId}/employees/${props.employee.id}`)
+      console.log(`📤 DELETE ${API_BASE_URL}/api/v2/teams/${groupId}/employees/${props.employee.id}`)
       promises.push(
-        fetch(`${API_BASE_URL}/api/v2/groups/${groupId}/employees/${props.employee.id}`, {
+        fetch(`${API_BASE_URL}/api/v2/teams/${groupId}/employees/${props.employee.id}`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
@@ -463,10 +463,10 @@ const saveChanges = async () => {
         }).then(async response => {
           if (!response.ok) {
             const errorText = await response.text()
-            console.error(`❌ Failed to remove from group ${groupName}:`, response.status, errorText)
-            throw new Error(`Failed to remove from group ${groupName}: ${response.status} - ${errorText}`)
+            console.error(`❌ Failed to remove from team ${groupName}:`, response.status, errorText)
+            throw new Error(`Failed to remove from team ${groupName}: ${response.status} - ${errorText}`)
           }
-          console.log(`✅ Successfully removed from group: ${groupName}`)
+          console.log(`✅ Successfully removed from team: ${groupName}`)
           return response.json()
         })
       )
@@ -487,8 +487,8 @@ const saveChanges = async () => {
     // ✅ Mise à jour de l'état local - CORRECT
     originalGroupIds.value = selectedGroups.value.map(g => g.id)
 
-    console.log('🔄 Updated original groups to:', originalGroupIds.value)
-    console.log('💾 Group assignment completed successfully!')
+    console.log('🔄 Updated original teams to:', originalGroupIds.value)
+    console.log('💾 Team assignment completed successfully!')
 
     // ✅ Émettre l'événement de mise à jour
     emit('updated')
@@ -503,7 +503,7 @@ const saveChanges = async () => {
       errorMessage = error
     }
 
-    alert(`Failed to save group changes: ${errorMessage}`)
+    alert(`Failed to save team changes: ${errorMessage}`)
   } finally {
     loading.value = false
   }
@@ -511,7 +511,7 @@ const saveChanges = async () => {
 // ========== LIFECYCLE ==========
 onMounted(async () => {
   console.log('🚀 Modal mounted for employee:', props.employee.fullName)
-  console.log('📋 Received current groups:', props.currentGroups)
+  console.log('📋 Received current teams:', props.currentGroups)
 
   // Charger tous les groupes disponibles ET les groupes actuels de l'employé
   await Promise.all([

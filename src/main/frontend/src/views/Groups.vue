@@ -1,15 +1,15 @@
 <template>
-  <div class="groups-page">
+  <div class="teams-page">
     <GroupsNavigation />
   </div>
 </template>
 
 <script setup lang="ts">
-import GroupsNavigation from '../components/groups/GroupsNavigation.vue'
+import GroupsNavigation from '../components/teams/GroupsNavigation.vue'
 </script>
 
 <style scoped>
-.groups-page {
+.teams-page {
   min-height: 100vh;
   background-color: #f9fafb;
 }

@@ -10,12 +10,12 @@ databaseChangeLog:
         - onFail: MARK_RAN
         - not:
             - tableExists:
-                tableName: j_employee
+                tableName: employee
 
       changes:
         # Create main table
         - createTable:
-            tableName: j_employee
+            tableName: employee
             columns:
               # Primary key (UUID stored as BINARY(16))
               - column:
@@ -80,14 +80,14 @@ databaseChangeLog:
 
         # Create indexes for performance
         - createIndex:
-            tableName: j_employee
+            tableName: employee
             indexName: idx_employee_active
             columns:
               - column:
                   name: active
 
         - createIndex:
-            tableName: j_employee
+            tableName: employee
             indexName: idx_employee_name
             columns:
               - column:
@@ -96,7 +96,7 @@ databaseChangeLog:
                   name: first_name
 
         - createIndex:
-            tableName: j_employee
+            tableName: employee
             indexName: idx_employee_email
             unique: true
             columns:
@@ -106,4 +106,4 @@ databaseChangeLog:
       # Rollback instructions
       rollback:
         - dropTable:
-            tableName: j_employee
+            tableName: employee

@@ -248,7 +248,7 @@ public class GreedyPlanningService {
     private boolean isPlanningAlreadyExists(String orderId, String employeeId) {
         try {
             String checkSql = """
-        SELECT COUNT(*) FROM j_planning 
+        SELECT COUNT(*) FROM planning
         WHERE order_id = UNHEX(?) 
         AND employee_id = UNHEX(?)
         """;
@@ -276,7 +276,7 @@ public class GreedyPlanningService {
             LocalDate targetDate = LocalDate.of(year, month, day);
 
             String deleteSql = """
-        DELETE FROM j_planning 
+        DELETE FROM planning
         WHERE planning_date = ?
         """;
 
@@ -306,7 +306,7 @@ public class GreedyPlanningService {
 
             // ✅ NOUVELLE REQUÊTE SQL
             String insertSql = """
-            INSERT INTO j_planning (
+            INSERT INTO planning (
                 id, order_id, employee_id, 
                 planning_date, start_time, end_time,
                 estimated_duration_minutes, estimated_end_time,

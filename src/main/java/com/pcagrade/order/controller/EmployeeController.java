@@ -111,9 +111,9 @@ public class EmployeeController {
             // 3. Generate UUID for employee ID
             String employeeId = UUID.randomUUID().toString().replace("-", "");
 
-            // 4. Insert into j_employee table
+            // 4. Insert into employee table
             String insertSql = """
-                INSERT INTO j_employee 
+                INSERT INTO employee 
                 (id, first_name, last_name, email, work_hours_per_day, active, creation_date, modification_date)
                 VALUES (UNHEX(?), ?, ?, ?, ?, ?, NOW(), NOW())
             """;
@@ -178,7 +178,7 @@ public class EmployeeController {
                     active,
                     creation_date as creationDate,
                     modification_date as modificationDate
-                FROM j_employee
+                FROM employee
                 WHERE HEX(id) = ? AND active = 1
                 """;
 
@@ -223,7 +223,7 @@ public class EmployeeController {
             System.out.println("🔧 Initializing employee table...");
 
             String createTableSql = """
-                CREATE TABLE IF NOT EXISTS j_employee (
+                CREATE TABLE IF NOT EXISTS employee (
                     id BINARY(16) NOT NULL PRIMARY KEY,
                     first_name VARCHAR(100) NOT NULL,
                     last_name VARCHAR(100) NOT NULL,
@@ -293,25 +293,25 @@ public class EmployeeController {
         try {
             log.info("🔍 Running employee debug diagnostics...");
 
-            // 1. Check if j_employee table exists
-            String sqlCheckTable = "SHOW TABLES LIKE 'j_employee'";
+            // 1. Check if employee table exists
+            String sqlCheckTable = "SHOW TABLES LIKE 'employee'";
             Query queryCheckTable = entityManager.createNativeQuery(sqlCheckTable);
             @SuppressWarnings("unchecked")
             List<Object> tableExists = queryCheckTable.getResultList();
 
-            debug.put("table_j_employee_exists", !tableExists.isEmpty());
+            debug.put("table_employee_exists", !tableExists.isEmpty());
 
             if (!tableExists.isEmpty()) {
                 // 2. Count total and active employees
-                String sqlCount = "SELECT COUNT(*) FROM j_employee";
+                String sqlCount = "SELECT COUNT(*) FROM employee";
                 Query queryCount = entityManager.createNativeQuery(sqlCount);
                 Number totalCount = (Number) queryCount.getSingleResult();
-                debug.put("j_employee_total_count", totalCount.intValue());
+                debug.put("employee_total_count", totalCount.intValue());
 
-                String sqlActiveCount = "SELECT COUNT(*) FROM j_employee WHERE active = 1";
+                String sqlActiveCount = "SELECT COUNT(*) FROM employee WHERE active = 1";
                 Query queryActiveCount = entityManager.createNativeQuery(sqlActiveCount);
                 Number activeCount = (Number) queryActiveCount.getSingleResult();
-                debug.put("j_employee_active_count", activeCount.intValue());
+                debug.put("employee_active_count", activeCount.intValue());
 
                 // 3. Get sample of first 3 employees with their actual data
                 String sqlSample = """
@@ -323,7 +323,7 @@ public class EmployeeController {
                         work_hours_per_day,
                         active,
                         efficiency_rating
-                    FROM j_employee 
+                    FROM employee 
 
                 """;
 
@@ -351,7 +351,7 @@ public class EmployeeController {
                 debug.put("service_sample", serviceResult.isEmpty() ? null : serviceResult.get(0));
 
             } else {
-                debug.put("error", "Table j_employee does not exist");
+                debug.put("error", "Table employee does not exist");
             }
 
             log.info("✅ Debug complete: {}", debug);
@@ -385,7 +385,7 @@ public class EmployeeController {
                     email,
                     work_hours_per_day,
                     active
-                FROM j_employee 
+                FROM employee 
                 WHERE active = 1
                 LIMIT 2
             """;

@@ -7,13 +7,13 @@
           <div class="flex items-center space-x-3">
             <div :class="[
               'w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg',
-              getPermissionLevelColor(group.permissionLevel)
+              getPermissionLevelColor(team.permissionLevel)
             ]">
-              {{ getGroupIcon(group.permissionLevel) }}
+              {{ getGroupIcon(team.permissionLevel) }}
             </div>
             <div>
-              <h2 class="text-lg font-semibold text-gray-900">{{ group.name }}</h2>
-              <p class="text-sm text-gray-600">{{ group.description }}</p>
+              <h2 class="text-lg font-semibold text-gray-900">{{ team.name }}</h2>
+              <p class="text-sm text-gray-600">{{ team.description }}</p>
             </div>
           </div>
           <button
@@ -57,15 +57,15 @@
                 <div class="space-y-2">
                   <div class="flex justify-between">
                     <span class="text-sm text-gray-600">Name:</span>
-                    <span class="text-sm font-medium">{{ group.name }}</span>
+                    <span class="text-sm font-medium">{{ team.name }}</span>
                   </div>
                   <div class="flex justify-between">
                     <span class="text-sm text-gray-600">Status:</span>
                     <span :class="[
                       'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-                      group.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      team.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                     ]">
-                      {{ group.active ? '✅ Active' : '❌ Inactive' }}
+                      {{ team.active ? '✅ Active' : '❌ Inactive' }}
                     </span>
                   </div>
                   <div class="flex justify-between">
@@ -82,14 +82,14 @@
                     <span class="text-sm text-gray-600">Level:</span>
                     <span :class="[
                       'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-                      getPermissionBadgeColor(group.permissionLevel)
+                      getPermissionBadgeColor(team.permissionLevel)
                     ]">
                       <Shield class="w-3 h-3 mr-1" />
-                      {{ group.permissionLevel }} - {{ getPermissionInfo(group.permissionLevel).name }}
+                      {{ team.permissionLevel }} - {{ getPermissionInfo(team.permissionLevel).name }}
                     </span>
                   </div>
                   <div class="text-sm text-gray-600">
-                    {{ getPermissionInfo(group.permissionLevel).description }}
+                    {{ getPermissionInfo(team.permissionLevel).description }}
                   </div>
                 </div>
               </div>
@@ -101,11 +101,11 @@
                 <div class="space-y-2">
                   <div class="flex justify-between">
                     <span class="text-sm text-gray-600">Created:</span>
-                    <span class="text-sm">{{ formatDate(group.creationDate) }}</span>
+                    <span class="text-sm">{{ formatDate(team.creationDate) }}</span>
                   </div>
                   <div class="flex justify-between">
                     <span class="text-sm text-gray-600">Modified:</span>
-                    <span class="text-sm">{{ formatDate(group.modificationDate) }}</span>
+                    <span class="text-sm">{{ formatDate(team.modificationDate) }}</span>
                   </div>
                 </div>
               </div>
@@ -174,7 +174,7 @@
 
           <div v-if="groupMembers.length === 0" class="text-center py-8">
             <Users class="w-12 h-12 text-gray-400 mx-auto mb-2" />
-            <p class="text-gray-500 mb-4">No members assigned to this group</p>
+            <p class="text-gray-500 mb-4">No members assigned to this team</p>
             <button
               @click="openEmployeeAssignment"
               class="btn-primary"
@@ -268,7 +268,7 @@
                 <span class="ml-2 text-sm text-gray-700">Group is active</span>
               </label>
               <p class="text-xs text-gray-500 mt-1">
-                Inactive groups cannot be assigned to employees
+                Inactive teams cannot be assigned to employees
               </p>
             </div>
 
@@ -311,7 +311,7 @@
     <!-- Employee Assignment Modal -->
     <EmployeeAssignmentModal
       v-if="showEmployeeAssignment"
-      :group="group"
+      :team="team"
       :employees="allEmployees"
       @close="showEmployeeAssignment = false"
       @updated="onMembersUpdated"
@@ -368,7 +368,7 @@ interface PermissionLevelInfo {
 
 // ========== PROPS & EMITS ==========
 const props = defineProps<{
-  group: Group
+  team: Group
 }>()
 
 const emit = defineEmits<{
@@ -385,9 +385,9 @@ const allEmployees = ref<Employee[]>([])
 const showEmployeeAssignment = ref(false)
 
 const editForm = ref({
-  description: props.group.description,
-  permissionLevel: props.group.permissionLevel,
-  active: props.group.active
+  description: props.team.description,
+  permissionLevel: props.team.permissionLevel,
+  active: props.team.active
 })
 
 // ========== PERMISSION LEVELS ==========
@@ -427,22 +427,22 @@ const totalWorkHours = computed(() => {
 })
 
 const hasChanges = computed(() => {
-  return editForm.value.description !== props.group.description ||
-    editForm.value.permissionLevel !== props.group.permissionLevel ||
-    editForm.value.active !== props.group.active
+  return editForm.value.description !== props.team.description ||
+    editForm.value.permissionLevel !== props.team.permissionLevel ||
+    editForm.value.active !== props.team.active
 })
 
 // ========== METHODS ==========
 const loadGroupMembers = async () => {
   loading.value = true
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/${props.group.id}?includeEmployees=true`)
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams/${props.team.id}?includeEmployees=true`)
     if (response.ok) {
       const data = await response.json()
       groupMembers.value = data.employees || []
     }
   } catch (error) {
-    console.error('Error loading group members:', error)
+    console.error('Error loading team members:', error)
   } finally {
     loading.value = false
   }
@@ -463,7 +463,7 @@ const loadAllEmployees = async () => {
 const updateGroup = async () => {
   loading.value = true
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/${props.group.id}`, {
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams/${props.team.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(editForm.value)
@@ -472,17 +472,17 @@ const updateGroup = async () => {
     if (response.ok) {
       emit('updated')
     } else {
-      console.error('Error updating group')
+      console.error('Error updating team')
     }
   } catch (error) {
-    console.error('Error updating group:', error)
+    console.error('Error updating team:', error)
   } finally {
     loading.value = false
   }
 }
 
 const confirmDelete = () => {
-  if (confirm(`Are you sure you want to delete the group "${props.group.name}"? This action cannot be undone.`)) {
+  if (confirm(`Are you sure you want to delete the team "${props.team.name}"? This action cannot be undone.`)) {
     deleteGroup()
   }
 }
@@ -490,27 +490,27 @@ const confirmDelete = () => {
 const deleteGroup = async () => {
   loading.value = true
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/${props.group.id}`, {
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams/${props.team.id}`, {
       method: 'DELETE'
     })
 
     if (response.ok) {
       emit('deleted')
     } else {
-      console.error('Error deleting group')
+      console.error('Error deleting team')
     }
   } catch (error) {
-    console.error('Error deleting group:', error)
+    console.error('Error deleting team:', error)
   } finally {
     loading.value = false
   }
 }
 
 const removeMemberFromGroup = async (employee: Employee) => {
-  if (!confirm(`Remove ${employee.fullName} from this group?`)) return
+  if (!confirm(`Remove ${employee.fullName} from this team?`)) return
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/${props.group.id}/employees/${employee.id}`, {
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams/${props.team.id}/employees/${employee.id}`, {
       method: 'DELETE'
     })
 
@@ -534,9 +534,9 @@ const onMembersUpdated = () => {
 
 const resetForm = () => {
   editForm.value = {
-    description: props.group.description,
-    permissionLevel: props.group.permissionLevel,
-    active: props.group.active
+    description: props.team.description,
+    permissionLevel: props.team.permissionLevel,
+    active: props.team.active
   }
 }
 
@@ -586,7 +586,7 @@ const formatDate = (dateString: string) => {
 }
 
 // ========== WATCHERS ==========
-watch(() => props.group, (newGroup) => {
+watch(() => props.team, (newGroup) => {
   if (newGroup) {
     editForm.value = {
       description: newGroup.description,

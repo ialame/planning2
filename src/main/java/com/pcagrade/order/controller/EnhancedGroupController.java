@@ -2,10 +2,10 @@ package com.pcagrade.order.controller;
 
 import com.github.f4b6a3.ulid.Ulid;
 
+import com.pcagrade.order.entity.Team;
 import org.springframework.transaction.annotation.Transactional;
 import com.pcagrade.order.dto.GroupDto;
 import com.pcagrade.order.entity.Employee;
-import com.pcagrade.order.entity.Group;
 import com.pcagrade.order.repository.GroupRepository;
 import com.pcagrade.order.service.GroupService;
 import com.pcagrade.order.service.mapper.GroupMapperService;
@@ -35,12 +35,12 @@ import java.util.*;
 
 
 /**
- * Enhanced Group Controller - Role Management API with DTOs
- * RESTful API for managing groups and roles using DTOs
+ * Enhanced Team Controller - Role Management API with DTOs
+ * RESTful API for managing teams and roles using DTOs
  */
 @RestController
 @RequestMapping("/api/v2/groups")
-@Tag(name = "Group Management V2", description = "Enhanced API for managing groups and roles with DTOs")
+@Tag(name = "Team Management V2", description = "Enhanced API for managing teams and roles with DTOs")
 @Slf4j
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"})
 public class EnhancedGroupController {
@@ -61,11 +61,11 @@ public class EnhancedGroupController {
 
     /**
      * 📋 GET ALL GROUPS
-     * Endpoint: GET /api/v2/groups
+     * Endpoint: GET /api/v2/teams
      */
     @GetMapping
     @Transactional(readOnly = true)
-    @Operation(summary = "Get all active groups", description = "Retrieve all active groups with optional pagination and search")
+    @Operation(summary = "Get all active teams", description = "Retrieve all active teams with optional pagination and search")
     @ApiResponse(responseCode = "200", description = "Groups retrieved successfully")
     public ResponseEntity<Map<String, Object>> getAllGroups(
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
@@ -76,21 +76,21 @@ public class EnhancedGroupController {
             @Parameter(description = "Include employee count") @RequestParam(defaultValue = "true") boolean includeEmployeeCount) {
 
         try {
-            log.info("🔍 Getting groups - page: {}, size: {}, sortBy: {}, search: '{}'",
+            log.info("🔍 Getting teams - page: {}, size: {}, sortBy: {}, search: '{}'",
                     page, size, sortBy, search);
 
             Map<String, Object> response = new HashMap<>();
 
             if (page < 0 || size <= 0) {
-                // Return all groups without pagination
-                List<Group> groups;
+                // Return all teams without pagination
+                List<Team> teams;
                 if (search != null && !search.trim().isEmpty()) {
-                    groups = groupService.searchGroups(search.trim());
+                    teams = groupService.searchGroups(search.trim());
                 } else {
-                    groups = groupService.getAllActiveGroups();
+                    teams = groupService.getAllActiveGroups();
                 }
 
-                List<GroupDto.GroupInfo> groupDtos = groups.stream()
+                List<GroupDto.GroupInfo> groupDtos = teams.stream()
                         .map(group -> includeEmployeeCount ?
                                 groupMapper.toGroupInfo(group, groupService.countActiveEmployeesInGroup(group.getId())) :
                                 groupMapper.toGroupInfo(group))
@@ -109,25 +109,25 @@ public class EnhancedGroupController {
 
                 if (search != null && !search.trim().isEmpty()) {
                     // For search, we need to implement pagination manually
-                    List<Group> allGroups = groupService.searchGroups(search.trim());
-                    int start = Math.min(page * size, allGroups.size());
-                    int end = Math.min(start + size, allGroups.size());
-                    List<Group> paginatedGroups = allGroups.subList(start, end);
+                    List<Team> allTeams = groupService.searchGroups(search.trim());
+                    int start = Math.min(page * size, allTeams.size());
+                    int end = Math.min(start + size, allTeams.size());
+                    List<Team> paginatedTeams = allTeams.subList(start, end);
 
-                    List<GroupDto.GroupInfo> groupDtos = paginatedGroups.stream()
+                    List<GroupDto.GroupInfo> groupDtos = paginatedTeams.stream()
                             .map(group -> includeEmployeeCount ?
                                     groupMapper.toGroupInfo(group, groupService.countActiveEmployeesInGroup(group.getId())) :
                                     groupMapper.toGroupInfo(group))
                             .toList();
 
                     response.put("groups", groupDtos);
-                    response.put("totalElements", allGroups.size());
-                    response.put("totalPages", (int) Math.ceil((double) allGroups.size() / size));
+                    response.put("totalElements", allTeams.size());
+                    response.put("totalPages", (int) Math.ceil((double) allTeams.size() / size));
                     response.put("currentPage", page);
-                    response.put("hasNext", end < allGroups.size());
+                    response.put("hasNext", end < allTeams.size());
                     response.put("hasPrevious", page > 0);
                 } else {
-                    Page<Group> groupPage = groupService.getAllActiveGroups(pageable);
+                    Page<Team> groupPage = groupService.getAllActiveGroups(pageable);
 
                     List<GroupDto.GroupInfo> groupDtos = groupPage.getContent().stream()
                             .map(group -> includeEmployeeCount ?
@@ -144,14 +144,14 @@ public class EnhancedGroupController {
                 }
             }
 
-            log.debug("✅ Successfully retrieved {} groups",
-                    ((List<?>) response.get("groups")).size());
+            log.debug("✅ Successfully retrieved {} teams",
+                    ((List<?>) response.get("teams")).size());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("❌ Error getting groups", e);
+            log.error("❌ Error getting teams", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error retrieving groups: " + e.getMessage()));
+                    .body(Map.of("error", "Error retrieving teams: " + e.getMessage()));
         }
     }
 
@@ -161,18 +161,18 @@ public class EnhancedGroupController {
      */
     public List<Employee> getEmployeesInGroup(UUID groupId) {
         try {
-            log.debug("Getting employees for group: {}", groupId);
+            log.debug("Getting employees for team: {}", groupId);
 
-            Optional<Group> groupOpt = groupRepository.findById(groupId);
+            Optional<Team> groupOpt = groupRepository.findById(groupId);
             if (groupOpt.isEmpty()) {
-                log.warn("Group not found: {}", groupId);
+                log.warn("Team not found: {}", groupId);
                 return new ArrayList<>();
             }
 
-            Group group = groupOpt.get();
-            List<Employee> employees = new ArrayList<>(group.getEmployees());
+            Team team = groupOpt.get();
+            List<Employee> employees = new ArrayList<>(team.getEmployees());
 
-            log.debug("Found {} employees in group {}", employees.size(), group.getName());
+            log.debug("Found {} employees in team {}", employees.size(), team.getName());
             return employees;
 
         } catch (Exception e) {
@@ -185,36 +185,36 @@ public class EnhancedGroupController {
 
     /**
      * ➕ CREATE NEW GROUP
-     * Endpoint: POST /api/v2/groups
+     * Endpoint: POST /api/v2/teams
      */
     @PostMapping
     @Operation(summary = "Create new group", description = "Create a new group/role using DTO")
-    @ApiResponse(responseCode = "201", description = "Group created successfully")
+    @ApiResponse(responseCode = "201", description = "Team created successfully")
     @ApiResponse(responseCode = "400", description = "Invalid group data")
     public ResponseEntity<Map<String, Object>> createGroup(@Valid @RequestBody GroupDto.CreateGroupRequest request) {
         try {
-            log.info("➕ Creating new group: {}", request.getName());
+            log.info("➕ Creating new team: {}", request.getName());
 
-            // Validate and suggest group name format if needed
+            // Validate and suggest team name format if needed
             if (!groupMapper.isValidGroupName(request.getName())) {
                 String suggestedName = groupMapper.suggestGroupNameFormat(request.getName());
                 return ResponseEntity.badRequest()
                         .body(Map.of(
-                                "error", "Invalid group name format. Group name must be uppercase with underscores only.",
+                                "error", "Invalid team name format. Team name must be uppercase with underscores only.",
                                 "suggestedName", suggestedName != null ? suggestedName : "EXAMPLE_GROUP_NAME"
                         ));
             }
 
-            Group group = groupMapper.fromCreateRequest(request);
-            Group createdGroup = groupService.createGroup(group);
+            Team team = groupMapper.fromCreateRequest(request);
+            Team createdTeam = groupService.createGroup(team);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Group created successfully");
-            response.put("group", groupMapper.toGroupInfo(createdGroup));
+            response.put("message", "Team created successfully");
+            response.put("group", groupMapper.toGroupInfo(createdTeam));
 
-            log.info("✅ Group created successfully: {} (ID: {})",
-                    createdGroup.getName(), createdGroup.getUlidString());
+            log.info("✅ Team created successfully: {} (ID: {})",
+                    createdTeam.getName(), createdTeam.getUlidString());
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (IllegalArgumentException e) {
@@ -230,12 +230,12 @@ public class EnhancedGroupController {
 
     /**
      * ✏️ UPDATE GROUP
-     * Endpoint: PUT /api/v2/groups/{id}
+     * Endpoint: PUT /api/v2/teams/{id}
      */
     @PutMapping("/{id}")
     @Operation(summary = "Update group", description = "Update an existing group using DTO")
-    @ApiResponse(responseCode = "200", description = "Group updated successfully")
-    @ApiResponse(responseCode = "404", description = "Group not found")
+    @ApiResponse(responseCode = "200", description = "Team updated successfully")
+    @ApiResponse(responseCode = "404", description = "Team not found")
     public ResponseEntity<Map<String, Object>> updateGroup(
             @PathVariable String id,
             @Valid @RequestBody GroupDto.UpdateGroupRequest request) {
@@ -243,24 +243,24 @@ public class EnhancedGroupController {
             log.info("✏️ Updating group: {}", id);
 
             UUID groupId = UUID.fromString(id);
-            Optional<Group> existingGroupOpt = groupService.findById(groupId);
+            Optional<Team> existingGroupOpt = groupService.findById(groupId);
 
             if (existingGroupOpt.isEmpty()) {
-                log.warn("⚠️ Group not found for update: {}", id);
+                log.warn("⚠️ Team not found for update: {}", id);
                 return ResponseEntity.notFound().build();
             }
 
-            Group existingGroup = existingGroupOpt.get();
-            Group updatedGroup = groupMapper.updateFromRequest(existingGroup, request);
-            updatedGroup = groupService.updateGroup(updatedGroup);
+            Team existingTeam = existingGroupOpt.get();
+            Team updatedTeam = groupMapper.updateFromRequest(existingTeam, request);
+            updatedTeam = groupService.updateGroup(updatedTeam);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Group updated successfully");
-            response.put("group", groupMapper.toGroupInfo(updatedGroup));
+            response.put("message", "Team updated successfully");
+            response.put("group", groupMapper.toGroupInfo(updatedTeam));
 
-            log.info("✅ Group updated successfully: {} (ID: {})",
-                    updatedGroup.getName(), updatedGroup.getUlidString());
+            log.info("✅ Team updated successfully: {} (ID: {})",
+                    updatedTeam.getName(), updatedTeam.getUlidString());
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {
@@ -276,21 +276,21 @@ public class EnhancedGroupController {
 
     /**
      * 🗑️ DELETE GROUP
-     * Endpoint: DELETE /api/v2/groups/{id}
+     * Endpoint: DELETE /api/v2/teams/{id}
      */
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete group", description = "Deactivate a group (soft delete)")
-    @ApiResponse(responseCode = "200", description = "Group deleted successfully")
-    @ApiResponse(responseCode = "404", description = "Group not found")
+    @ApiResponse(responseCode = "200", description = "Team deleted successfully")
+    @ApiResponse(responseCode = "404", description = "Team not found")
     public ResponseEntity<Map<String, Object>> deleteGroup(@PathVariable String id) {
         try {
             log.info("🗑️ Deleting group: {}", id);
 
             UUID groupId = UUID.fromString(id);
-            Optional<Group> groupOpt = groupService.findById(groupId);
+            Optional<Team> groupOpt = groupService.findById(groupId);
 
             if (groupOpt.isEmpty()) {
-                log.warn("⚠️ Group not found for deletion: {}", id);
+                log.warn("⚠️ Team not found for deletion: {}", id);
                 return ResponseEntity.notFound().build();
             }
 
@@ -298,9 +298,9 @@ public class EnhancedGroupController {
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Group deleted successfully");
+            response.put("message", "Team deleted successfully");
 
-            log.info("✅ Group deleted successfully: {}", id);
+            log.info("✅ Team deleted successfully: {}", id);
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {
@@ -322,26 +322,26 @@ public class EnhancedGroupController {
 
     /**
      * 👥 GET GROUPS FOR EMPLOYEE - CORRIGÉ
-     * Endpoint: GET /api/v2/groups/employee/{employeeId}
+     * Endpoint: GET /api/v2/teams/employee/{employeeId}
      */
     @GetMapping("/employee/{employeeId}")
     @Transactional(readOnly = true)
-    @Operation(summary = "Get groups for employee", description = "Get all groups assigned to an employee")
+    @Operation(summary = "Get teams for employee", description = "Get all teams assigned to an employee")
     public ResponseEntity<Map<String, Object>> getGroupsForEmployee(@PathVariable String employeeId) {
         try {
-            log.info("👥 Getting groups for employee: {}", employeeId);
+            log.info("👥 Getting teams for employee: {}", employeeId);
 
             // ✅ Utiliser parseIdToUuid au lieu de UUID.fromString
             UUID empId = parseIdToUuid(employeeId);
-            List<Group> groups = groupService.getGroupsForEmployee(empId);
-            List<GroupDto.GroupInfo> groupDtos = groupMapper.toGroupInfoList(groups);
+            List<Team> teams = groupService.getGroupsForEmployee(empId);
+            List<GroupDto.GroupInfo> groupDtos = groupMapper.toGroupInfoList(teams);
 
             Map<String, Object> response = new HashMap<>();
             response.put("groups", groupDtos);
             response.put("employeeId", employeeId);
             response.put("totalGroups", groupDtos.size());
 
-            log.debug("✅ Found {} groups for employee: {}", groupDtos.size(), employeeId);
+            log.debug("✅ Found {} teams for employee: {}", groupDtos.size(), employeeId);
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {
@@ -349,24 +349,24 @@ public class EnhancedGroupController {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "Invalid employee ID format: " + e.getMessage()));
         } catch (Exception e) {
-            log.error("❌ Error getting groups for employee: {}", employeeId, e);
+            log.error("❌ Error getting teams for employee: {}", employeeId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error retrieving groups: " + e.getMessage()));
+                    .body(Map.of("error", "Error retrieving teams: " + e.getMessage()));
         }
     }
 
     /**
      * 🔄 UPDATE EMPLOYEE GROUPS - VERSION AVEC DEBUG ET VALIDATION
-     * Endpoint: PUT /api/v2/groups/employee/{employeeId}
+     * Endpoint: PUT /api/v2/teams/employee/{employeeId}
      */
     @PutMapping("/employee/{employeeId}")
     @Transactional
-    @Operation(summary = "Update employee groups", description = "Replace all groups for an employee")
+    @Operation(summary = "Update employee teams", description = "Replace all teams for an employee")
     public ResponseEntity<Map<String, Object>> updateEmployeeGroups(
             @PathVariable String employeeId,
             @RequestBody Map<String, Object> request) {
         try {
-            log.info("Updating groups for employee: {}", employeeId);
+            log.info("Updating teams for employee: {}", employeeId);
 
             // Convertir tous les IDs (employé et groupes) en UUID
             UUID empUuid = parseId(employeeId);
@@ -382,7 +382,7 @@ public class EnhancedGroupController {
             }
 
             // Supprimer les assignations existantes
-            String deleteSql = "DELETE FROM j_employee_group WHERE employee_id = ?";
+            String deleteSql = "DELETE FROM employee_group WHERE employee_id = ?";
             Query deleteQuery = entityManager.createNativeQuery(deleteSql);
             deleteQuery.setParameter(1, empUuid);
             int deletedCount = deleteQuery.executeUpdate();
@@ -390,7 +390,7 @@ public class EnhancedGroupController {
             // Ajouter les nouvelles assignations
             int addedCount = 0;
             for (UUID groupUuid : groupUuids) {
-                String insertSql = "INSERT INTO j_employee_group (employee_id, group_id) VALUES (?, ?)";
+                String insertSql = "INSERT INTO employee_group (employee_id, group_id) VALUES (?, ?)";
                 Query insertQuery = entityManager.createNativeQuery(insertSql);
                 insertQuery.setParameter(1, empUuid);
                 insertQuery.setParameter(2, groupUuid);
@@ -401,23 +401,23 @@ public class EnhancedGroupController {
             // Response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Employee groups updated successfully");
+            response.put("message", "Employee teams updated successfully");
             response.put("assignmentsRemoved", deletedCount);
             response.put("assignmentsAdded", addedCount);
 
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Error updating employee groups: {}", e.getMessage(), e);
+            log.error("Error updating employee teams: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error updating groups: " + e.getMessage()));
+                    .body(Map.of("error", "Error updating teams: " + e.getMessage()));
         }
     }
 
 
     /**
      * 🔗 ASSIGN EMPLOYEE TO GROUP - CORRIGÉ
-     * Endpoint: POST /api/v2/groups/{groupId}/employees/{employeeId}
+     * Endpoint: POST /api/v2/teams/{groupId}/employees/{employeeId}
      */
     @PostMapping("/{groupId}/employees/{employeeId}")
     @Operation(summary = "Assign employee to group", description = "Add an employee to a group")
@@ -455,7 +455,7 @@ public class EnhancedGroupController {
 
     /**
      * ✂️ REMOVE EMPLOYEE FROM GROUP - CORRIGÉ
-     * Endpoint: DELETE /api/v2/groups/{groupId}/employees/{employeeId}
+     * Endpoint: DELETE /api/v2/teams/{groupId}/employees/{employeeId}
      */
     @DeleteMapping("/{groupId}/employees/{employeeId}")
     @Operation(summary = "Remove employee from group", description = "Remove an employee from a group")
@@ -495,7 +495,7 @@ public class EnhancedGroupController {
 
     /**
      * 🔐 GET PERMISSION LEVELS
-     * Endpoint: GET /api/v2/groups/permission-levels
+     * Endpoint: GET /api/v2/teams/permission-levels
      */
     @GetMapping("/permission-levels")
     @Transactional(readOnly = true)
@@ -517,22 +517,22 @@ public class EnhancedGroupController {
 
     /**
      * 🔍 GET GROUPS BY PERMISSION LEVEL
-     * Endpoint: GET /api/v2/groups/permission-level/{level}
+     * Endpoint: GET /api/v2/teams/permission-level/{level}
      */
     @GetMapping("/permission-level/{level}")
     @Transactional(readOnly = true)
-    @Operation(summary = "Get groups by permission level", description = "Get groups with minimum permission level")
+    @Operation(summary = "Get teams by permission level", description = "Get teams with minimum permission level")
     public ResponseEntity<Map<String, Object>> getGroupsByPermissionLevel(@PathVariable int level) {
         try {
-            log.info("🔍 Getting groups with permission level >= {}", level);
+            log.info("🔍 Getting teams with permission level >= {}", level);
 
             if (level < 1 || level > 10) {
                 return ResponseEntity.badRequest()
                         .body(Map.of("error", "Permission level must be between 1 and 10"));
             }
 
-            List<Group> groups = groupService.getGroupsByMinimumPermissionLevel(level);
-            List<GroupDto.GroupInfo> groupDtos = groupMapper.toGroupInfoList(groups);
+            List<Team> teams = groupService.getGroupsByMinimumPermissionLevel(level);
+            List<GroupDto.GroupInfo> groupDtos = groupMapper.toGroupInfoList(teams);
 
             Map<String, Object> response = new HashMap<>();
             response.put("groups", groupDtos);
@@ -540,13 +540,13 @@ public class EnhancedGroupController {
             response.put("totalGroups", groupDtos.size());
             response.put("permissionLevelInfo", groupMapper.getPermissionLevelInfo(level));
 
-            log.debug("✅ Found {} groups with permission level >= {}", groupDtos.size(), level);
+            log.debug("✅ Found {} teams with permission level >= {}", groupDtos.size(), level);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("❌ Error getting groups by permission level: {}", level, e);
+            log.error("❌ Error getting teams by permission level: {}", level, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error retrieving groups: " + e.getMessage()));
+                    .body(Map.of("error", "Error retrieving teams: " + e.getMessage()));
         }
     }
 
@@ -554,19 +554,19 @@ public class EnhancedGroupController {
 
     /**
      * 📊 GET GROUP STATISTICS
-     * Endpoint: GET /api/v2/groups/statistics
+     * Endpoint: GET /api/v2/teams/statistics
      */
     @GetMapping("/statistics")
     @Transactional(readOnly = true)
-    @Operation(summary = "Get group statistics", description = "Get comprehensive statistics about groups and their members")
+    @Operation(summary = "Get group statistics", description = "Get comprehensive statistics about teams and their members")
     public ResponseEntity<Map<String, Object>> getGroupStatistics() {
         try {
             log.info("📊 Getting group statistics");
 
             List<Object[]> rawStats = groupService.getGroupStatistics();
             List<GroupDto.GroupStatistics> stats = groupMapper.toGroupStatisticsList(rawStats);
-            List<Group> emptyGroups = groupService.getEmptyGroups();
-            List<GroupDto.GroupInfo> emptyGroupDtos = groupMapper.toGroupInfoList(emptyGroups);
+            List<Team> emptyTeams = groupService.getEmptyGroups();
+            List<GroupDto.GroupInfo> emptyGroupDtos = groupMapper.toGroupInfoList(emptyTeams);
 
             Map<String, Object> response = new HashMap<>();
             response.put("groupStatistics", stats);
@@ -585,7 +585,7 @@ public class EnhancedGroupController {
                     ));
             response.put("permissionLevelDistribution", permissionDistribution);
 
-            log.debug("✅ Statistics retrieved: {} total groups, {} empty groups",
+            log.debug("✅ Statistics retrieved: {} total teams, {} empty teams",
                     stats.size(), emptyGroupDtos.size());
             return ResponseEntity.ok(response);
 
@@ -598,7 +598,7 @@ public class EnhancedGroupController {
 
     /**
      * 📈 GET GROUP SUMMARY
-     * Endpoint: GET /api/v2/groups/summary
+     * Endpoint: GET /api/v2/teams/summary
      */
     @GetMapping("/summary")
     @Transactional(readOnly = true)
@@ -607,43 +607,43 @@ public class EnhancedGroupController {
         try {
             log.info("📈 Getting group summary");
 
-            List<Group> allGroups = groupService.getAllActiveGroups();
+            List<Team> allTeams = groupService.getAllActiveGroups();
             List<Object[]> rawStats = groupService.getGroupStatistics();
-            List<Group> emptyGroups = groupService.getEmptyGroups();
+            List<Team> emptyTeams = groupService.getEmptyGroups();
 
             long totalEmployeesInGroups = rawStats.stream()
                     .mapToLong(stat -> ((Number) stat[2]).longValue())
                     .sum();
 
             Map<String, Object> summary = new HashMap<>();
-            summary.put("totalActiveGroups", allGroups.size());
+            summary.put("totalActiveGroups", allTeams.size());
             summary.put("totalEmployeesInGroups", totalEmployeesInGroups);
-            summary.put("emptyGroupsCount", emptyGroups.size());
-            summary.put("groupsWithEmployeesCount", allGroups.size() - emptyGroups.size());
+            summary.put("emptyGroupsCount", emptyTeams.size());
+            summary.put("groupsWithEmployeesCount", allTeams.size() - emptyTeams.size());
 
-            // Average employees per group (excluding empty groups)
-            double avgEmployeesPerGroup = allGroups.size() > emptyGroups.size() ?
-                    (double) totalEmployeesInGroups / (allGroups.size() - emptyGroups.size()) : 0.0;
+            // Average employees per group (excluding empty teams)
+            double avgEmployeesPerGroup = allTeams.size() > emptyTeams.size() ?
+                    (double) totalEmployeesInGroups / (allTeams.size() - emptyTeams.size()) : 0.0;
             summary.put("averageEmployeesPerGroup", Math.round(avgEmployeesPerGroup * 100.0) / 100.0);
 
             // Permission level breakdown
-            Map<Integer, Integer> permissionLevelCounts = allGroups.stream()
+            Map<Integer, Integer> permissionLevelCounts = allTeams.stream()
                     .collect(java.util.stream.Collectors.groupingBy(
-                            Group::getPermissionLevel,
+                            Team::getPermissionLevel,
                             java.util.stream.Collectors.summingInt(g -> 1)
                     ));
             summary.put("groupsByPermissionLevel", permissionLevelCounts);
 
             // Health indicators
             summary.put("healthIndicators", Map.of(
-                    "hasAdminGroups", allGroups.stream().anyMatch(g -> g.getPermissionLevel() >= 8),
-                    "hasManagerGroups", allGroups.stream().anyMatch(g -> g.getPermissionLevel() >= 5),
-                    "hasProcessorGroups", allGroups.stream().anyMatch(g -> g.getPermissionLevel() <= 3),
-                    "emptyGroupsPercentage", allGroups.isEmpty() ? 0.0 :
-                            Math.round((double) emptyGroups.size() / allGroups.size() * 10000.0) / 100.0
+                    "hasAdminGroups", allTeams.stream().anyMatch(g -> g.getPermissionLevel() >= 8),
+                    "hasManagerGroups", allTeams.stream().anyMatch(g -> g.getPermissionLevel() >= 5),
+                    "hasProcessorGroups", allTeams.stream().anyMatch(g -> g.getPermissionLevel() <= 3),
+                    "emptyGroupsPercentage", allTeams.isEmpty() ? 0.0 :
+                            Math.round((double) emptyTeams.size() / allTeams.size() * 10000.0) / 100.0
             ));
 
-            log.debug("✅ Group summary generated successfully");
+            log.debug("✅ Team summary generated successfully");
             return ResponseEntity.ok(summary);
 
         } catch (Exception e) {
@@ -657,34 +657,34 @@ public class EnhancedGroupController {
 
     /**
      * 🔧 INITIALIZE DEFAULT GROUPS
-     * Endpoint: POST /api/v2/groups/init-defaults
+     * Endpoint: POST /api/v2/teams/init-defaults
      */
     @PostMapping("/init-defaults")
-    @Operation(summary = "Initialize default groups", description = "Create standard groups if they don't exist")
+    @Operation(summary = "Initialize default teams", description = "Create standard teams if they don't exist")
     public ResponseEntity<Map<String, Object>> initializeDefaultGroups() {
         try {
-            log.info("🔧 Initializing default groups");
+            log.info("🔧 Initializing default teams");
 
             groupService.initializeDefaultGroups();
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Default groups initialized successfully");
+            response.put("message", "Default teams initialized successfully");
             response.put("defaultGroups", List.of("ADMIN", "MANAGER", "SUPERVISOR", "PROCESSOR", "VIEWER"));
 
-            log.info("✅ Default groups initialized successfully");
+            log.info("✅ Default teams initialized successfully");
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("❌ Error initializing default groups", e);
+            log.error("❌ Error initializing default teams", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error initializing groups: " + e.getMessage()));
+                    .body(Map.of("error", "Error initializing teams: " + e.getMessage()));
         }
     }
 
     /**
      * ✅ VALIDATE GROUP NAME
-     * Endpoint: POST /api/v2/groups/validate-name
+     * Endpoint: POST /api/v2/teams/validate-name
      */
     @PostMapping("/validate-name")
     @Operation(summary = "Validate group name", description = "Validate and suggest group name format")
@@ -700,7 +700,7 @@ public class EnhancedGroupController {
             if (!groupMapper.isValidGroupName(name)) {
                 String suggestedName = groupMapper.suggestGroupNameFormat(name);
                 response.put("suggestedName", suggestedName);
-                response.put("reason", "Group name must be uppercase with underscores only (A-Z, 0-9, _)");
+                response.put("reason", "Team name must be uppercase with underscores only (A-Z, 0-9, _)");
             }
 
             // Check if name already exists
@@ -708,7 +708,7 @@ public class EnhancedGroupController {
                 boolean exists = groupService.findByName(name).isPresent();
                 response.put("alreadyExists", exists);
                 if (exists) {
-                    response.put("reason", "Group name already exists");
+                    response.put("reason", "Team name already exists");
                 }
             }
 
@@ -723,62 +723,62 @@ public class EnhancedGroupController {
 
     /**
      * 🔍 SEARCH GROUPS
-     * Endpoint: POST /api/v2/groups/search
+     * Endpoint: POST /api/v2/teams/search
      */
     @PostMapping("/search")
-    @Operation(summary = "Advanced group search", description = "Search groups with advanced filters using DTO")
+    @Operation(summary = "Advanced group search", description = "Search teams with advanced filters using DTO")
     public ResponseEntity<Map<String, Object>> searchGroups(@Valid @RequestBody GroupDto.GroupSearchRequest searchRequest) {
         try {
             log.info("🔍 Advanced group search: {}", searchRequest.getSearchTerm());
 
             // For now, use basic search - can be enhanced with more complex filtering
-            List<Group> groups;
+            List<Team> teams;
             if (searchRequest.getSearchTerm() != null && !searchRequest.getSearchTerm().trim().isEmpty()) {
-                groups = groupService.searchGroups(searchRequest.getSearchTerm());
+                teams = groupService.searchGroups(searchRequest.getSearchTerm());
             } else {
-                groups = groupService.getAllActiveGroups();
+                teams = groupService.getAllActiveGroups();
             }
 
             // Apply additional filters
             if (searchRequest.getMinPermissionLevel() != null) {
-                groups = groups.stream()
+                teams = teams.stream()
                         .filter(g -> g.getPermissionLevel() >= searchRequest.getMinPermissionLevel())
                         .toList();
             }
 
             if (searchRequest.getMaxPermissionLevel() != null) {
-                groups = groups.stream()
+                teams = teams.stream()
                         .filter(g -> g.getPermissionLevel() <= searchRequest.getMaxPermissionLevel())
                         .toList();
             }
 
             if (searchRequest.getActive() != null) {
-                groups = groups.stream()
+                teams = teams.stream()
                         .filter(g -> g.getActive().equals(searchRequest.getActive()))
                         .toList();
             }
 
             if (searchRequest.getHasEmployees() != null) {
                 if (searchRequest.getHasEmployees()) {
-                    groups = groups.stream()
+                    teams = teams.stream()
                             .filter(g -> !g.getEmployees().isEmpty())
                             .toList();
                 } else {
-                    groups = groups.stream()
+                    teams = teams.stream()
                             .filter(g -> g.getEmployees().isEmpty())
                             .toList();
                 }
             }
 
             // Apply pagination
-            int totalElements = groups.size();
+            int totalElements = teams.size();
             int page = searchRequest.getPage();
             int size = searchRequest.getSize();
             int start = Math.min(page * size, totalElements);
             int end = Math.min(start + size, totalElements);
 
-            List<Group> paginatedGroups = groups.subList(start, end);
-            List<GroupDto.GroupInfo> groupDtos = groupMapper.toGroupInfoList(paginatedGroups);
+            List<Team> paginatedTeams = teams.subList(start, end);
+            List<GroupDto.GroupInfo> groupDtos = groupMapper.toGroupInfoList(paginatedTeams);
 
             Map<String, Object> response = new HashMap<>();
             response.put("groups", groupDtos);
@@ -789,13 +789,13 @@ public class EnhancedGroupController {
             response.put("hasPrevious", page > 0);
             response.put("searchCriteria", searchRequest);
 
-            log.debug("✅ Found {} groups matching search criteria", totalElements);
+            log.debug("✅ Found {} teams matching search criteria", totalElements);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("❌ Error searching groups", e);
+            log.error("❌ Error searching teams", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error searching groups: " + e.getMessage()));
+                    .body(Map.of("error", "Error searching teams: " + e.getMessage()));
         }
     }
 
@@ -879,39 +879,39 @@ public class EnhancedGroupController {
 
     /**
      * 🔍 GET GROUP BY ID - CORRIGÉ
-     * Endpoint: GET /api/v2/groups/{id}
+     * Endpoint: GET /api/v2/teams/{id}
      */
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
     @Operation(summary = "Get group by ID", description = "Retrieve a specific group by its ID with employee details")
-    @ApiResponse(responseCode = "200", description = "Group found")
-    @ApiResponse(responseCode = "404", description = "Group not found")
+    @ApiResponse(responseCode = "200", description = "Team found")
+    @ApiResponse(responseCode = "404", description = "Team not found")
     public ResponseEntity<Map<String, Object>> getGroupById(
             @PathVariable String id,
             @Parameter(description = "Include employee details") @RequestParam(defaultValue = "true") boolean includeEmployees) {
         try {
-            log.info("🔍 Getting group by ID: {} (includeEmployees: {})", id, includeEmployees);
+            log.info("🔍 Getting team by ID: {} (includeEmployees: {})", id, includeEmployees);
 
             // ✅ Utiliser parseIdToUuid pour supporter les IDs hexadécimaux
             UUID groupId = parseIdToUuid(id);
-            Optional<Group> groupOpt = groupService.findById(groupId);
+            Optional<Team> groupOpt = groupService.findById(groupId);
 
             if (groupOpt.isEmpty()) {
-                log.warn("⚠️ Group not found: {}", id);
+                log.warn("⚠️ Team not found: {}", id);
                 return ResponseEntity.notFound().build();
             }
 
-            Group group = groupOpt.get();
+            Team team = groupOpt.get();
             Map<String, Object> response = new HashMap<>();
 
-            // Basic group info
-            response.put("id", group.getUlidString() != null ? group.getUlidString() : group.getId().toString());
-            response.put("name", group.getName());
-            response.put("description", group.getDescription());
-            response.put("permissionLevel", group.getPermissionLevel());
-            response.put("active", group.getActive());
-            response.put("creationDate", group.getCreationDate());
-            response.put("modificationDate", group.getModificationDate());
+            // Basic team info
+            response.put("id", team.getUlidString() != null ? team.getUlidString() : team.getId().toString());
+            response.put("name", team.getName());
+            response.put("description", team.getDescription());
+            response.put("permissionLevel", team.getPermissionLevel());
+            response.put("active", team.getActive());
+            response.put("creationDate", team.getCreationDate());
+            response.put("modificationDate", team.getModificationDate());
 
             if (includeEmployees) {
                 // ✅ Charger et inclure les employés du groupe
@@ -936,14 +936,14 @@ public class EnhancedGroupController {
                 response.put("employees", employeeList);
                 response.put("employeeCount", employeeList.size());
 
-                log.debug("✅ Group {} loaded with {} employees", group.getName(), employeeList.size());
+                log.debug("✅ Team {} loaded with {} employees", team.getName(), employeeList.size());
             } else {
                 // Juste le count sans les détails
                 int employeeCount = Math.toIntExact(groupService.countActiveEmployeesInGroup(groupId));
                 response.put("employeeCount", employeeCount);
             }
 
-            log.info("✅ Group retrieved successfully: {} (ID: {})", group.getName(), id);
+            log.info("✅ Team retrieved successfully: {} (ID: {})", team.getName(), id);
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {

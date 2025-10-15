@@ -17,7 +17,7 @@ import java.util.UUID;
  * - Delai uses priority codes (X, F+, F, C, E)
  */
 @Entity
-@Table(name = "j_planning",
+@Table(name = "planning",
         indexes = {
                 @Index(name = "idx_planning_employee_date", columnList = "employee_id, planning_date"),
                 @Index(name = "idx_planning_order", columnList = "order_id"),

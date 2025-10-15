@@ -1,32 +1,24 @@
 package com.pcagrade.order.service;
 
 import com.pcagrade.order.entity.Employee;
-import com.pcagrade.order.entity.Group;
+import com.pcagrade.order.entity.Team;
 import com.pcagrade.order.repository.EmployeeRepository;
 import com.pcagrade.order.repository.GroupRepository;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestParam;
 
 import java.time.LocalDateTime;
 import java.util.*;
 
 /**
- * Group Service - Role Management
+ * Team Service - Role Management
  * Handles all group-related business logic
  */
 @Service
@@ -49,63 +41,63 @@ public class GroupService {
     // ========== CRUD OPERATIONS ==========
 
     /**
-     * Create a new group
-     * @param group the group to create
-     * @return created group
+     * Create a new team
+     * @param team the team to create
+     * @return created team
      */
-    public Group createGroup(@Valid @NotNull Group group) {
+    public Team createGroup(@Valid @NotNull Team team) {
         try {
-            log.info("Creating new group: {}", group.getName());
+            log.info("Creating new team: {}", team.getName());
 
             // Validate business rules
-            validateNewGroup(group);
+            validateNewGroup(team);
 
             // Set default values if not provided
-            if (group.getActive() == null) {
-                group.setActive(true);
+            if (team.getActive() == null) {
+                team.setActive(true);
             }
-            if (group.getPermissionLevel() == null) {
-                group.setPermissionLevel(MIN_PERMISSION_LEVEL);
+            if (team.getPermissionLevel() == null) {
+                team.setPermissionLevel(MIN_PERMISSION_LEVEL);
             }
-            if (group.getCreationDate() == null) {
-                group.setCreationDate(LocalDateTime.now());
+            if (team.getCreationDate() == null) {
+                team.setCreationDate(LocalDateTime.now());
             }
-            if (group.getModificationDate() == null) {
-                group.setModificationDate(LocalDateTime.now());
+            if (team.getModificationDate() == null) {
+                team.setModificationDate(LocalDateTime.now());
             }
 
-            Group savedGroup = groupRepository.save(group);
-            log.info("Group created successfully with ID: {}", savedGroup.getUlidString());
-            return savedGroup;
+            Team savedTeam = groupRepository.save(team);
+            log.info("Team created successfully with ID: {}", savedTeam.getUlidString());
+            return savedTeam;
 
         } catch (Exception e) {
-            log.error("Error creating group", e);
-            throw new RuntimeException("Error creating group: " + e.getMessage(), e);
+            log.error("Error creating team", e);
+            throw new RuntimeException("Error creating team: " + e.getMessage(), e);
         }
     }
 
     /**
-     * Update an existing group
-     * @param group the group to update
-     * @return updated group
+     * Update an existing team
+     * @param team the team to update
+     * @return updated team
      */
-    public Group updateGroup(@Valid @NotNull Group group) {
-        log.info("Updating group: {}", group.getUlidString());
+    public Team updateGroup(@Valid @NotNull Team team) {
+        log.info("Updating team: {}", team.getUlidString());
 
-        if (group.getId() == null) {
-            throw new IllegalArgumentException("Group ID cannot be null for update");
+        if (team.getId() == null) {
+            throw new IllegalArgumentException("Team ID cannot be null for update");
         }
 
         // Validate permission level
-        if (group.getPermissionLevel() != null) {
-            validatePermissionLevel(group.getPermissionLevel());
+        if (team.getPermissionLevel() != null) {
+            validatePermissionLevel(team.getPermissionLevel());
         }
 
-        group.setModificationDate(LocalDateTime.now());
+        team.setModificationDate(LocalDateTime.now());
 
-        Group updatedGroup = groupRepository.save(group);
-        log.info("Group updated successfully: {}", updatedGroup.getUlidString());
-        return updatedGroup;
+        Team updatedTeam = groupRepository.save(team);
+        log.info("Team updated successfully: {}", updatedTeam.getUlidString());
+        return updatedTeam;
     }
 
     /**
@@ -115,42 +107,42 @@ public class GroupService {
     public void deleteGroup(UUID groupId) {
         log.info("Deleting group: {}", groupId);
 
-        Optional<Group> groupOpt = groupRepository.findById(groupId);
+        Optional<Team> groupOpt = groupRepository.findById(groupId);
         if (groupOpt.isPresent()) {
-            Group group = groupOpt.get();
+            Team team = groupOpt.get();
 
             // Remove all employee associations before deactivating
-            group.getEmployees().clear();
-            group.setActive(false);
-            group.setModificationDate(LocalDateTime.now());
+            team.getEmployees().clear();
+            team.setActive(false);
+            team.setModificationDate(LocalDateTime.now());
 
-            groupRepository.save(group);
-            log.info("Group deactivated successfully: {}", groupId);
+            groupRepository.save(team);
+            log.info("Team deactivated successfully: {}", groupId);
         } else {
-            throw new IllegalArgumentException("Group not found: " + groupId);
+            throw new IllegalArgumentException("Team not found: " + groupId);
         }
     }
 
     // ========== RETRIEVAL OPERATIONS ==========
 
     /**
-     * Get all active groups
-     * @return list of active groups
+     * Get all active teams
+     * @return list of active teams
      */
     @Transactional(readOnly = true)
-    public List<Group> getAllActiveGroups() {
-        log.debug("Getting all active groups");
+    public List<Team> getAllActiveGroups() {
+        log.debug("Getting all active teams");
         return groupRepository.findActiveGroupsOrderedByName();
     }
 
     /**
-     * Get active groups with pagination
+     * Get active teams with pagination
      * @param pageable pagination parameters
-     * @return page of active groups
+     * @return page of active teams
      */
     @Transactional(readOnly = true)
-    public Page<Group> getAllActiveGroups(Pageable pageable) {
-        log.debug("Getting active groups with pagination");
+    public Page<Team> getAllActiveGroups(Pageable pageable) {
+        log.debug("Getting active teams with pagination");
         return groupRepository.findByActiveTrue(pageable);
     }
 
@@ -160,7 +152,7 @@ public class GroupService {
      * @return group if found
      */
     @Transactional(readOnly = true)
-    public Optional<Group> findById(UUID groupId) {
+    public Optional<Team> findById(UUID groupId) {
         log.debug("Finding group by ID: {}", groupId);
         return groupRepository.findById(groupId);
     }
@@ -171,19 +163,19 @@ public class GroupService {
      * @return group if found
      */
     @Transactional(readOnly = true)
-    public Optional<Group> findByName(String name) {
+    public Optional<Team> findByName(String name) {
         log.debug("Finding group by name: {}", name);
         return groupRepository.findByNameIgnoreCase(name);
     }
 
     /**
-     * Search groups by term
+     * Search teams by term
      * @param searchTerm search term
-     * @return list of matching groups
+     * @return list of matching teams
      */
     @Transactional(readOnly = true)
-    public List<Group> searchGroups(String searchTerm) {
-        log.debug("Searching groups with term: {}", searchTerm);
+    public List<Team> searchGroups(String searchTerm) {
+        log.debug("Searching teams with term: {}", searchTerm);
         if (searchTerm == null || searchTerm.trim().isEmpty()) {
             return getAllActiveGroups();
         }
@@ -193,33 +185,33 @@ public class GroupService {
     // ========== PERMISSION-BASED QUERIES ==========
 
     /**
-     * Get admin groups
-     * @return list of admin groups
+     * Get admin teams
+     * @return list of admin teams
      */
     @Transactional(readOnly = true)
-    public List<Group> getAdminGroups() {
-        log.debug("Getting admin groups");
+    public List<Team> getAdminGroups() {
+        log.debug("Getting admin teams");
         return groupRepository.findAdminGroups();
     }
 
     /**
-     * Get manager groups
-     * @return list of manager groups
+     * Get manager teams
+     * @return list of manager teams
      */
     @Transactional(readOnly = true)
-    public List<Group> getManagerGroups() {
-        log.debug("Getting manager groups");
+    public List<Team> getManagerGroups() {
+        log.debug("Getting manager teams");
         return groupRepository.findManagerGroups();
     }
 
     /**
-     * Get groups by minimum permission level
+     * Get teams by minimum permission level
      * @param minLevel minimum permission level
-     * @return list of groups with sufficient permission level
+     * @return list of teams with sufficient permission level
      */
     @Transactional(readOnly = true)
-    public List<Group> getGroupsByMinimumPermissionLevel(int minLevel) {
-        log.debug("Getting groups with minimum permission level: {}", minLevel);
+    public List<Team> getGroupsByMinimumPermissionLevel(int minLevel) {
+        log.debug("Getting teams with minimum permission level: {}", minLevel);
         validatePermissionLevel(minLevel);
         return groupRepository.findByMinimumPermissionLevel(minLevel);
     }
@@ -232,29 +224,29 @@ public class GroupService {
      * @param groupId group ID
      */
     public void assignEmployeeToGroup(UUID employeeId, UUID groupId) {
-        log.info("Assigning employee {} to group {}", employeeId, groupId);
+        log.info("Assigning employee {} to team {}", employeeId, groupId);
 
         Optional<Employee> employeeOpt = employeeRepository.findById(employeeId);
-        Optional<Group> groupOpt = groupRepository.findById(groupId);
+        Optional<Team> groupOpt = groupRepository.findById(groupId);
 
         if (employeeOpt.isEmpty()) {
             throw new IllegalArgumentException("Employee not found: " + employeeId);
         }
         if (groupOpt.isEmpty()) {
-            throw new IllegalArgumentException("Group not found: " + groupId);
+            throw new IllegalArgumentException("Team not found: " + groupId);
         }
 
         Employee employee = employeeOpt.get();
-        Group group = groupOpt.get();
+        Team team = groupOpt.get();
 
-        if (!group.getActive()) {
-            throw new IllegalArgumentException("Cannot assign to inactive group: " + group.getName());
+        if (!team.getActive()) {
+            throw new IllegalArgumentException("Cannot assign to inactive team: " + team.getName());
         }
 
-        employee.addGroup(group);
+        employee.addTeam(team);
         employeeRepository.save(employee);
 
-        log.info("Employee {} assigned to group {} successfully", employeeId, groupId);
+        log.info("Employee {} assigned to team {} successfully", employeeId, groupId);
     }
 
     /**
@@ -263,56 +255,56 @@ public class GroupService {
      * @param groupId group ID
      */
     public void removeEmployeeFromGroup(UUID employeeId, UUID groupId) {
-        log.info("Removing employee {} from group {}", employeeId, groupId);
+        log.info("Removing employee {} from team {}", employeeId, groupId);
 
         Optional<Employee> employeeOpt = employeeRepository.findById(employeeId);
-        Optional<Group> groupOpt = groupRepository.findById(groupId);
+        Optional<Team> groupOpt = groupRepository.findById(groupId);
 
         if (employeeOpt.isEmpty()) {
             throw new IllegalArgumentException("Employee not found: " + employeeId);
         }
         if (groupOpt.isEmpty()) {
-            throw new IllegalArgumentException("Group not found: " + groupId);
+            throw new IllegalArgumentException("Team not found: " + groupId);
         }
 
         Employee employee = employeeOpt.get();
-        Group group = groupOpt.get();
+        Team team = groupOpt.get();
 
-        employee.removeGroup(group);
+        employee.removeTeam(team);
         employeeRepository.save(employee);
 
-        log.info("Employee {} removed from group {} successfully", employeeId, groupId);
+        log.info("Employee {} removed from team {} successfully", employeeId, groupId);
     }
 
     /**
-     * Get groups for employee
+     * Get teams for employee
      * @param employeeId employee ID
-     * @return list of groups where employee is member
+     * @return list of teams where employee is member
      */
     @Transactional(readOnly = true)
-    public List<Group> getGroupsForEmployee(UUID employeeId) {
-        log.debug("Getting groups for employee: {}", employeeId);
+    public List<Team> getGroupsForEmployee(UUID employeeId) {
+        log.debug("Getting teams for employee: {}", employeeId);
         return groupRepository.findByEmployeeId(employeeId);
     }
 
     /**
-     * Get available groups for employee (groups not assigned)
+     * Get available teams for employee (teams not assigned)
      * @param employeeId employee ID
-     * @return list of groups where employee is not member
+     * @return list of teams where employee is not member
      */
     @Transactional(readOnly = true)
-    public List<Group> getAvailableGroupsForEmployee(UUID employeeId) {
-        log.debug("Getting available groups for employee: {}", employeeId);
+    public List<Team> getAvailableGroupsForEmployee(UUID employeeId) {
+        log.debug("Getting available teams for employee: {}", employeeId);
         return groupRepository.findGroupsNotAssignedToEmployee(employeeId);
     }
 
     /**
-     * Update employee groups (replace all groups)
+     * Update employee teams (replace all teams)
      * @param employeeId employee ID
      * @param groupIds list of group IDs
      */
     public void updateEmployeeGroups(UUID employeeId, List<UUID> groupIds) {
-        log.info("Updating groups for employee {}: {}", employeeId, groupIds);
+        log.info("Updating teams for employee {}: {}", employeeId, groupIds);
 
         Optional<Employee> employeeOpt = employeeRepository.findById(employeeId);
         if (employeeOpt.isEmpty()) {
@@ -321,23 +313,23 @@ public class GroupService {
 
         Employee employee = employeeOpt.get();
 
-        // Clear existing groups
-        employee.getGroups().clear();
+        // Clear existing teams
+        employee.getTeams().clear();
 
-        // Add new groups
+        // Add new teams
         if (groupIds != null && !groupIds.isEmpty()) {
-            List<Group> groups = groupRepository.findAllById(groupIds);
+            List<Team> teams = groupRepository.findAllById(groupIds);
 
-            // Validate all groups exist and are active
-            if (groups.size() != groupIds.size()) {
-                throw new IllegalArgumentException("Some groups were not found");
+            // Validate all teams exist and are active
+            if (teams.size() != groupIds.size()) {
+                throw new IllegalArgumentException("Some teams were not found");
             }
 
-            for (Group group : groups) {
-                if (!group.getActive()) {
-                    throw new IllegalArgumentException("Cannot assign to inactive group: " + group.getName());
+            for (Team team : teams) {
+                if (!team.getActive()) {
+                    throw new IllegalArgumentException("Cannot assign to inactive team: " + team.getName());
                 }
-                employee.addGroup(group);
+                employee.addTeam(team);
             }
         }
 
@@ -348,21 +340,21 @@ public class GroupService {
     // ========== VALIDATION METHODS ==========
 
     /**
-     * Validate new group business rules
+     * Validate new team business rules
      */
-    private void validateNewGroup(Group group) {
-        if (group.getName() == null || group.getName().trim().isEmpty()) {
-            throw new IllegalArgumentException("Group name is required");
+    private void validateNewGroup(Team team) {
+        if (team.getName() == null || team.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Team name is required");
         }
 
         // Check for duplicate name
-        if (groupRepository.existsByNameIgnoreCase(group.getName())) {
-            throw new IllegalArgumentException("Group with this name already exists: " + group.getName());
+        if (groupRepository.existsByNameIgnoreCase(team.getName())) {
+            throw new IllegalArgumentException("Team with this name already exists: " + team.getName());
         }
 
         // Validate permission level
-        if (group.getPermissionLevel() != null) {
-            validatePermissionLevel(group.getPermissionLevel());
+        if (team.getPermissionLevel() != null) {
+            validatePermissionLevel(team.getPermissionLevel());
         }
     }
 
@@ -390,12 +382,12 @@ public class GroupService {
     }
 
     /**
-     * Get empty groups (groups with no employees)
-     * @return list of empty groups
+     * Get empty teams (teams with no employees)
+     * @return list of empty teams
      */
     @Transactional(readOnly = true)
-    public List<Group> getEmptyGroups() {
-        log.debug("Getting empty groups");
+    public List<Team> getEmptyGroups() {
+        log.debug("Getting empty teams");
         return groupRepository.findEmptyGroups();
     }
 
@@ -413,18 +405,18 @@ public class GroupService {
     // ========== UTILITY METHODS ==========
 
     /**
-     * Initialize default groups
-     * Creates standard groups if they don't exist
+     * Initialize default teams
+     * Creates standard teams if they don't exist
      */
     public void initializeDefaultGroups() {
-        log.info("Initializing default groups");
+        log.info("Initializing default teams");
 
         createDefaultGroupIfNotExists("ADMIN", "System administrators", ADMIN_PERMISSION_LEVEL);
         createDefaultGroupIfNotExists("MANAGER", "Team managers", MANAGER_PERMISSION_LEVEL);
         createDefaultGroupIfNotExists("PROCESSOR", "Card processors", 3);
         createDefaultGroupIfNotExists("VIEWER", "Read-only access", 1);
 
-        log.info("Default groups initialization completed");
+        log.info("Default teams initialization completed");
     }
 
     /**
@@ -432,15 +424,15 @@ public class GroupService {
      */
     private void createDefaultGroupIfNotExists(String name, String description, int permissionLevel) {
         if (!groupRepository.existsByNameIgnoreCase(name)) {
-            Group group = Group.builder()
+            Team team = Team.builder()
                     .name(name)
                     .description(description)
                     .permissionLevel(permissionLevel)
                     .active(true)
                     .build();
 
-            createGroup(group);
-            log.info("Created default group: {}", name);
+            createGroup(team);
+            log.info("Created default team: {}", name);
         }
     }
 
@@ -449,18 +441,18 @@ public class GroupService {
      */
     public List<Employee> getEmployeesInGroup(UUID groupId) {
         try {
-            log.debug("Getting employees for group: {}", groupId);
+            log.debug("Getting employees for team: {}", groupId);
 
-            Optional<Group> groupOpt = groupRepository.findById(groupId);
+            Optional<Team> groupOpt = groupRepository.findById(groupId);
             if (groupOpt.isEmpty()) {
-                log.warn("Group not found: {}", groupId);
+                log.warn("Team not found: {}", groupId);
                 return new ArrayList<>();
             }
 
-            Group group = groupOpt.get();
-            List<Employee> employees = new ArrayList<>(group.getEmployees());
+            Team team = groupOpt.get();
+            List<Employee> employees = new ArrayList<>(team.getEmployees());
 
-            log.debug("Found {} employees in group {}", employees.size(), group.getName());
+            log.debug("Found {} employees in team {}", employees.size(), team.getName());
             return employees;
 
         } catch (Exception e) {

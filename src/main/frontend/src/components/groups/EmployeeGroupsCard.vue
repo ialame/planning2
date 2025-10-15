@@ -1,5 +1,5 @@
 <template>
-  <div class="employee-groups-card card">
+  <div class="employee-teams-card card">
     <!-- Header -->
     <div class="flex justify-between items-center mb-4">
       <div class="flex items-center space-x-3">
@@ -20,31 +20,31 @@
     <!-- Current Groups -->
     <div v-if="employeeGroups.length > 0" class="space-y-3 mb-4">
       <div
-        v-for="group in employeeGroups"
-        :key="group.id"
+        v-for="team in employeeGroups"
+        :key="team.id"
         class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
       >
         <div class="flex items-center space-x-3">
           <div :class="[
             'w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm',
-            getPermissionLevelColor(group.permissionLevel)
+            getPermissionLevelColor(team.permissionLevel)
           ]">
-            {{ getGroupIcon(group.permissionLevel) }}
+            {{ getGroupIcon(team.permissionLevel) }}
           </div>
           <div>
-            <p class="font-medium text-gray-900">{{ group.name }}</p>
-            <p class="text-sm text-gray-600">{{ group.description }}</p>
+            <p class="font-medium text-gray-900">{{ team.name }}</p>
+            <p class="text-sm text-gray-600">{{ team.description }}</p>
             <span :class="[
               'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-1',
-              getPermissionBadgeColor(group.permissionLevel)
+              getPermissionBadgeColor(team.permissionLevel)
             ]">
               <Shield class="w-3 h-3 mr-1" />
-              Level {{ group.permissionLevel }}
+              Level {{ team.permissionLevel }}
             </span>
           </div>
         </div>
         <button
-          @click="removeFromGroup(group)"
+          @click="removeFromGroup(team)"
           class="text-red-600 hover:text-red-800 p-1"
           :disabled="loading"
         >
@@ -56,7 +56,7 @@
     <!-- Empty State -->
     <div v-else class="text-center py-6 bg-gray-50 rounded-lg mb-4">
       <Users class="w-12 h-12 text-gray-400 mx-auto mb-2" />
-      <p class="text-gray-500 mb-2">No groups assigned</p>
+      <p class="text-gray-500 mb-2">No teams assigned</p>
       <p class="text-sm text-gray-400">This employee has no role assignments</p>
     </div>
 
@@ -86,21 +86,21 @@
       <div class="flex space-x-2">
         <button
           @click="addToGroup('PROCESSOR')"
-          :disabled="loading || hasGroup('PROCESSOR')"
+          :disabled="loading || hasTeam('PROCESSOR')"
           class="flex-1 text-sm bg-blue-50 text-blue-600 px-3 py-2 rounded hover:bg-blue-100 disabled:opacity-50"
         >
           + Processor
         </button>
         <button
           @click="addToGroup('SUPERVISOR')"
-          :disabled="loading || hasGroup('SUPERVISOR')"
+          :disabled="loading || hasTeam('SUPERVISOR')"
           class="flex-1 text-sm bg-yellow-50 text-yellow-600 px-3 py-2 rounded hover:bg-yellow-100 disabled:opacity-50"
         >
           + Supervisor
         </button>
         <button
           @click="addToGroup('MANAGER')"
-          :disabled="loading || hasGroup('MANAGER')"
+          :disabled="loading || hasTeam('MANAGER')"
           class="flex-1 text-sm bg-red-50 text-red-600 px-3 py-2 rounded hover:bg-red-100 disabled:opacity-50"
         >
           + Manager
@@ -108,11 +108,11 @@
       </div>
     </div>
 
-    <!-- Employee Group Management Modal -->
+    <!-- Employee Team Management Modal -->
     <EmployeeGroupManagementModal
       v-if="showGroupManagement"
       :employee="employee"
-      :current-groups="employeeGroups"
+      :current-teams="employeeGroups"
       @close="showGroupManagement = false"
       @updated="onGroupsUpdated"
     />
@@ -187,13 +187,13 @@ const primaryRole = computed(() => {
 const loadEmployeeGroups = async () => {
   loading.value = true
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/employee/${props.employee.id}`)
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams/employee/${props.employee.id}`)
     if (response.ok) {
       const data = await response.json()
-      employeeGroups.value = data.groups || []
+      employeeGroups.value = data.teams || []
     }
   } catch (error) {
-    console.error('Error loading employee groups:', error)
+    console.error('Error loading employee teams:', error)
   } finally {
     loading.value = false
   }
@@ -201,20 +201,20 @@ const loadEmployeeGroups = async () => {
 
 const addToGroup = async (groupName: string) => {
   try {
-    // First find the group by name
-    const groupsResponse = await fetch(`${API_BASE_URL}/api/v2/groups?search=${groupName}`)
+    // First find the team by name
+    const groupsResponse = await fetch(`${API_BASE_URL}/api/v2/teams?search=${groupName}`)
     if (!groupsResponse.ok) return
 
     const groupsData = await groupsResponse.json()
-    const group = groupsData.groups?.find((g: Group) => g.name === groupName)
+    const team = groupsData.teams?.find((g: Group) => g.name === groupName)
 
-    if (!group) {
+    if (!team) {
       console.error(`Group ${groupName} not found`)
       return
     }
 
-    // Add employee to group
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/${group.id}/employees/${props.employee.id}`, {
+    // Add employee to team
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams/${team.id}/employees/${props.employee.id}`, {
       method: 'POST'
     })
 
@@ -223,15 +223,15 @@ const addToGroup = async (groupName: string) => {
       emit('updated')
     }
   } catch (error) {
-    console.error('Error adding to group:', error)
+    console.error('Error adding to team:', error)
   }
 }
 
-const removeFromGroup = async (group: Group) => {
-  if (!confirm(`Remove ${props.employee.fullName} from ${group.name}?`)) return
+const removeFromGroup = async (team: Group) => {
+  if (!confirm(`Remove ${props.employee.fullName} from ${team.name}?`)) return
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/groups/${group.id}/employees/${props.employee.id}`, {
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams/${team.id}/employees/${props.employee.id}`, {
       method: 'DELETE'
     })
 
@@ -240,11 +240,11 @@ const removeFromGroup = async (group: Group) => {
       emit('updated')
     }
   } catch (error) {
-    console.error('Error removing from group:', error)
+    console.error('Error removing from team:', error)
   }
 }
 
-const hasGroup = (groupName: string) => {
+const hasTeam = (groupName: string) => {
   return employeeGroups.value.some(g => g.name === groupName)
 }
 

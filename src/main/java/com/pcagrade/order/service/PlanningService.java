@@ -265,7 +265,7 @@ public class PlanningService {
                     e.last_name as lastName,
                     e.email as email,
                     e.work_hours_per_day as workHoursPerDay
-                FROM j_employee e 
+                FROM employee e 
                 WHERE e.active = 1 
                 ORDER BY e.work_hours_per_day DESC
             """;
@@ -311,7 +311,7 @@ public class PlanningService {
         try {
             // ✅ NOUVELLE REQUÊTE SQL avec delai VARCHAR et status INT
             String insertSql = """
-            INSERT INTO j_planning (
+            INSERT INTO planning (
                 id, order_id, employee_id, 
                 planning_date, start_time, end_time,
                 estimated_duration_minutes, estimated_end_time,
@@ -437,7 +437,7 @@ public class PlanningService {
     private void cleanExistingPlannings(LocalDate fromDate) {
         try {
             String deleteSql = """
-        DELETE FROM j_planning 
+        DELETE FROM planning 
         WHERE planning_date >= ?
         AND created_at >= NOW() - INTERVAL 1 HOUR
         """;
@@ -459,7 +459,7 @@ public class PlanningService {
     private boolean isPlanningExistsForOrder(String orderId) {
         try {
             String checkSql = """
-        SELECT COUNT(*) FROM j_planning 
+        SELECT COUNT(*) FROM planning 
         WHERE order_id = UNHEX(?)
         """;
 

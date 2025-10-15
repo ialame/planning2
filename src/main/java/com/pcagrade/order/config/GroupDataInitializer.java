@@ -23,23 +23,23 @@ public class GroupDataInitializer implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) throws Exception {
         try {
-            log.info("🔍 Checking if j_group table needs initialization...");
+            log.info("🔍 Checking if team table needs initialization...");
 
             Long count = (Long) entityManager.createNativeQuery(
-                    "SELECT COUNT(*) FROM j_group"
+                    "SELECT COUNT(*) FROM team"
             ).getSingleResult();
 
             if (count > 0) {
-                log.info("✅ j_group table already contains {} roles - skipping initialization", count);
+                log.info("✅ team table already contains {} roles - skipping initialization", count);
                 return;
             }
 
-            log.info("📝 j_group table is empty - inserting default roles...");
+            log.info("📝 team table is empty - inserting default roles...");
             insertDefaultGroups();
-            log.info("✅ Successfully initialized 7 default roles in j_group table");
+            log.info("✅ Successfully initialized 7 default roles in team table");
 
         } catch (Exception e) {
-            log.error("❌ Error initializing default groups: {}", e.getMessage(), e);
+            log.error("❌ Error initializing default teams: {}", e.getMessage(), e);
         }
     }
 
@@ -56,7 +56,7 @@ public class GroupDataInitializer implements ApplicationRunner {
     private void insertGroup(String name, String nameUpper, String description, int permissionLevel) {
         try {
             String sql = """
-                INSERT INTO j_group 
+                INSERT INTO team 
                     (id, active, creation_date, description, modification_date, name, name_upper, permission_level)
                 VALUES 
                     (UNHEX(REPLACE(UUID(), '-', '')), 1, NOW(), ?, NOW(), ?, ?, ?)

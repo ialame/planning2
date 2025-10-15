@@ -219,10 +219,10 @@ The main tables managed by Liquibase:
 |-------|-------------|------------|
 | `order` | Pokemon card orders (synced from Symfony) | Liquibase |
 | `card_certification` | Individual cards being processed | Liquibase |
-| `j_employee` | Employees with work hours and efficiency | Liquibase |
-| `j_group` | Roles (Admin, Manager, Grader, etc.) | Liquibase |
-| `j_employee_group` | Employee-to-role assignments | Liquibase |
-| `j_planning` | Generated work schedules | Liquibase |
+| `employee` | Employees with work hours and efficiency | Liquibase |
+| `team` | Roles (Admin, Manager, Grader, etc.) | Liquibase |
+| `employee_group` | Employee-to-role assignments | Liquibase |
+| `planning` | Generated work schedules | Liquibase |
 | `DATABASECHANGELOG` | Liquibase version tracking | Liquibase |
 | `DATABASECHANGELOGLOCK` | Liquibase execution lock | Liquibase |
 
@@ -344,8 +344,8 @@ curl http://localhost:8080/api/orders?page=0&size=10
 # Get all employees
 curl http://localhost:8080/api/employees
 
-# Get groups/roles
-curl http://localhost:8080/api/groups
+# Get teams/roles
+curl http://localhost:8080/api/teams
 ```
 
 ---
@@ -1218,7 +1218,7 @@ databaseChangeLog:
       context: development,docker,production
       changes:
         - addColumn:
-            tableName: j_employee
+            tableName: employee
             columns:
               - column:
                   name: phone_number
@@ -1227,7 +1227,7 @@ databaseChangeLog:
                     nullable: true
       rollback:
         - dropColumn:
-            tableName: j_employee
+            tableName: employee
             columnName: phone_number
 ```
 
@@ -1459,7 +1459,7 @@ lsof -ti:3000 | xargs kill -9
 Check logs for initialization:
 
 ```bash
-grep -i "group\|employee\|liquibase" logs/spring.log
+grep -i "team\|employee\|liquibase" logs/spring.log
 ```
 
 Should see:
@@ -1591,14 +1591,14 @@ DELETE /api/employees/{employeeId}
 #### Groups/Roles
 
 ```bash
-# Get all groups
-GET /api/groups
+# Get all teams
+GET /api/teams
 
-# Get employee groups
-GET /api/groups/employee/{employeeId}
+# Get employee teams
+GET /api/teams/employee/{employeeId}
 
 # Assign role to employee
-POST /api/groups/assign
+POST /api/teams/assign
 Content-Type: application/json
 
 {
@@ -1607,7 +1607,7 @@ Content-Type: application/json
 }
 
 # Remove role from employee
-DELETE /api/groups/remove?employeeId={id}&groupId={id}
+DELETE /api/teams/remove?employeeId={id}&groupId={id}
 ```
 
 #### Planning
