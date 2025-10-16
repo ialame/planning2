@@ -37,7 +37,7 @@ public abstract class AbstractUlidEntity implements Serializable {
     @GeneratedValue(generator = "ulid-generator")
     @GenericGenerator(
             name = "ulid-generator",
-            strategy = "com.pcagrade.order.util.UlidGenerator"
+            strategy = "com.pcagrade.order.entity.ulid.UlidGenerator"
     )
     @Column(name = "id", updatable = false, nullable = false, columnDefinition = "BINARY(16)")
     @JdbcTypeCode(SqlTypes.BINARY)

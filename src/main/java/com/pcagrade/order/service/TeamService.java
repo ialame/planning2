@@ -6,16 +6,20 @@ import com.pcagrade.order.repository.TeamRepository;
 import com.pcagrade.order.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
  * Team Service - Business Logic Layer
- * Handles all business operations related to Teams
+ * Handles all business operations related to Teams and Roles
  */
 @Service
 @RequiredArgsConstructor
@@ -24,6 +28,8 @@ public class TeamService {
 
     private final TeamRepository teamRepository;
     private final EmployeeRepository employeeRepository;
+
+    // ========== BASIC CRUD OPERATIONS ==========
 
     /**
      * Get all teams
@@ -36,16 +42,24 @@ public class TeamService {
     /**
      * Get all active teams
      */
-    public List<Team> getActiveTeams() {
-        log.debug("Getting active teams");
+    public List<Team> getAllActiveTeams() {
+        log.debug("Getting all active teams");
         return teamRepository.findByActiveTrue();
+    }
+
+    /**
+     * Get all active teams (paginated)
+     */
+    public Page<Team> getAllActiveTeamsPaginated(Pageable pageable) {
+        log.debug("Getting all active teams (paginated)");
+        return teamRepository.findByActiveTrue(pageable);
     }
 
     /**
      * Get team by ID
      */
     public Optional<Team> getTeamById(UUID id) {
-        log.debug("Getting team by id: {}", id);
+        log.debug("Getting team by ID: {}", id);
         return teamRepository.findById(id);
     }
 
@@ -58,11 +72,19 @@ public class TeamService {
     }
 
     /**
-     * Search teams by name
+     * Search teams by name or description
      */
-    public List<Team> searchTeamsByName(String searchTerm) {
-        log.debug("Searching teams by name: {}", searchTerm);
-        return teamRepository.searchByName(searchTerm);
+    public List<Team> searchTeams(String searchTerm) {
+        log.debug("Searching teams with term: {}", searchTerm);
+        return teamRepository.searchByNameOrDescription(searchTerm);
+    }
+
+    /**
+     * Search teams by name or description (paginated)
+     */
+    public Page<Team> searchTeamsPaginated(String searchTerm, Pageable pageable) {
+        log.debug("Searching teams (paginated) with term: {}", searchTerm);
+        return teamRepository.searchByNameOrDescription(searchTerm, pageable);
     }
 
     /**
@@ -72,19 +94,18 @@ public class TeamService {
     public Team createTeam(Team team) {
         log.info("Creating new team: {}", team.getName());
 
-        // Validate unique name
-        if (teamRepository.findByName(team.getName()).isPresent()) {
-            log.warn("Team with name {} already exists", team.getName());
-            throw new IllegalArgumentException("Team with name " + team.getName() + " already exists");
+        validateTeam(team);
+
+        if (teamNameExists(team.getName())) {
+            throw new IllegalArgumentException("Team with name '" + team.getName() + "' already exists");
         }
 
-        // Ensure team is active by default
-        if (team.getActive() == null) {
-            team.setActive(true);
-        }
+        team.setActive(true);
+        team.setCreationDate(LocalDateTime.now());
+        team.setModificationDate(LocalDateTime.now());
 
         Team savedTeam = teamRepository.save(team);
-        log.info("Team created successfully with id: {}", savedTeam.getId());
+        log.info("Team created successfully: {} (ID: {})", savedTeam.getName(), savedTeam.getId());
 
         return savedTeam;
     }
@@ -93,92 +114,68 @@ public class TeamService {
      * Update existing team
      */
     @Transactional
-    public Team updateTeam(UUID id, Team updatedTeam) {
-        log.info("Updating team id: {}", id);
+    public Team updateTeam(UUID id, Team team) {
+        log.info("Updating team: {}", id);
 
         Team existingTeam = teamRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Team not found: " + id));
+                .orElseThrow(() -> new NoSuchElementException("Team not found: " + id));
 
-        // Check if name is being changed and if it's unique
-        if (updatedTeam.getName() != null &&
-                !updatedTeam.getName().equals(existingTeam.getName())) {
-            if (teamRepository.findByName(updatedTeam.getName()).isPresent()) {
-                log.warn("Team with name {} already exists", updatedTeam.getName());
-                throw new IllegalArgumentException("Team with name " + updatedTeam.getName() + " already exists");
-            }
-            existingTeam.setName(updatedTeam.getName());
+        validateTeam(team);
+
+        // Check if new name conflicts with another team
+        if (!existingTeam.getName().equals(team.getName()) && teamNameExists(team.getName())) {
+            throw new IllegalArgumentException("Team with name '" + team.getName() + "' already exists");
         }
 
-        // Update other fields
-        if (updatedTeam.getDescription() != null) {
-            existingTeam.setDescription(updatedTeam.getDescription());
-        }
-        if (updatedTeam.getPermissionLevel() != null) {
-            existingTeam.setPermissionLevel(updatedTeam.getPermissionLevel());
-        }
-        if (updatedTeam.getActive() != null) {
-            existingTeam.setActive(updatedTeam.getActive());
-        }
+        existingTeam.setName(team.getName());
+        existingTeam.setDescription(team.getDescription());
+        existingTeam.setPermissionLevel(team.getPermissionLevel());
+        existingTeam.setActive(team.getActive());
+        existingTeam.setModificationDate(LocalDateTime.now());
 
-        Team savedTeam = teamRepository.save(existingTeam);
-        log.info("Team updated successfully: {}", id);
+        Team updatedTeam = teamRepository.save(existingTeam);
+        log.info("Team updated successfully: {}", updatedTeam.getName());
 
-        return savedTeam;
+        return updatedTeam;
     }
 
     /**
-     * Deactivate team (soft delete)
+     * Delete team (soft delete)
      */
     @Transactional
-    public void deactivateTeam(UUID id) {
-        log.info("Deactivating team id: {}", id);
+    public void deleteTeam(UUID id) {
+        log.info("Deleting team: {}", id);
 
         Team team = teamRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Team not found: " + id));
+                .orElseThrow(() -> new NoSuchElementException("Team not found: " + id));
 
         team.setActive(false);
+        team.setModificationDate(LocalDateTime.now());
+
         teamRepository.save(team);
+        log.info("Team deleted successfully: {}", id);
+    }
 
-        log.info("Team deactivated successfully: {}", id);
+    // ========== EMPLOYEE-TEAM RELATIONSHIP MANAGEMENT ==========
+
+    /**
+     * Get teams for a specific employee
+     */
+    public List<Team> getTeamsForEmployee(UUID employeeId) {
+        log.debug("Getting teams for employee: {}", employeeId);
+
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
+
+        return employee.getTeams().stream().toList();
     }
 
     /**
-     * Reactivate team
+     * Assign employee to team
      */
     @Transactional
-    public void reactivateTeam(UUID id) {
-        log.info("Reactivating team id: {}", id);
-
-        Team team = teamRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Team not found: " + id));
-
-        team.setActive(true);
-        teamRepository.save(team);
-
-        log.info("Team reactivated successfully: {}", id);
-    }
-
-    /**
-     * Delete team permanently
-     */
-    @Transactional
-    public void deleteTeamPermanently(UUID id) {
-        log.warn("Permanently deleting team id: {}", id);
-
-        if (!teamRepository.existsById(id)) {
-            throw new IllegalArgumentException("Team not found: " + id);
-        }
-
-        teamRepository.deleteById(id);
-        log.info("Team deleted permanently: {}", id);
-    }
-
-    /**
-     * Add employee to team
-     */
-    @Transactional
-    public void addEmployeeToTeam(UUID teamId, UUID employeeId) {
-        log.info("Adding employee {} to team {}", employeeId, teamId);
+    public void assignEmployeeToTeam(UUID employeeId, UUID teamId) {
+        log.info("Assigning employee {} to team {}", employeeId, teamId);
 
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new IllegalArgumentException("Team not found: " + teamId));
@@ -186,19 +183,23 @@ public class TeamService {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
 
+        if (team.getEmployees().contains(employee)) {
+            log.warn("Employee {} is already in team {}", employeeId, teamId);
+            return;
+        }
+
         team.getEmployees().add(employee);
         employee.getTeams().add(team);
 
         teamRepository.save(team);
-
-        log.info("Employee {} added to team {} successfully", employeeId, teamId);
+        log.info("Employee {} assigned to team {} successfully", employeeId, teamId);
     }
 
     /**
      * Remove employee from team
      */
     @Transactional
-    public void removeEmployeeFromTeam(UUID teamId, UUID employeeId) {
+    public void removeEmployeeFromTeam(UUID employeeId, UUID teamId) {
         log.info("Removing employee {} from team {}", employeeId, teamId);
 
         Team team = teamRepository.findById(teamId)
@@ -211,8 +212,37 @@ public class TeamService {
         employee.getTeams().remove(team);
 
         teamRepository.save(team);
-
         log.info("Employee {} removed from team {} successfully", employeeId, teamId);
+    }
+
+    /**
+     * Update all teams for an employee (replace existing teams)
+     */
+    @Transactional
+    public void updateEmployeeTeams(UUID employeeId, List<UUID> teamIds) {
+        log.info("Updating teams for employee: {}", employeeId);
+
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
+
+        // Remove employee from all current teams
+        List<Team> currentTeams = employee.getTeams().stream().toList();
+        for (Team team : currentTeams) {
+            team.getEmployees().remove(employee);
+        }
+        employee.getTeams().clear();
+
+        // Add employee to new teams
+        for (UUID teamId : teamIds) {
+            Team team = teamRepository.findById(teamId)
+                    .orElseThrow(() -> new IllegalArgumentException("Team not found: " + teamId));
+
+            team.getEmployees().add(employee);
+            employee.getTeams().add(team);
+        }
+
+        employeeRepository.save(employee);
+        log.info("Updated {} teams for employee {}", teamIds.size(), employeeId);
     }
 
     /**
@@ -225,6 +255,75 @@ public class TeamService {
                 .orElseThrow(() -> new IllegalArgumentException("Team not found: " + teamId));
 
         return team.getEmployees().stream().toList();
+    }
+
+    /**
+     * Count active employees in a team
+     */
+    public long countActiveEmployeesInTeam(UUID teamId) {
+        log.debug("Counting active employees in team: {}", teamId);
+
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new IllegalArgumentException("Team not found: " + teamId));
+
+        return team.getEmployees().stream()
+                .filter(Employee::getActive)
+                .count();
+    }
+
+    // ========== STATISTICS AND UTILITY METHODS ==========
+
+    /**
+     * Get team statistics (team name, member count, etc.)
+     */
+    public List<Object[]> getTeamStatistics() {
+        log.debug("Getting team statistics");
+        return teamRepository.getTeamStatistics();
+    }
+
+    /**
+     * Get teams with no members
+     */
+    public List<Team> getEmptyTeams() {
+        log.debug("Getting empty teams");
+        return teamRepository.findTeamsWithNoMembers();
+    }
+
+    /**
+     * Initialize default teams/roles
+     */
+    @Transactional
+    public void initializeDefaultTeams() {
+        log.info("Initializing default teams");
+
+        String[][] defaultTeams = {
+                {"ROLE_ADMIN", "System administrators", "10"},
+                {"ROLE_MANAGER", "Team managers", "7"},
+                {"ROLE_NOTEUR", "Card graders", "5"},
+                {"ROLE_CERTIFICATEUR", "Card certifiers/encapsulators", "5"},
+                {"ROLE_SCANNER", "Card scanners", "4"},
+                {"ROLE_PREPARATEUR", "Order preparers", "4"},
+                {"ROLE_VIEWER", "Read-only viewers", "2"}
+        };
+
+        for (String[] teamData : defaultTeams) {
+            String name = teamData[0];
+
+            if (teamRepository.findByName(name).isEmpty()) {
+                Team team = new Team();
+                team.setName(name);
+                team.setDescription(teamData[1]);
+                team.setPermissionLevel(Integer.parseInt(teamData[2]));
+                team.setActive(true);
+                team.setCreationDate(LocalDateTime.now());
+                team.setModificationDate(LocalDateTime.now());
+
+                teamRepository.save(team);
+                log.info("Created default team: {}", name);
+            }
+        }
+
+        log.info("Default teams initialization complete");
     }
 
     /**
@@ -254,7 +353,7 @@ public class TeamService {
     }
 
     /**
-     * Validate team
+     * Validate team data
      */
     public void validateTeam(Team team) {
         if (team.getName() == null || team.getName().trim().isEmpty()) {
@@ -263,6 +362,10 @@ public class TeamService {
 
         if (team.getName().length() > 50) {
             throw new IllegalArgumentException("Team name cannot exceed 50 characters");
+        }
+
+        if (team.getPermissionLevel() == null || team.getPermissionLevel() < 0) {
+            throw new IllegalArgumentException("Permission level must be a positive number");
         }
     }
 }

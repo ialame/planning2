@@ -20,7 +20,7 @@ import java.util.Map;
  * This ensures that the planning system has employees with the necessary
  * permissions to handle all types of tasks.
  *
- * Runs AFTER GroupDataInitializer (Order 1) and EmployeeDataInitializer (Order 2)
+ * Runs AFTER TeamDataInitializer (Order 1) and EmployeeDataInitializer (Order 2)
  */
 @Component
 @Order(3) // Execute after employees are created
@@ -37,13 +37,13 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
         try {
             log.info("🔍 Checking if employee roles need initialization...");
 
-            // Check if any employee-group assignments exist
+            // Check if any employee-taem assignments exist
             Long count = (Long) entityManager.createNativeQuery(
-                    "SELECT COUNT(*) FROM employee_group"
+                    "SELECT COUNT(*) FROM employee_team"
             ).getSingleResult();
 
             if (count > 0) {
-                log.info("✅ employee_group table already contains {} assignments - skipping initialization", count);
+                log.info("✅ employee_taem table already contains {} assignments - skipping initialization", count);
                 return;
             }
 
@@ -73,44 +73,44 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
         Map<String, String> employees = getEmployeeIds();
 
         // Get teams by name
-        Map<String, String> groups = getGroupIds();
+        Map<String, String> taems = getTeamIds();
 
-        if (employees.isEmpty() || groups.isEmpty()) {
+        if (employees.isEmpty() || taems.isEmpty()) {
             log.warn("⚠️ No employees or teams found - skipping role assignment");
             return;
         }
 
         // Employee 1: Sophie Martin - Card grader with basic access
         assignRoles(employees.get("sophie.martin@pcagrade.com"), List.of(
-                groups.get("ROLE_NOTEUR"),       // Main role: grading cards
-                groups.get("ROLE_SCANNER"),      // Can also scan
-                groups.get("ROLE_VIEWER")        // Read-only access
+                taems.get("ROLE_NOTEUR"),       // Main role: grading cards
+                taems.get("ROLE_SCANNER"),      // Can also scan
+                taems.get("ROLE_VIEWER")        // Read-only access
         ), "Sophie Martin");
 
         // Employee 2: Thomas Dubois - Certifier and preparer
         assignRoles(employees.get("thomas.dubois@pcagrade.com"), List.of(
-                groups.get("ROLE_CERTIFICATEUR"), // Main role: certifying/encapsulating
-                groups.get("ROLE_PREPARATEUR")    // Can prepare orders
+                taems.get("ROLE_CERTIFICATEUR"), // Main role: certifying/encapsulating
+                taems.get("ROLE_PREPARATEUR")    // Can prepare orders
         ), "Thomas Dubois");
 
         // Employee 3: Marie Bernard - Multi-skilled scanner and preparer
         assignRoles(employees.get("marie.bernard@pcagrade.com"), List.of(
-                groups.get("ROLE_SCANNER"),      // Main role: scanning
-                groups.get("ROLE_PREPARATEUR"),  // Can prepare orders
-                groups.get("ROLE_VIEWER")        // Read-only access
+                taems.get("ROLE_SCANNER"),      // Main role: scanning
+                taems.get("ROLE_PREPARATEUR"),  // Can prepare orders
+                taems.get("ROLE_VIEWER")        // Read-only access
         ), "Marie Bernard");
 
         // Employee 4: Pierre Petit - Senior manager with admin rights
         assignRoles(employees.get("pierre.petit@pcagrade.com"), List.of(
-                groups.get("ROLE_MANAGER"),      // Team management
-                groups.get("ROLE_ADMIN")         // Full system access
+                taems.get("ROLE_MANAGER"),      // Team management
+                taems.get("ROLE_ADMIN")         // Full system access
         ), "Pierre Petit");
 
         // Employee 5: Julie Moreau - Trainee learning multiple roles
         assignRoles(employees.get("julie.moreau@pcagrade.com"), List.of(
-                groups.get("ROLE_NOTEUR"),       // Learning to grade
-                groups.get("ROLE_CERTIFICATEUR"), // Learning to certify
-                groups.get("ROLE_VIEWER")        // Read-only monitoring
+                taems.get("ROLE_NOTEUR"),       // Learning to grade
+                taems.get("ROLE_CERTIFICATEUR"), // Learning to certify
+                taems.get("ROLE_VIEWER")        // Read-only monitoring
         ), "Julie Moreau");
 
         log.info("✅ All 7 roles covered across 5 employees");
@@ -133,10 +133,10 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
     }
 
     /**
-     * Get group IDs by name
+     * Get taem IDs by name
      */
-    private Map<String, String> getGroupIds() {
-        String sql = "SELECT name, HEX(id) FROM group";
+    private Map<String, String> getTeamIds() {
+        String sql = "SELECT name, HEX(id) FROM taem";
 
         @SuppressWarnings("unchecked")
         List<Object[]> results = entityManager.createNativeQuery(sql).getResultList();
@@ -151,26 +151,26 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
     /**
      * Assign multiple roles to an employee
      */
-    private void assignRoles(String employeeId, List<String> groupIds, String employeeName) {
-        if (employeeId == null || groupIds == null || groupIds.isEmpty()) {
+    private void assignRoles(String employeeId, List<String> taemIds, String employeeName) {
+        if (employeeId == null || taemIds == null || taemIds.isEmpty()) {
             log.warn("⚠️ Cannot assign roles to {} - missing IDs", employeeName);
             return;
         }
 
         int successCount = 0;
 
-        for (String groupId : groupIds) {
-            if (groupId == null) continue;
+        for (String taemId : taemIds) {
+            if (taemId == null) continue;
 
             try {
                 String sql = """
-                    INSERT INTO employee_group (employee_id, group_id)
+                    INSERT INTO employee_taem (employee_id, taem_id)
                     VALUES (UNHEX(?), UNHEX(?))
                     """;
 
                 int result = entityManager.createNativeQuery(sql)
                         .setParameter(1, employeeId)
-                        .setParameter(2, groupId)
+                        .setParameter(2, taemId)
                         .executeUpdate();
 
                 if (result > 0) {
