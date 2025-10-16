@@ -7,12 +7,14 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Order entity representing a Pokemon card grading order
+ *
+ * Simplified version with only fields that exist in Symfony database
  *
  * Inherits ULID primary key from AbstractUlidEntity for:
  * - Chronological ordering of orders (important for priority)
@@ -27,43 +29,76 @@ import java.util.List;
 @AllArgsConstructor
 public class Order extends AbstractUlidEntity {
 
-    @Column(nullable = false, unique = true, length = 50)
-    private String orderNumber;
-
-    @Column(nullable = false, length = 100)
-    private String customerName;
-
-    @Column(length = 100)
-    private String customerEmail;
+    // ============================================================
+    // SYMFONY SYNCHRONIZATION FIELDS (Read from Symfony API)
+    // ============================================================
 
     /**
-     * Delivery deadline - determines order priority
-     * Orders with earlier deadlines have higher priority
+     * Original Symfony order ID for synchronization
      */
-    @Column(name = "delivery_deadline", nullable = false)
-    private LocalDateTime deliveryDeadline;
+    @Column(name = "symfony_order_id", unique = true, length = 50)
+    private String symfonyOrderId;
 
-    @Column(name = "order_date")
-    private LocalDateTime orderDate;
+    /**
+     * Order number (unique identifier)
+     */
+    @Column(name = "order_number", nullable = false, unique = true, length = 50)
+    private String orderNumber;
 
+    /**
+     * Customer name
+     */
+    @Column(name = "customer_name", nullable = false, length = 100)
+    private String customerName;
+
+    /**
+     * Total number of cards in this order (from Symfony)
+     */
+    @Column(name = "total_cards")
+    private Integer totalCards;
+
+    /**
+     * Order price/total (from Symfony)
+     */
+    @Column(name = "price")
+    private Float price;
+
+    /**
+     * Delivery priority code from Symfony (X, F+, F, C, E)
+     * X = Express (highest priority)
+     * F+ = Fast Plus
+     * F = Fast
+     * C = Classic
+     * E = Economy (lowest priority)
+     */
+    @Column(name = "delai", length = 10)
+    private String delai;
+
+    /**
+     * Order creation date (from Symfony)
+     */
+    @Column(name = "date")
+    private LocalDate date;
+
+    /**
+     * Current processing status
+     */
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
     private OrderStatus status = OrderStatus.PENDING;
 
+    // ============================================================
+    // SPRING BOOT PLANNING FIELDS (Managed locally)
+    // ============================================================
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Card> cards = new ArrayList<>();
-
-    /**
-     * Total estimated processing time in minutes
-     */
-    @Column(name = "estimated_processing_minutes")
-    private Integer estimatedProcessingMinutes;
 
     @PrePersist
     protected void onOrderCreate() {
         super.onCreate();
-        if (orderDate == null) {
-            orderDate = LocalDateTime.now();
+        if (date == null) {
+            date = LocalDate.now();
         }
     }
 
@@ -72,37 +107,93 @@ public class Order extends AbstractUlidEntity {
         super.onUpdate();
     }
 
-    /**
-     * Calculate total processing time based on cards and processing stages
-     */
-    public void calculateEstimatedTime() {
-        // 3 minutes per card per processing stage
-        final int MINUTES_PER_CARD_PER_STAGE = 3;
-        int totalCards = cards.size();
-
-        // Count required stages (grading, certifying, scanning, packaging)
-        int stages = 4;
-
-        estimatedProcessingMinutes = totalCards * stages * MINUTES_PER_CARD_PER_STAGE;
-    }
+    // ============================================================
+    // BUSINESS LOGIC METHODS
+    // ============================================================
 
     /**
      * Get priority score (lower is higher priority)
-     * Based on delivery deadline
+     * Based on delai code
      */
-    public long getPriorityScore() {
-        return deliveryDeadline.toEpochSecond(java.time.ZoneOffset.UTC);
+    public int getPriorityScore() {
+        if (delai != null) {
+            switch (delai.toUpperCase()) {
+                case "X":  return 1; // Highest priority
+                case "F+": return 2;
+                case "F":  return 3;
+                case "C":  return 4;
+                case "E":  return 5; // Lowest priority
+            }
+        }
+        return 6; // Unknown priority
     }
 
     /**
-     * Check if order is overdue
+     * Get priority label for display
      */
-    public boolean isOverdue() {
-        return LocalDateTime.now().isAfter(deliveryDeadline)
+    public String getPriorityLabel() {
+        if (delai != null) {
+            switch (delai.toUpperCase()) {
+                case "X":  return "🔴 Express";
+                case "F+": return "🟠 Fast Plus";
+                case "F":  return "🟡 Fast";
+                case "C":  return "🟢 Classic";
+                case "E":  return "🔵 Economy";
+            }
+        }
+        return "⚪ Unknown";
+    }
+
+    /**
+     * Get estimated days until delivery based on delai code
+     */
+    public int getEstimatedDeliveryDays() {
+        if (delai != null) {
+            switch (delai.toUpperCase()) {
+                case "X":  return 2;   // Express - 2 days
+                case "F+": return 5;   // Fast Plus - 5 days
+                case "F":  return 10;  // Fast - 10 days
+                case "C":  return 20;  // Classic - 20 days
+                case "E":  return 30;  // Economy - 30 days
+            }
+        }
+        return 20; // Default to Classic
+    }
+
+    /**
+     * Get card count (prefers totalCards from sync, falls back to cards list)
+     */
+    public int getCardCount() {
+        return totalCards != null ? totalCards : cards.size();
+    }
+
+    /**
+     * Calculate total estimated processing time in minutes
+     * Formula: totalCards * 4 stages * 3 minutes per stage
+     */
+    public int getEstimatedProcessingMinutes() {
+        final int MINUTES_PER_CARD_PER_STAGE = 3;
+        final int NUMBER_OF_STAGES = 4; // grading, certifying, scanning, packaging
+
+        int cardCount = getCardCount();
+        return cardCount * NUMBER_OF_STAGES * MINUTES_PER_CARD_PER_STAGE;
+    }
+
+    /**
+     * Calculate estimated delivery date based on order date and delai
+     */
+    public LocalDate getEstimatedDeliveryDate() {
+        LocalDate baseDate = date != null ? date : LocalDate.now();
+        return baseDate.plusDays(getEstimatedDeliveryDays());
+    }
+
+    /**
+     * Check if order is likely overdue (past estimated delivery date)
+     */
+    public boolean isLikelyOverdue() {
+        LocalDate estimatedDelivery = getEstimatedDeliveryDate();
+        return LocalDate.now().isAfter(estimatedDelivery)
                 && status != OrderStatus.COMPLETED
                 && status != OrderStatus.DELIVERED;
     }
 }
-
-
-

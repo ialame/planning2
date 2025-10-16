@@ -149,9 +149,6 @@ public class TeamDataInitializer implements ApplicationRunner {
         Order order = new Order();
         order.setOrderNumber(orderNumber);
         order.setCustomerName(customerName);
-        order.setCustomerEmail(customerEmail);
-        order.setDeliveryDeadline(deadline);
-        order.setOrderDate(LocalDateTime.now());
         order.setStatus(OrderStatus.PENDING);
 
         // Create sample cards
@@ -168,7 +165,6 @@ public class TeamDataInitializer implements ApplicationRunner {
         order.setCards(cards);
 
         // Calculate estimated processing time
-        order.calculateEstimatedTime();
 
         return order;
     }

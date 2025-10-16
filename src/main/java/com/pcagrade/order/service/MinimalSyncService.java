@@ -1,6 +1,7 @@
 package com.pcagrade.order.service;
 
 import com.pcagrade.order.entity.Order;
+import com.pcagrade.order.entity.OrderStatus;
 import com.pcagrade.order.repository.OrderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,16 +86,26 @@ public class MinimalSyncService {
             log.debug("✨ Creating new order: {}", symfonyOrderId);
         }
 
-        // Set all fields using direct setters
+        // Set all fields using direct setters (Symfony fields only)
         order.setSymfonyOrderId(symfonyOrderId);
         order.setOrderNumber(getString(orderData, "order_number"));
         order.setCustomerName(getString(orderData, "customer_name"));
-        order.setDeliveryDate(getString(orderData, "delivery_date")); // This is the delai code
-        order.setDate(parseDate(getString(orderData, "date")));
-        order.setTotalCards(getInteger(orderData, "total_cards"));
-        order.setStatus(getInteger(orderData, "status"));
-        order.setPrice(getFloat(orderData, "price"));
+
+        // Set delai (priority code: X, F+, F, C, E)
         order.setDelai(getString(orderData, "delai"));
+
+        // Set order creation date
+        order.setDate(parseDate(getString(orderData, "date")));
+
+        // Set total cards count
+        order.setTotalCards(getInteger(orderData, "total_cards"));
+
+        // Convert Symfony status integer to OrderStatus enum
+        Integer statusCode = getInteger(orderData, "status");
+        order.setStatus(convertSymfonyStatusToOrderStatus(statusCode));
+
+        // Set order price/total
+        order.setPrice(getFloat(orderData, "price"));
 
         // Save to database
         Order saved = orderRepository.save(order);
@@ -106,68 +117,104 @@ public class MinimalSyncService {
                 saved.getPrice());
     }
 
-    // ============================================================
-    // Helper Methods for Data Extraction
-    // ============================================================
-
-    private String getString(Map<String, Object> data, String key) {
-        Object value = data.get(key);
-        if (value == null) {
-            return null;
+    /**
+     * Convert Symfony status code (integer) to OrderStatus enum
+     *
+     * Symfony status codes:
+     * 1 = A_RECEPTIONNER (To be received)
+     * 2 = A_NOTER (To be graded) -> GRADING
+     * 3 = A_CERTIFIER (To be encapsulated) -> CERTIFYING
+     * 4 = A_PREPARER (To be prepared) -> PACKAGING
+     * 5 = ENVOYEE (Sent) -> COMPLETED
+     * 10 = A_SCANNER (To be scanned) -> SCANNING
+     */
+    private OrderStatus convertSymfonyStatusToOrderStatus(Integer statusCode) {
+        if (statusCode == null) {
+            return OrderStatus.PENDING;
         }
-        return value.toString().trim();
+
+        switch (statusCode) {
+            case 1:  // A_RECEPTIONNER
+                return OrderStatus.PENDING;
+            case 2:  // A_NOTER (to be graded)
+                return OrderStatus.GRADING;
+            case 3:  // A_CERTIFIER (to be certified)
+                return OrderStatus.CERTIFYING;
+            case 4:  // A_PREPARER (to be prepared/packaged)
+                return OrderStatus.PACKAGING;
+            case 5:  // ENVOYEE (sent)
+            case 42: // A_ENVOYER (to be sent)
+                return OrderStatus.DELIVERED;
+            case 10: // A_SCANNER (to be scanned)
+                return OrderStatus.SCANNING;
+            default:
+                log.debug("Unknown Symfony status code: {}, defaulting to PENDING", statusCode);
+                return OrderStatus.PENDING;
+        }
     }
 
-    private Integer getInteger(Map<String, Object> data, String key) {
-        Object value = data.get(key);
-        if (value == null) {
-            return null;
+    // ==================== HELPER METHODS ====================
+
+    private String getString(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) return null;
+        return value.toString();
+    }
+
+    private Integer getInteger(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) return null;
+
+        if (value instanceof Integer) {
+            return (Integer) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
         }
 
         try {
-            if (value instanceof Integer) {
-                return (Integer) value;
-            }
-            if (value instanceof Number) {
-                return ((Number) value).intValue();
-            }
             return Integer.parseInt(value.toString());
         } catch (NumberFormatException e) {
-            log.warn("⚠️ Cannot parse integer from '{}': {}", key, value);
+            log.warn("Cannot convert '{}' value '{}' to Integer", key, value);
             return null;
         }
     }
 
-    private Float getFloat(Map<String, Object> data, String key) {
-        Object value = data.get(key);
-        if (value == null) {
-            return null;
+    private Float getFloat(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) return null;
+
+        if (value instanceof Float) {
+            return (Float) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).floatValue();
         }
 
         try {
-            if (value instanceof Float) {
-                return (Float) value;
-            }
-            if (value instanceof Number) {
-                return ((Number) value).floatValue();
-            }
             return Float.parseFloat(value.toString());
         } catch (NumberFormatException e) {
-            log.warn("⚠️ Cannot parse float from '{}': {}", key, value);
+            log.warn("Cannot convert '{}' value '{}' to Float", key, value);
             return null;
         }
     }
 
-    private LocalDate parseDate(String dateString) {
-        if (dateString == null || dateString.isEmpty()) {
+    private LocalDate parseDate(String dateStr) {
+        if (dateStr == null || dateStr.isEmpty()) {
             return null;
         }
 
         try {
-            return LocalDate.parse(dateString, DATE_FORMATTER);
+            // Try ISO format first (yyyy-MM-dd)
+            return LocalDate.parse(dateStr, DATE_FORMATTER);
         } catch (Exception e) {
-            log.warn("⚠️ Cannot parse date: {}", dateString);
-            return null;
+            try {
+                // Try with default parser
+                return LocalDate.parse(dateStr);
+            } catch (Exception ex) {
+                log.warn("Cannot parse date: {}", dateStr);
+                return null;
+            }
         }
     }
 }

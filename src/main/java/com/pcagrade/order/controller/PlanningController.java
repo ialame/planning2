@@ -153,7 +153,7 @@ public class PlanningController {
      */
     @GetMapping("/orders/overdue")
     public ResponseEntity<List<OrderDTO>> getOverdueOrders() {
-        List<Order> orders = orderRepository.findOverdueOrders();
+        List<Order> orders = orderRepository.findPotentiallyOverdueOrders();
         List<OrderDTO> dtos = orders.stream()
                 .map(this::convertOrderToDTO)
                 .collect(Collectors.toList());
@@ -187,13 +187,10 @@ public class PlanningController {
         dto.setId(order.getId());
         dto.setOrderNumber(order.getOrderNumber());
         dto.setCustomerName(order.getCustomerName());
-        dto.setCustomerEmail(order.getCustomerEmail());
-        dto.setDeliveryDeadline(order.getDeliveryDeadline());
-        dto.setOrderDate(order.getOrderDate());
         dto.setStatus(order.getStatus().name());
         dto.setCardCount(order.getCards().size());
         dto.setEstimatedProcessingMinutes(order.getEstimatedProcessingMinutes());
-        dto.setPriorityScore(order.getPriorityScore());
+        dto.setPriorityScore((long) order.getPriorityScore());
         return dto;
     }
 

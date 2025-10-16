@@ -37,13 +37,13 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
         try {
             log.info("🔍 Checking if employee roles need initialization...");
 
-            // Check if any employee-taem assignments exist
+            // Check if any employee-team assignments exist
             Long count = (Long) entityManager.createNativeQuery(
                     "SELECT COUNT(*) FROM employee_team"
             ).getSingleResult();
 
             if (count > 0) {
-                log.info("✅ employee_taem table already contains {} assignments - skipping initialization", count);
+                log.info("✅ employee_team table already contains {} assignments - skipping initialization", count);
                 return;
             }
 
@@ -73,44 +73,44 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
         Map<String, String> employees = getEmployeeIds();
 
         // Get teams by name
-        Map<String, String> taems = getTeamIds();
+        Map<String, String> teams = getTeamIds();
 
-        if (employees.isEmpty() || taems.isEmpty()) {
+        if (employees.isEmpty() || teams.isEmpty()) {
             log.warn("⚠️ No employees or teams found - skipping role assignment");
             return;
         }
 
         // Employee 1: Sophie Martin - Card grader with basic access
         assignRoles(employees.get("sophie.martin@pcagrade.com"), List.of(
-                taems.get("ROLE_NOTEUR"),       // Main role: grading cards
-                taems.get("ROLE_SCANNER"),      // Can also scan
-                taems.get("ROLE_VIEWER")        // Read-only access
+                teams.get("ROLE_NOTEUR"),       // Main role: grading cards
+                teams.get("ROLE_SCANNER"),      // Can also scan
+                teams.get("ROLE_VIEWER")        // Read-only access
         ), "Sophie Martin");
 
         // Employee 2: Thomas Dubois - Certifier and preparer
         assignRoles(employees.get("thomas.dubois@pcagrade.com"), List.of(
-                taems.get("ROLE_CERTIFICATEUR"), // Main role: certifying/encapsulating
-                taems.get("ROLE_PREPARATEUR")    // Can prepare orders
+                teams.get("ROLE_CERTIFICATEUR"), // Main role: certifying/encapsulating
+                teams.get("ROLE_PREPARATEUR")    // Can prepare orders
         ), "Thomas Dubois");
 
         // Employee 3: Marie Bernard - Multi-skilled scanner and preparer
         assignRoles(employees.get("marie.bernard@pcagrade.com"), List.of(
-                taems.get("ROLE_SCANNER"),      // Main role: scanning
-                taems.get("ROLE_PREPARATEUR"),  // Can prepare orders
-                taems.get("ROLE_VIEWER")        // Read-only access
+                teams.get("ROLE_SCANNER"),      // Main role: scanning
+                teams.get("ROLE_PREPARATEUR"),  // Can prepare orders
+                teams.get("ROLE_VIEWER")        // Read-only access
         ), "Marie Bernard");
 
         // Employee 4: Pierre Petit - Senior manager with admin rights
         assignRoles(employees.get("pierre.petit@pcagrade.com"), List.of(
-                taems.get("ROLE_MANAGER"),      // Team management
-                taems.get("ROLE_ADMIN")         // Full system access
+                teams.get("ROLE_MANAGER"),      // Team management
+                teams.get("ROLE_ADMIN")         // Full system access
         ), "Pierre Petit");
 
         // Employee 5: Julie Moreau - Trainee learning multiple roles
         assignRoles(employees.get("julie.moreau@pcagrade.com"), List.of(
-                taems.get("ROLE_NOTEUR"),       // Learning to grade
-                taems.get("ROLE_CERTIFICATEUR"), // Learning to certify
-                taems.get("ROLE_VIEWER")        // Read-only monitoring
+                teams.get("ROLE_NOTEUR"),       // Learning to grade
+                teams.get("ROLE_CERTIFICATEUR"), // Learning to certify
+                teams.get("ROLE_VIEWER")        // Read-only monitoring
         ), "Julie Moreau");
 
         log.info("✅ All 7 roles covered across 5 employees");
@@ -133,10 +133,10 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
     }
 
     /**
-     * Get taem IDs by name
+     * Get team IDs by name
      */
     private Map<String, String> getTeamIds() {
-        String sql = "SELECT name, HEX(id) FROM taem";
+        String sql = "SELECT name, HEX(id) FROM team";
 
         @SuppressWarnings("unchecked")
         List<Object[]> results = entityManager.createNativeQuery(sql).getResultList();
@@ -151,26 +151,26 @@ public class EmployeeRoleInitializer implements ApplicationRunner {
     /**
      * Assign multiple roles to an employee
      */
-    private void assignRoles(String employeeId, List<String> taemIds, String employeeName) {
-        if (employeeId == null || taemIds == null || taemIds.isEmpty()) {
+    private void assignRoles(String employeeId, List<String> teamIds, String employeeName) {
+        if (employeeId == null || teamIds == null || teamIds.isEmpty()) {
             log.warn("⚠️ Cannot assign roles to {} - missing IDs", employeeName);
             return;
         }
 
         int successCount = 0;
 
-        for (String taemId : taemIds) {
-            if (taemId == null) continue;
+        for (String teamId : teamIds) {
+            if (teamId == null) continue;
 
             try {
                 String sql = """
-                    INSERT INTO employee_taem (employee_id, taem_id)
+                    INSERT INTO employee_team (employee_id, team_id)
                     VALUES (UNHEX(?), UNHEX(?))
                     """;
 
                 int result = entityManager.createNativeQuery(sql)
                         .setParameter(1, employeeId)
-                        .setParameter(2, taemId)
+                        .setParameter(2, teamId)
                         .executeUpdate();
 
                 if (result > 0) {

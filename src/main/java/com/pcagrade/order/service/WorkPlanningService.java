@@ -116,7 +116,7 @@ public class WorkPlanningService {
         assignment.setProcessingStage(stage);
         assignment.setCardCount(order.getCards().size());
         assignment.setEstimatedDurationMinutes(order.getCards().size() * MINUTES_PER_CARD);
-        assignment.setPriorityScore(order.getPriorityScore());
+        assignment.setPriorityScore((long) order.getPriorityScore());
 
         // Schedule start time based on current workload
         LocalDateTime startTime = workload.getNextAvailableTime();

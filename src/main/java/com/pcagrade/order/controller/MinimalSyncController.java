@@ -1,6 +1,7 @@
 package com.pcagrade.order.controller;
 
 import com.pcagrade.order.entity.Order;
+import com.pcagrade.order.entity.OrderStatus;
 import com.pcagrade.order.model.SyncProgress;
 import com.pcagrade.order.repository.OrderRepository;
 import com.pcagrade.order.service.CardCertificationSyncService;
@@ -513,57 +514,7 @@ public class MinimalSyncController {
         }
     }
 
-    // Helper method to create/update order
-    private Order createOrUpdateOrder(Map<String, Object> orderData) {
-        try {
-            String symfonyId = getString(orderData, "id");
-            if (symfonyId == null) {
-                log.warn("⚠️ Order missing ID, skipping");
-                return null;
-            }
 
-            // Check if order already exists
-            Order order = orderRepository.findBySymfonyOrderId(symfonyId)
-                    .orElse(new Order());
-
-            // Set Symfony ID for tracking
-            order.setSymfonyOrderId(symfonyId);
-
-            // Map basic fields
-            order.setOrderNumber(getString(orderData, "order_number"));
-            order.setCustomerName(getString(orderData, "customer_name"));
-            order.setStatus(getInteger(orderData, "status", 2)); // Default: A_NOTER
-            order.setTotalCards(getInteger(orderData, "card_count", 0));
-
-            // Map delai/priority code (X, F+, F, C, E)
-            String delaiCode = getString(orderData, "delai", "C"); // Default: Classic
-            order.setDelai(delaiCode);
-            order.setDeliveryDate(delaiCode); // deliveryDate also stores delai code
-
-            // Map dates
-            order.setDate(parseDate(getString(orderData, "creation_date")));
-
-            // Map price if available
-            order.setPrice(getFloat(orderData, "price", 0.0f));
-
-            return order;
-
-        } catch (Exception e) {
-            log.error("❌ Error creating order: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    // Helper methods for safe data extraction
-    private String getString(Map<String, Object> map, String key) {
-        Object value = map.get(key);
-        return value != null ? value.toString() : null;
-    }
-
-    private String getString(Map<String, Object> map, String key, String defaultValue) {
-        String value = getString(map, key);
-        return value != null ? value : defaultValue;
-    }
 
     private Integer getInteger(Map<String, Object> map, String key, Integer defaultValue) {
         Object value = map.get(key);
@@ -589,15 +540,144 @@ public class MinimalSyncController {
         }
     }
 
-    private LocalDate parseDate(String dateString) {
-        if (dateString == null || dateString.isEmpty()) {
+
+    // Add this helper method to MinimalSyncController.java
+
+    /**
+     * Create or update order from Symfony API data
+     */
+    private Order createOrUpdateOrder(Map<String, Object> orderData) {
+        try {
+            String symfonyId = getString(orderData, "id");
+            if (symfonyId == null) {
+                log.warn("⚠️ Order missing ID, skipping");
+                return null;
+            }
+
+            // Check if order already exists
+            Order order = orderRepository.findBySymfonyOrderId(symfonyId)
+                    .orElse(new Order());
+
+            // Set Symfony ID for tracking
+            order.setSymfonyOrderId(symfonyId);
+
+            // Map Symfony fields only
+            order.setOrderNumber(getString(orderData, "order_number"));
+            order.setCustomerName(getString(orderData, "customer_name"));
+
+            // Set delai priority code (X, F+, F, C, E)
+            order.setDelai(getString(orderData, "delai", "C")); // Default: Classic
+
+            // Set order creation date
+            order.setDate(parseDate(getString(orderData, "date")));
+
+            // Set total cards count
+            order.setTotalCards(getInteger(orderData, "total_cards", 0));
+
+            // Convert Symfony status integer to OrderStatus enum
+            Integer statusCode = getInteger(orderData, "status", 2); // Default: A_NOTER (GRADING)
+            order.setStatus(convertSymfonyStatusToOrderStatus(statusCode));
+
+            // Set order price
+            order.setPrice(getFloat(orderData, "price", 0.0f));
+
+            return order;
+
+        } catch (Exception e) {
+            log.error("❌ Error creating order: {}", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Convert Symfony status code (integer) to OrderStatus enum
+     */
+    private OrderStatus convertSymfonyStatusToOrderStatus(Integer statusCode) {
+        if (statusCode == null) {
+            return OrderStatus.PENDING;
+        }
+
+        switch (statusCode) {
+            case 1:  // A_RECEPTIONNER
+                return OrderStatus.PENDING;
+            case 2:  // A_NOTER (to be graded)
+                return OrderStatus.GRADING;
+            case 3:  // A_CERTIFIER (to be certified)
+                return OrderStatus.CERTIFYING;
+            case 4:  // A_PREPARER (to be prepared/packaged)
+                return OrderStatus.PACKAGING;
+            case 5:  // ENVOYEE (sent)
+            case 42: // A_ENVOYER (to be sent)
+                return OrderStatus.DELIVERED;
+            case 10: // A_SCANNER (to be scanned)
+                return OrderStatus.SCANNING;
+            default:
+                log.debug("Unknown Symfony status code: {}, defaulting to GRADING", statusCode);
+                return OrderStatus.GRADING;
+        }
+    }
+
+    // Helper methods for safe data extraction
+    private String getString(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value != null ? value.toString() : null;
+    }
+
+    private String getString(Map<String, Object> map, String key, String defaultValue) {
+        String value = getString(map, key);
+        return value != null ? value : defaultValue;
+    }
+
+    private Integer getInteger(Map<String, Object> map, String key, int defaultValue) {
+        Object value = map.get(key);
+        if (value == null) return defaultValue;
+
+        if (value instanceof Integer) {
+            return (Integer) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+
         try {
-            return LocalDate.parse(dateString, DATE_FORMATTER);
-        } catch (Exception e) {
-            log.warn("⚠️ Could not parse date: {}", dateString);
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private Float getFloat(Map<String, Object> map, String key, float defaultValue) {
+        Object value = map.get(key);
+        if (value == null) return defaultValue;
+
+        if (value instanceof Float) {
+            return (Float) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).floatValue();
+        }
+
+        try {
+            return Float.parseFloat(value.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private LocalDate parseDate(String dateStr) {
+        if (dateStr == null || dateStr.isEmpty()) {
             return null;
+        }
+
+        try {
+            return LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        } catch (Exception e) {
+            try {
+                return LocalDate.parse(dateStr);
+            } catch (Exception ex) {
+                log.warn("Cannot parse date: {}", dateStr);
+                return null;
+            }
         }
     }
 }
