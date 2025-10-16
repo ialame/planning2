@@ -8,13 +8,13 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * GroupDto - Data Transfer Objects for Team/Group entities
+ * TeamDto - Data Transfer Objects for Team entities
  * Contains nested classes for different use cases (Request, Response)
  */
-public class GroupDto {
+public class TeamDto {
 
     /**
-     * Request DTO for creating or updating a Team/Group
+     * Request DTO for creating or updating a Team
      */
     @Data
     @NoArgsConstructor
@@ -26,7 +26,7 @@ public class GroupDto {
     }
 
     /**
-     * Response DTO for returning Team/Group data
+     * Response DTO for returning Team data
      */
     @Data
     @NoArgsConstructor

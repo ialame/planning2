@@ -1,165 +1,108 @@
 package com.pcagrade.order.entity;
 
-import com.pcagrade.order.util.AbstractUlidEntity;
+import com.pcagrade.order.entity.ulid.AbstractUlidEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Order entity representing Pokemon card orders
- * Writable entity - synced from Symfony API and stored locally for planning
+ * Order entity representing a Pokemon card grading order
  *
- * IMPORTANT: This entity is now WRITABLE to allow syncing from Symfony
- * Data flows: Symfony API → Spring Boot → dev-planning database
+ * Inherits ULID primary key from AbstractUlidEntity for:
+ * - Chronological ordering of orders (important for priority)
+ * - Database synchronization compatibility
+ * - Natural sorting by creation time
  */
 @Entity
-@Table(name = "`order`")
-// @Immutable  ← REMOVED to allow writes
+@Table(name = "card_order")
 @Data
 @EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class Order extends AbstractUlidEntity {
 
-    /**
-     * Symfony order ID (ULID hex format)
-     * This is the unique identifier from the Symfony system
-     */
-    @Column(name = "symfony_order_id", unique = true)
-    private String symfonyOrderId;
-
-    /**
-     * Unique order number for tracking
-     */
-    @Column(name = "order_number")
+    @Column(nullable = false, unique = true, length = 50)
     private String orderNumber;
 
-    /**
-     * Customer name (from customer table join in Symfony)
-     */
-    @Column(name = "customer_name")
+    @Column(nullable = false, length = 100)
     private String customerName;
 
-    /**
-     * Delivery date code (actually the delai code: X, F+, F, C, E)
-     * X = Express (1 day)
-     * F+ = Fast+ (1 week)
-     * F = Fast (2 weeks)
-     * C = Classic (1 month)
-     * E = Economy (3 months)
-     */
-    @Column(name = "delivery_date", length = 10)
-    private String deliveryDate;
+    @Column(length = 100)
+    private String customerEmail;
 
     /**
-     * Order creation date
+     * Delivery deadline - determines order priority
+     * Orders with earlier deadlines have higher priority
      */
-    @Column(name = "date")
-    private LocalDate Date;
+    @Column(name = "delivery_deadline", nullable = false)
+    private LocalDateTime deliveryDeadline;
+
+    @Column(name = "order_date")
+    private LocalDateTime orderDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 50)
+    private OrderStatus status = OrderStatus.PENDING;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Card> cards = new ArrayList<>();
 
     /**
-     * Total number of cards in this order
+     * Total estimated processing time in minutes
      */
-    @Column(name = "total_cards")
-    private Integer totalCards;
+    @Column(name = "estimated_processing_minutes")
+    private Integer estimatedProcessingMinutes;
 
-    /**
-     * Order status (from Symfony workflow)
-     * Status constants for planning reference:
-     */
-    public static final int STATUS_A_RECEPTIONNER = 1;
-    public static final int STATUS_COLIS_ACCEPTE = 9;
-    public static final int STATUS_A_SCANNER = 10;
-    public static final int STATUS_A_OUVRIR = 11;
-    public static final int STATUS_A_NOTER = 2;
-    public static final int STATUS_A_CERTIFIER = 3;
-    public static final int STATUS_A_PREPARER = 4;
-    public static final int STATUS_A_DESCELLER = 7;
-    public static final int STATUS_A_VOIR = 6;
-    public static final int STATUS_A_DISTRIBUER = 41;
-    public static final int STATUS_A_ENVOYER = 42;
-    public static final int STATUS_ENVOYEE = 5;
-    public static final int STATUS_RECU = 8;
-
-    @Column(name = "status")
-    private Integer status;
-
-    /**
-     * Price from invoice (total_ttc)
-     * Synced from Symfony API: invoice.total_ttc
-     */
-    @Column(name = "price")
-    private Float price;
-
-    /**
-     * Delivery priority code
-     * Values: X=1day, F+=1week, F=2weeks, C=1month, E=3months
-     * Synced from Symfony API: order.delai
-     */
-    @Column(name = "delai", length = 3)
-    private String delai;
-
-    // ============================================================
-    // HELPER METHODS FOR PLANNING
-    // ============================================================
-
-    /**
-     * Get estimated processing time in minutes
-     * Based on: 3 minutes per card
-     */
-    public int getEstimatedProcessingMinutes() {
-        if (totalCards == null || totalCards <= 0) {
-            return 0;
+    @PrePersist
+    protected void onOrderCreate() {
+        super.onCreate();
+        if (orderDate == null) {
+            orderDate = LocalDateTime.now();
         }
-        return totalCards * 3;
+    }
+
+    @PreUpdate
+    protected void onOrderUpdate() {
+        super.onUpdate();
     }
 
     /**
-     * Get priority score for scheduling (higher = more urgent)
-     * Based on delai code
+     * Calculate total processing time based on cards and processing stages
      */
-    public int getPriorityScore() {
-        if (delai == null) return 50;
+    public void calculateEstimatedTime() {
+        // 3 minutes per card per processing stage
+        final int MINUTES_PER_CARD_PER_STAGE = 3;
+        int totalCards = cards.size();
 
-        return switch (delai) {
-            case "X" -> 100;   // Express - Highest priority
-            case "F+" -> 80;   // Fast+
-            case "F" -> 60;    // Fast
-            case "C" -> 40;    // Classic
-            case "E" -> 20;    // Economy - Lowest priority
-            default -> 50;     // Unknown
-        };
+        // Count required stages (grading, certifying, scanning, packaging)
+        int stages = 4;
+
+        estimatedProcessingMinutes = totalCards * stages * MINUTES_PER_CARD_PER_STAGE;
     }
 
     /**
-     * Check if order is ready for planning
-     * (has been accepted but not yet completed)
+     * Get priority score (lower is higher priority)
+     * Based on delivery deadline
      */
-    public boolean isReadyForPlanning() {
-        return status != null &&
-                status >= STATUS_A_NOTER &&
-                status < STATUS_ENVOYEE;
+    public long getPriorityScore() {
+        return deliveryDeadline.toEpochSecond(java.time.ZoneOffset.UTC);
     }
 
     /**
-     * Get human-readable delai description
+     * Check if order is overdue
      */
-    public String getDelaiDescription() {
-        if (delai == null) return "Unknown";
-
-        return switch (delai) {
-            case "X" -> "Express (1 day)";
-            case "F+" -> "Fast+ (1 week)";
-            case "F" -> "Fast (2 weeks)";
-            case "C" -> "Classic (1 month)";
-            case "E" -> "Economy (3 months)";
-            default -> "Unknown (" + delai + ")";
-        };
+    public boolean isOverdue() {
+        return LocalDateTime.now().isAfter(deliveryDeadline)
+                && status != OrderStatus.COMPLETED
+                && status != OrderStatus.DELIVERED;
     }
 }
+
+
+

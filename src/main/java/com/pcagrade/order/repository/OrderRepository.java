@@ -1,6 +1,9 @@
 package com.pcagrade.order.repository;
 
+import com.pcagrade.order.entity.AssignmentStatus;
 import com.pcagrade.order.entity.Order;
+import com.pcagrade.order.entity.OrderStatus;
+import com.pcagrade.order.entity.WorkAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -10,56 +13,35 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Repository for Order entity
- * Handles database operations for Pokemon card orders
- *
- * FIXED: All parameter types corrected to match Order entity field types
+ * Order Repository
  */
 @Repository
 public interface OrderRepository extends JpaRepository<Order, UUID> {
 
-    /**
-     * Find order by order number (unique identifier from Symfony)
-     */
     Optional<Order> findByOrderNumber(String orderNumber);
 
-    /**
-     * Find order by Symfony order ID (ULID hex format)
-     * FIXED: Changed from Long to String to match Order.symfonyOrderId field type
-     */
-    Optional<Order> findBySymfonyOrderId(String symfonyOrderId);
+    List<Order> findByStatus(OrderStatus status);
 
-    /**
-     * Check if order exists by order number
-     */
-    boolean existsByOrderNumber(String orderNumber);
+    @Query("SELECT o FROM Order o WHERE o.status = :status ORDER BY o.deliveryDeadline ASC")
+    List<Order> findByStatusOrderedByDeadline(OrderStatus status);
 
-    /**
-     * Find orders by status
-     * FIXED: Changed from String to Integer to match Order.status field type
-     */
-    List<Order> findByStatus(Integer status);
+    @Query("SELECT o FROM Order o WHERE o.deliveryDeadline < CURRENT_TIMESTAMP AND o.status NOT IN ('COMPLETED', 'DELIVERED')")
+    List<Order> findOverdueOrders();
 
-    /**
-     * Find orders by delivery date code (delai: X, F+, F, C, E)
-     * FIXED: Changed from LocalDate to String - deliveryDate stores delai codes, not dates
-     */
-    List<Order> findByDeliveryDate(String deliveryDateCode);
+    List<Order> findByCustomerEmailOrderByOrderDateDesc(String customerEmail);
 
-    /**
-     * Find orders for a specific customer
-     */
-    List<Order> findByCustomerNameContainingIgnoreCase(String customerName);
+    // For synchronization - ULID advantage!
+    // Simple ID comparison instead of complex timestamp queries
+    List<Order> findByIdGreaterThan(UUID lastSyncId);
 
-    /**
-     * Count orders by status
-     * FIXED: Changed from String to Integer
-     */
-    long countByStatus(Integer status);
+    // Range queries using ULID's chronological ordering
+    @Query("SELECT o FROM Order o WHERE o.id >= :fromId AND o.id <= :toId")
+    List<Order> findByIdBetween(UUID fromId, UUID toId);
 
-    /**
-     * Get total cards count across all orders
-     */
-    @Query("SELECT SUM(o.totalCards) FROM Order o")
-    Long getTotalCardsCount();
+    Optional<Order> findTopByOrderByIdDesc();
+
+    // Count orders created in a time range (using ULID)
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.id >= :fromId AND o.id <= :toId")
+    Long countByIdBetween(UUID fromId, UUID toId);
 }
+

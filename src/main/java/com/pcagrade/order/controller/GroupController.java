@@ -1,7 +1,7 @@
 package com.pcagrade.order.controller;
 
 import com.pcagrade.order.entity.Team;
-import com.pcagrade.order.service.GroupService;
+import com.pcagrade.order.service.TeamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -31,7 +31,7 @@ import java.util.*;
 public class GroupController {
 
     @Autowired
-    private GroupService groupService;
+    private TeamService groupService;
 
     // ========== CRUD OPERATIONS ==========
 

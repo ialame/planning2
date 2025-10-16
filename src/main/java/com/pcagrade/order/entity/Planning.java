@@ -1,6 +1,6 @@
 package com.pcagrade.order.entity;
 
-import com.pcagrade.order.util.AbstractUlidEntity;
+import com.pcagrade.order.entity.ulid.AbstractUlidEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;

@@ -1,147 +1,63 @@
 package com.pcagrade.order.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.pcagrade.order.util.AbstractUlidEntity;
+import com.pcagrade.order.entity.ulid.AbstractUlidEntity;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
- * Team Entity - Role Management
- * Represents a group/role in the Pokemon card processing system
+ * Team entity representing a group of employees working together
+ * Renamed from "Group" to avoid SQL reserved keyword conflict
+ *
+ * Inherits ULID primary key from AbstractUlidEntity for:
+ * - Chronological ordering
+ * - Database synchronization compatibility
+ * - Optimal index performance
  */
 @Entity
-@Table(name = "group")
+@Table(name = "team")
 @Data
 @EqualsAndHashCode(callSuper = true)
-@ToString(callSuper = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class Team extends AbstractUlidEntity {
 
-    /**
-     * Team name (e.g., "ADMIN", "MANAGER", "PROCESSOR", "VIEWER")
-     */
-    @Column(name = "name", nullable = false, unique = true, length = 50)
-    @NotBlank(message = "Team name is required")
+    @Column(nullable = false, length = 50, unique = true)
     private String name;
 
-    /**
-     * Computed column for case-insensitive searches (MariaDB compatible)
-     */
-    @Column(name = "name_upper", length = 50, insertable = false, updatable = false)
+    @Column(length = 50)
     private String nameUpper;
 
-    /**
-     * Team description
-     */
-    @Column(name = "description", length = 255)
+    @Column(length = 255)
     private String description;
 
-    /**
-     * Whether the group is active
-     */
+    @Column(name = "permission_level")
+    private Integer permissionLevel;
+
     @Column(name = "active")
-    @NotNull
-    @Builder.Default
     private Boolean active = true;
 
-    /**
-     * Team permissions level (1=lowest, 10=highest)
-     */
-    @Column(name = "permission_level")
-    @Builder.Default
-    private Integer permissionLevel = 1;
-
-    /**
-     * Date when the group was created
-     */
-    @Column(name = "creation_date")
-    private LocalDateTime creationDate;
-
-    /**
-     * Date when the group was last modified
-     */
-    @Column(name = "modification_date")
-    private LocalDateTime modificationDate;
-
-    // ========== RELATIONSHIPS ==========
-
-    /**
-     * Many-to-many relationship with Employee
-     */
-    @ManyToMany(mappedBy = "teams", fetch = FetchType.LAZY)
-    @ToString.Exclude
-    @JsonIgnoreProperties({"teams", "plannings", "hibernateLazyInitializer", "handler"})  // ← AJOUTER CETTE LIGNE
-    private List<Employee> employees = new ArrayList<>();
-
-    // ========== BUSINESS METHODS ==========
-
-    /**
-     * Check if this group has a specific permission level or higher
-     * @param requiredLevel the minimum required permission level
-     * @return true if group has sufficient permissions
-     */
-    public boolean hasPermissionLevel(int requiredLevel) {
-        return this.permissionLevel != null && this.permissionLevel >= requiredLevel;
-    }
-
-    /**
-     * Check if this group is an admin group (permission level >= 8)
-     * @return true if admin group
-     */
-    public boolean isAdminGroup() {
-        return hasPermissionLevel(8);
-    }
-
-    /**
-     * Check if this group is a manager group (permission level >= 5)
-     * @return true if manager group
-     */
-    public boolean isManagerGroup() {
-        return hasPermissionLevel(5);
-    }
-
-    /**
-     * Add employee to this group
-     * @param employee the employee to add
-     */
-    public void addEmployee(Employee employee) {
-        if (employee != null && !this.employees.contains(employee)) {
-            this.employees.add(employee);
-            employee.getTeams().add(this);
-        }
-    }
-
-    /**
-     * Remove employee from this group
-     * @param employee the employee to remove
-     */
-    public void removeEmployee(Employee employee) {
-        if (employee != null && this.employees.contains(employee)) {
-            this.employees.remove(employee);
-            employee.getTeams().remove(this);
-        }
-    }
+    @ManyToMany(mappedBy = "teams")
+    private Set<Employee> employees = new HashSet<>();
 
     @PrePersist
-    protected void onCreate() {
-        if (creationDate == null) {
-            creationDate = LocalDateTime.now();
-        }
-        if (modificationDate == null) {
-            modificationDate = LocalDateTime.now();
+    protected void onTeamCreate() {
+        super.onCreate();
+        if (name != null) {
+            nameUpper = name.toUpperCase();
         }
     }
 
     @PreUpdate
-    protected void onUpdate() {
-        modificationDate = LocalDateTime.now();
+    protected void onTeamUpdate() {
+        super.onUpdate();
+        if (name != null) {
+            nameUpper = name.toUpperCase();
+        }
     }
 }

@@ -18,7 +18,7 @@ import java.util.UUID;
  * Génère des ULID et les convertit en UUID pour stockage MariaDB
  * Les ULID conservent l'ordre chronologique même convertis en UUID
  */
-public class UlidGenerator implements IdentifierGenerator {
+public class UlidGeneratorOld implements IdentifierGenerator {
 
     @Override
     public Serializable generate(SharedSessionContractImplementor session, Object object) {

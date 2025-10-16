@@ -201,7 +201,7 @@ const loadEmployeeGroups = async () => {
 
 const addToGroup = async (groupName: string) => {
   try {
-    // First find the team by name
+    // First find the group by name
     const groupsResponse = await fetch(`${API_BASE_URL}/api/v2/teams?search=${groupName}`)
     if (!groupsResponse.ok) return
 
