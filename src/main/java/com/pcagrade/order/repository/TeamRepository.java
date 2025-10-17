@@ -1,5 +1,6 @@
 package com.pcagrade.order.repository;
 
+import com.pcagrade.order.entity.Employee;
 import com.pcagrade.order.entity.Team;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,7 +21,7 @@ import java.util.UUID;
 public interface TeamRepository extends JpaRepository<Team, UUID> {
 
     // ========== BASIC QUERIES ==========
-
+    List<Team> findByEmployeesContaining(Employee employee);
     /**
      * Find team by exact name
      */

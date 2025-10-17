@@ -25,7 +25,7 @@ public class TeamMapperService {
         }
 
         TeamDto.Response response = new TeamDto.Response();
-        response.setId(team.getId());
+        response.setId(String.valueOf(team.getId()));
         response.setName(team.getName());
         response.setDescription(team.getDescription());
         response.setPermissionLevel(team.getPermissionLevel());
@@ -81,7 +81,7 @@ public class TeamMapperService {
         }
 
         TeamDto.Summary summary = new TeamDto.Summary();
-        summary.setId(team.getId());
+        summary.setId(String.valueOf(team.getId()));
         summary.setName(team.getName());
         summary.setMemberCount(team.getEmployees() != null ? team.getEmployees().size() : 0);
         summary.setActive(team.getActive());
@@ -98,7 +98,7 @@ public class TeamMapperService {
         }
 
         TeamDto.Detailed detailed = new TeamDto.Detailed();
-        detailed.setId(team.getId());
+        detailed.setId(String.valueOf(team.getId()));
         detailed.setName(team.getName());
         detailed.setDescription(team.getDescription());
         detailed.setPermissionLevel(team.getPermissionLevel());

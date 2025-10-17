@@ -1,67 +1,92 @@
 package com.pcagrade.order.dto;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import java.time.LocalDateTime;
-import java.util.UUID;
+import java.util.List;
 
-/**
- * TeamDto - Data Transfer Objects for Team entities
- * Contains nested classes for different use cases (Request, Response)
- */
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class TeamDto {
+    private String id;
+    private String name;
+    private String description;
+    private Integer permissionLevel;
+    private Boolean active;
+    private LocalDateTime creationDate;
+    private LocalDateTime modificationDate;
+    private Integer employeeCount;
 
-    /**
-     * Request DTO for creating or updating a Team
-     */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class Request {
-        private String name;
-        private String description;
-        private Integer permissionLevel;
-    }
-
-    /**
-     * Response DTO for returning Team data
-     */
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Builder
     public static class Response {
-        private UUID id;
+        private String id;
         private String name;
         private String description;
         private Integer permissionLevel;
         private Boolean active;
         private LocalDateTime creationDate;
         private LocalDateTime modificationDate;
+        private Integer employeeCount;
+        private List<String> employeeIds;
     }
 
-    /**
-     * Summary DTO for list views (minimal data)
-     */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class Summary {
-        private UUID id;
+    @Builder
+    public static class Request {
         private String name;
-        private Integer memberCount;
+        private String description;
+        private Integer permissionLevel;
         private Boolean active;
     }
 
-    /**
-     * Detailed DTO with member information
-     */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class Detailed extends Response {
-        private Integer memberCount;
-        private Integer activeAssignments;
+    @Builder
+    public static class Summary {
+        private String id;
+        private String name;
+        private Integer permissionLevel;
+        private Integer employeeCount;
+        private Integer memberCount;  // ← Ajouté
+        private Boolean active;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class Detailed {
+        private String id;
+        private String name;
+        private String description;
+        private Integer permissionLevel;
+        private Boolean active;
+        private LocalDateTime creationDate;
+        private LocalDateTime modificationDate;
+        private Integer employeeCount;
+        private Integer memberCount;  // ← Ajouté
+        private Integer activeAssignments;  // ← Ajouté
+        private List<EmployeeBasicInfo> employees;
+
+        @Data
+        @NoArgsConstructor
+        @AllArgsConstructor
+        @Builder
+        public static class EmployeeBasicInfo {
+            private String id;
+            private String firstName;
+            private String lastName;
+            private String email;
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.pcagrade.order.controller;
 
+import com.pcagrade.order.dto.TeamDto;
 import com.pcagrade.order.entity.Team;
 import com.pcagrade.order.service.TeamService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,7 +27,7 @@ import java.util.*;
  * RESTful API for managing teams and roles
  */
 @RestController
-@RequestMapping("/api/teams")
+@RequestMapping("/api/v2/teams")
 @Tag(name = "Team Management", description = "API for managing teams and roles")
 @Slf4j
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"})
@@ -257,37 +258,6 @@ public class TeamController {
 
     // ========== EMPLOYEE-TEAM MANAGEMENT ==========
 
-    /**
-     * 👥 GET TEAMS FOR EMPLOYEE
-     * Endpoint: GET /api/teams/employee/{employeeId}
-     */
-    @GetMapping("/employee/{employeeId}")
-    @Operation(summary = "Get teams for employee", description = "Get all teams assigned to an employee")
-    public ResponseEntity<Map<String, Object>> getTeamsForEmployee(@PathVariable String employeeId) {
-        try {
-            log.info("👥 Getting teams for employee: {}", employeeId);
-
-            UUID empId = UUID.fromString(employeeId);
-            List<Team> teams = teamService.getTeamsForEmployee(empId);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("teams", teams);
-            response.put("employeeId", employeeId);
-            response.put("totalTeams", teams.size());
-
-            log.debug("✅ Found {} teams for employee: {}", teams.size(), employeeId);
-            return ResponseEntity.ok(response);
-
-        } catch (IllegalArgumentException e) {
-            log.warn("⚠️ Invalid employee ID: {}", employeeId);
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Invalid employee ID format"));
-        } catch (Exception e) {
-            log.error("❌ Error getting teams for employee: {}", employeeId, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error retrieving teams: " + e.getMessage()));
-        }
-    }
 
     /**
      * ➕ ASSIGN EMPLOYEE TO TEAM
@@ -324,40 +294,40 @@ public class TeamController {
         }
     }
 
-    /**
-     * ➖ REMOVE EMPLOYEE FROM TEAM
-     * Endpoint: DELETE /api/teams/remove
-     */
-    @DeleteMapping("/remove")
-    @Operation(summary = "Remove employee from team", description = "Remove an employee from a team")
-    public ResponseEntity<Map<String, Object>> removeEmployeeFromTeam(
-            @Parameter(description = "Employee ID") @RequestParam String employeeId,
-            @Parameter(description = "Team ID") @RequestParam String teamId) {
-        try {
-            log.info("➖ Removing employee {} from team {}", employeeId, teamId);
-
-            UUID empId = UUID.fromString(employeeId);
-            UUID tmId = UUID.fromString(teamId);
-
-            teamService.removeEmployeeFromTeam(empId, tmId);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Employee removed from team successfully");
-
-            log.info("✅ Employee removed successfully");
-            return ResponseEntity.ok(response);
-
-        } catch (IllegalArgumentException e) {
-            log.warn("⚠️ Invalid ID format: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            log.error("❌ Error removing employee from team", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error removing employee: " + e.getMessage()));
-        }
-    }
+//    /**
+//     * ➖ REMOVE EMPLOYEE FROM TEAM
+//     * Endpoint: DELETE /api/teams/remove
+//     */
+//    @DeleteMapping("/remove")
+//    @Operation(summary = "Remove employee from team", description = "Remove an employee from a team")
+//    public ResponseEntity<Map<String, Object>> removeEmployeeFromTeam(
+//            @Parameter(description = "Employee ID") @RequestParam String employeeId,
+//            @Parameter(description = "Team ID") @RequestParam String teamId) {
+//        try {
+//            log.info("➖ Removing employee {} from team {}", employeeId, teamId);
+//
+//            UUID empId = UUID.fromString(employeeId);
+//            UUID tmId = UUID.fromString(teamId);
+//
+//            teamService.removeEmployeeFromTeam(empId, tmId);
+//
+//            Map<String, Object> response = new HashMap<>();
+//            response.put("success", true);
+//            response.put("message", "Employee removed from team successfully");
+//
+//            log.info("✅ Employee removed successfully");
+//            return ResponseEntity.ok(response);
+//
+//        } catch (IllegalArgumentException e) {
+//            log.warn("⚠️ Invalid ID format: {}", e.getMessage());
+//            return ResponseEntity.badRequest()
+//                    .body(Map.of("error", e.getMessage()));
+//        } catch (Exception e) {
+//            log.error("❌ Error removing employee from team", e);
+//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+//                    .body(Map.of("error", "Error removing employee: " + e.getMessage()));
+//        }
+//    }
 
     /**
      * 🔄 UPDATE EMPLOYEE TEAMS
@@ -372,11 +342,11 @@ public class TeamController {
             log.info("🔄 Updating teams for employee: {}", employeeId);
 
             UUID empId = UUID.fromString(employeeId);
-            List<UUID> tmIds = teamIds.stream()
-                    .map(UUID::fromString)
-                    .toList();
+//            List<UUID> tmIds = teamIds.stream()
+//                    .map(UUID::fromString)
+//                    .toList();
 
-            teamService.updateEmployeeTeams(empId, tmIds);
+            teamService.updateEmployeeTeams(empId, teamIds);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -452,6 +422,130 @@ public class TeamController {
             log.error("❌ Error getting team statistics", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error retrieving statistics: " + e.getMessage()));
+        }
+    }
+
+
+    // ========== EMPLOYEE MANAGEMENT ENDPOINTS ==========
+
+    /**
+     * Add an employee to a team
+     * POST /api/v2/teams/{teamId}/employees/{employeeId}
+     */
+    @PostMapping("/{teamId}/employees/{employeeId}")
+    public ResponseEntity<?> addEmployeeToTeam(
+            @PathVariable String teamId,
+            @PathVariable String employeeId) {
+        try {
+            // Formater les UUIDs (ajouter tirets si manquants)
+            UUID teamUuid = parseUUID(teamId);
+            UUID employeeUuid = parseUUID(employeeId);
+
+            teamService.assignEmployeeToTeam(teamUuid, employeeUuid);
+            return ResponseEntity.ok().body(Map.of("message", "Employee added to team successfully"));
+        } catch (Exception e) {
+            log.error("Error adding employee to team", e);
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+
+    /**
+     * Parse UUID avec ou sans tirets
+     * IMPORTANT: Ne pas reformater si déjà correct !
+     */
+    private UUID parseUUID(String uuidString) {
+        if (uuidString == null || uuidString.isEmpty()) {
+            throw new IllegalArgumentException("UUID cannot be empty");
+        }
+
+        try {
+            // Essayer de parser directement (si déjà avec tirets)
+            return UUID.fromString(uuidString);
+        } catch (IllegalArgumentException e) {
+            // Si ça échoue, c'est probablement sans tirets
+            // Nettoyer et ajouter les tirets
+            String clean = uuidString.replace("-", "").toLowerCase();
+
+            if (clean.length() != 32) {
+                throw new IllegalArgumentException("Invalid UUID format: " + uuidString);
+            }
+
+            String formatted = String.format(
+                    "%s-%s-%s-%s-%s",
+                    clean.substring(0, 8),
+                    clean.substring(8, 12),
+                    clean.substring(12, 16),
+                    clean.substring(16, 20),
+                    clean.substring(20, 32)
+            );
+
+            return UUID.fromString(formatted);
+        }
+    }
+
+    /**
+     * Remove an employee from a team
+     * DELETE /api/v2/teams/{teamId}/employees/{employeeId}
+     */
+    @DeleteMapping("/{teamId}/employees/{employeeId}")
+    public ResponseEntity<?> removeEmployeeFromTeam(
+            @PathVariable String teamId,
+            @PathVariable String employeeId) {
+        try {
+            teamService.removeEmployeeFromTeam(UUID.fromString(teamId), UUID.fromString(employeeId));
+            return ResponseEntity.ok().body(Map.of("message", "Employee removed from team successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Get all employees in a team
+     * GET /api/v2/teams/{teamId}/employees
+     */
+    @GetMapping("/{teamId}/employees")
+    public ResponseEntity<?> getTeamEmployees(@PathVariable String teamId) {
+        try {
+            List<?> employees = teamService.getTeamEmployees(UUID.fromString(teamId));
+            return ResponseEntity.ok(employees);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Get all teams for an employee
+     * GET /api/v2/teams/employee/{employeeId}
+     */
+    @GetMapping("/employee/{employeeId}")
+    public ResponseEntity<?> getEmployeeTeams(@PathVariable String employeeId) {
+        try {
+            List<TeamDto> teams = teamService.getTeamsByEmployee(UUID.fromString(employeeId));
+            return ResponseEntity.ok(Map.of("teams", teams));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/employee/{employeeId}/bulk")
+    public ResponseEntity<?> bulkUpdateEmployeeTeams(
+            @PathVariable String employeeId,
+            @RequestBody Map<String, Object> payload) {
+        try {
+            List<String> teamIds = (List<String>) payload.get("teamIds");
+
+            // ✅ Convertir employeeId String en UUID, garder teamIds en List<String>
+            teamService.updateEmployeeTeams(UUID.fromString(employeeId), teamIds);
+
+            return ResponseEntity.ok().body(Map.of("message", "Employee teams updated successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
         }
     }
 }

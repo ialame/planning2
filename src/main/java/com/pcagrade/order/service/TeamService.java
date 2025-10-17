@@ -1,5 +1,6 @@
 package com.pcagrade.order.service;
 
+import com.pcagrade.order.dto.TeamDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;  // ADD THIS IMPORT
 import org.springframework.stereotype.Service;
@@ -13,10 +14,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Team Service - Business Logic Layer
@@ -216,35 +215,7 @@ public class TeamService {
         log.info("Employee {} removed from team {} successfully", employeeId, teamId);
     }
 
-    /**
-     * Update all teams for an employee (replace existing teams)
-     */
-    @Transactional
-    public void updateEmployeeTeams(UUID employeeId, List<UUID> teamIds) {
-        log.info("Updating teams for employee: {}", employeeId);
 
-        Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
-
-        // Remove employee from all current teams
-        List<Team> currentTeams = employee.getTeams().stream().toList();
-        for (Team team : currentTeams) {
-            team.getEmployees().remove(employee);
-        }
-        employee.getTeams().clear();
-
-        // Add employee to new teams
-        for (UUID teamId : teamIds) {
-            Team team = teamRepository.findById(teamId)
-                    .orElseThrow(() -> new IllegalArgumentException("Team not found: " + teamId));
-
-            team.getEmployees().add(employee);
-            employee.getTeams().add(team);
-        }
-
-        employeeRepository.save(employee);
-        log.info("Updated {} teams for employee {}", teamIds.size(), employeeId);
-    }
 
     /**
      * Get all employees in a team
@@ -368,5 +339,76 @@ public class TeamService {
         if (team.getPermissionLevel() == null || team.getPermissionLevel() < 0) {
             throw new IllegalArgumentException("Permission level must be a positive number");
         }
+    }
+
+    /**
+     * Get teams by employee (wrapper method)
+     */
+    public List<TeamDto> getTeamsByEmployee(UUID employeeId) {
+        return getTeamsByEmployee(employeeId.toString());
+    }
+
+    public List<TeamDto> getTeamsByEmployee(String employeeId) {
+        Employee employee = employeeRepository.findById(UUID.fromString(employeeId))
+                .orElseThrow(() -> new RuntimeException("Employee not found: " + employeeId));
+
+        List<Team> teams = teamRepository.findByEmployeesContaining(employee);
+
+        return teams.stream()
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
+    }
+
+    private TeamDto convertToDto(Team team) {
+        TeamDto dto = new TeamDto();
+        // ✅ ID est String, pas UUID
+        dto.setId(String.valueOf(team.getId()));  // team.getId() retourne déjà un String
+        dto.setName(team.getName());
+        dto.setDescription(team.getDescription());
+        dto.setPermissionLevel(team.getPermissionLevel());
+        dto.setActive(team.getActive());
+        dto.setCreationDate(team.getCreationDate());
+        dto.setModificationDate(team.getModificationDate());
+        dto.setEmployeeCount(team.getEmployees().size());
+        return dto;
+    }
+
+
+    // Dans TeamService.java
+
+
+    /**
+     * Update employee teams - accepts UUID + List<String>
+     */
+    public void updateEmployeeTeams(UUID employeeId, List<String> teamIds) {
+        updateEmployeeTeams(employeeId.toString(), teamIds);
+    }
+
+    /**
+     * Update employee teams - main implementation
+     */
+    public void updateEmployeeTeams(String employeeId, List<String> teamIds) {
+        Employee employee = employeeRepository.findById(UUID.fromString(employeeId))
+                .orElseThrow(() -> new RuntimeException("Employee not found: " + employeeId));
+
+        // Retirer de toutes les teams actuelles
+        List<Team> currentTeams = teamRepository.findByEmployeesContaining(employee);
+        for (Team team : currentTeams) {
+            team.getEmployees().remove(employee);
+            teamRepository.save(team);
+        }
+
+        // Ajouter aux nouvelles teams
+        for (String teamId : teamIds) {
+            Team team = teamRepository.findById(UUID.fromString(teamId))
+                    .orElseThrow(() -> new RuntimeException("Team not found: " + teamId));
+
+            if (!team.getEmployees().contains(employee)) {
+                team.getEmployees().add(employee);
+                teamRepository.save(team);
+            }
+        }
+
+        log.info("Updated teams for employee {}: {} teams", employeeId, teamIds.size());
     }
 }

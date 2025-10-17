@@ -11,19 +11,10 @@ import lombok.NoArgsConstructor;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * Team entity representing a group of employees working together
- * Renamed from "Group" to avoid SQL reserved keyword conflict
- *
- * Inherits ULID primary key from AbstractUlidEntity for:
- * - Chronological ordering
- * - Database synchronization compatibility
- * - Optimal index performance
- */
 @Entity
 @Table(name = "team")
-@Data  // ✅ MUST HAVE THIS - Generates getters/setters
-@EqualsAndHashCode(callSuper = true)
+@Data
+//@EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class Team extends AbstractUlidEntity {
