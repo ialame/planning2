@@ -162,7 +162,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
@@ -199,11 +199,6 @@ const phaseClass = computed(() => {
   return phaseMap[phase.value] || 'phase-default'
 })
 
-// Clean up SSE connection on unmount
-onUnmounted(() => {
-  closeSSEConnection()
-})
-
 // Format time
 const formatTime = (timestamp: any) => {
   return new Date(timestamp).toLocaleString('en-US', {
@@ -230,65 +225,69 @@ const showNotification = (message: string, type: 'success' | 'error' = 'success'
 
 // Add to history
 const addToHistory = (message: string, success: boolean, duration?: number) => {
-  syncHistory.value = [
-    {
-      message,
-      success,
-      duration,
-      timestamp: new Date()
-    },
-    ...syncHistory.value.slice(0, 9)
-  ]
+  syncHistory.value.unshift({
+    message,
+    success,
+    duration,
+    timestamp: new Date().toISOString()
+  })
+  if (syncHistory.value.length > 10) {
+    syncHistory.value.pop()
+  }
 }
 
-// Connect to SSE stream
+// Connect to SSE for real-time progress
 const connectSSE = (syncId: string) => {
-  closeSSEConnection()
-
   currentSyncId.value = syncId
-  const sseUrl = `${API_BASE_URL}/api/sync/progress/stream/${syncId}`
+  const url = `${API_BASE_URL}/api/sync/progress/stream/${syncId}`
 
-  console.log('📡 Connecting to SSE:', sseUrl)
+  console.log('🔌 Connecting to SSE:', url)
 
-  eventSource = new EventSource(sseUrl)
+  eventSource = new EventSource(url)
 
-  eventSource.addEventListener('progress', (event: MessageEvent) => {
+  eventSource.onmessage = (event) => {
     try {
-      const progressData = JSON.parse(event.data)
-      console.log('📊 Progress update:', progressData)
+      const data = JSON.parse(event.data)
 
-      progress.value = progressData.percentage || 0
-      currentOperation.value = progressData.currentOperation || ''
-      progressMessage.value = progressData.message || ''
-      phase.value = progressData.phase || ''
-      itemsProcessed.value = progressData.itemsProcessed || 0
-      totalItems.value = progressData.totalItems || 0
-      estimatedSecondsRemaining.value = progressData.estimatedSecondsRemaining || 0
+      if (data.type === 'KEEP_ALIVE') {
+        return
+      }
 
-      if (progressData.completed) {
-        if (progressData.error) {
-          showNotification(`❌ ${progressData.errorMessage}`, 'error')
-        } else {
-          showNotification(`✅ ${progressData.message}`, 'success')
-        }
+      progress.value = data.progress || 0
+      currentOperation.value = data.operation || ''
+      progressMessage.value = data.message || ''
+      phase.value = data.phase || ''
+      itemsProcessed.value = data.itemsProcessed || 0
+      totalItems.value = data.totalItems || 0
+      estimatedSecondsRemaining.value = data.estimatedSecondsRemaining || 0
 
+      if (data.type === 'COMPLETED') {
+        console.log('✅ Sync completed')
+        showNotification('✅ Synchronization completed successfully', 'success')
         setTimeout(() => {
           closeSSEConnection()
           syncing.value = false
           checkSyncStatus()
-        }, 1000)
+        }, 2000)
+      }
+
+      if (data.type === 'ERROR') {
+        console.error('❌ Sync error:', data.message)
+        showNotification(`❌ Sync failed: ${data.message}`, 'error')
+        closeSSEConnection()
+        syncing.value = false
       }
     } catch (error) {
-      console.error('Error parsing SSE data:', error)
+      console.error('Error parsing SSE message:', error)
     }
-  })
+  }
 
   eventSource.onerror = (error) => {
     console.error('❌ SSE connection error:', error)
-    closeSSEConnection()
 
-    if (syncing.value && progress.value < 100) {
-      showNotification('Connection lost. Please try again.', 'error')
+    if (eventSource?.readyState === EventSource.CLOSED) {
+      console.log('SSE connection closed by server')
+      showNotification('Connection closed. Please try again.', 'error')
       syncing.value = false
     }
   }
@@ -394,8 +393,18 @@ const syncCards = async () => {
 }
 
 const syncIncremental = async () => {
-  await performSync('incremental', 'Quick Sync')
+  await performSync('incremental', 'Incremental Sync')
 }
+
+// ✅ LIFECYCLE - Auto check status on mount
+onMounted(() => {
+  console.log('📊 DataSync page mounted - checking status automatically')
+  checkSyncStatus()
+})
+
+onUnmounted(() => {
+  closeSSEConnection()
+})
 </script>
 
 <style scoped>
