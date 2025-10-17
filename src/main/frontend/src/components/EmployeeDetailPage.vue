@@ -479,7 +479,7 @@ const toggleOrderCards = async (order: any) => {
 
   order.loadingCards = true
   try {
-    const orderId = order.orderId || order.id
+    const orderId = order.orderId || order.symfonyOrderId || order.id
     if (!orderId) {
       console.error('❌ No orderId found in order:', order)
       order.cards = []

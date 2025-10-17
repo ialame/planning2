@@ -1,6 +1,7 @@
 package com.pcagrade.order.model;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -10,7 +11,10 @@ import java.time.LocalDateTime;
  * Model representing sync progress events
  * Used for Server-Sent Events (SSE) to track synchronization progress
  */
-@Data
+
+
+@Data  // ✅ ADD THIS - Generates all getters/setters
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class SyncProgress {

@@ -41,7 +41,7 @@
       <PlanningView v-if="activeTab === 'planning'" />
 
       <!-- NOUVEAU -->
-      <GroupsView v-if="activeTab === 'groups'" />
+      <TeamsView v-if="activeTab === 'teams'" />
       <!-- NOUVEAU -->
       <SyncView v-if="activeTab === 'sync'" />
 
@@ -67,7 +67,7 @@ import DashboardView from './views/Dashboard.vue'
 import OrdersView from './views/Orders.vue'
 import EmployeesView from './views/Employees.vue'
 import PlanningView from './views/Planning.vue'
-import GroupsView from "./views/Groups.vue";
+import TeamsView from "./views/Teams.vue";
 import SyncView from "./views/DataSync.vue";
 
 // État global
@@ -81,9 +81,9 @@ const notification = ref({
 const tabs = [
   { id: 'dashboard', label: '📊 Dashboard' },
   { id: 'orders', label: '📋 Orders' },
-  { id: 'employees', label: '👥 Employees & Planning' },
-  { id: 'planning', label: '📅 Global Planning' },
-  { id: 'groups', label: '👥 Groups' },
+  { id: 'employees', label: '👥 Employees' },
+  { id: 'planning', label: '📅 Planning' },
+  { id: 'teams', label: '👥 Teams' },
   { id: 'sync', label: 'ApiSync' },
 ]
   // Fonction pour changer d'onglet

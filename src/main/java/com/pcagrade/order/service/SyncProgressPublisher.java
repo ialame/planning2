@@ -1,6 +1,8 @@
 package com.pcagrade.order.service;
 
+
 import com.pcagrade.order.model.SyncProgress;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -14,8 +16,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * Service to publish sync progress events via Server-Sent Events (SSE)
  * Uses Reactor's Sinks to create a non-blocking event stream
  */
-@Slf4j
+
 @Service
+@RequiredArgsConstructor
+@Slf4j  // ADD THIS ANNOTATION
 public class SyncProgressPublisher {
 
     // Map to store active sync sessions

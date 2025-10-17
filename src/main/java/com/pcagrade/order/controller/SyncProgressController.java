@@ -1,8 +1,11 @@
 package com.pcagrade.order.controller;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;  // ADD THIS IMPORT
+import org.springframework.web.bind.annotation.*;
 import com.pcagrade.order.model.SyncProgress;
 import com.pcagrade.order.service.SyncProgressPublisher;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
@@ -13,17 +16,14 @@ import reactor.core.publisher.Flux;
  *
  * Provides real-time progress updates for synchronization operations
  */
-@Slf4j
 @RestController
 @RequestMapping("/api/sync/progress")
-@CrossOrigin(origins = "*") // Allow CORS for SSE
+@RequiredArgsConstructor
+@Slf4j  // ADD THIS ANNOTATION
+@CrossOrigin(origins = "*")
 public class SyncProgressController {
 
     private final SyncProgressPublisher progressPublisher;
-
-    public SyncProgressController(SyncProgressPublisher progressPublisher) {
-        this.progressPublisher = progressPublisher;
-    }
 
     /**
      * Stream sync progress events via Server-Sent Events

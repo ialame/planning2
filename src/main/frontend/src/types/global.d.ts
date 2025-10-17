@@ -102,7 +102,8 @@ declare global {
   // ========== INTERFACES ==========
   interface Planning {
     id: string
-    orderId: string
+    symfonyOrderId: string  // ✅ NEW - Matches backend
+    orderId?: string         // ✅ DEPRECATED - Keep for compatibility
     employeeId: string
     employeeName?: string
     orderNumber?: string
@@ -112,8 +113,9 @@ declare global {
     durationMinutes: number
     cardCount?: number
     priority?: string
-    status?: string
-    completed: boolean
+    delai?: string          // ✅ ADD - Priority code (X, F+, F, C, E)
+    status?: string | number // ✅ UPDATE - Can be string or integer
+    completed?: boolean      // ✅ OPTIONAL - Not always present
     notes?: string
   }
 

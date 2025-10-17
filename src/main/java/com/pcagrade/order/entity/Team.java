@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
+
 import java.util.HashSet;
 import java.util.Set;
 
@@ -21,7 +22,7 @@ import java.util.Set;
  */
 @Entity
 @Table(name = "team")
-@Data
+@Data  // ✅ MUST HAVE THIS - Generates getters/setters
 @EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
 @AllArgsConstructor
