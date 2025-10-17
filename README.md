@@ -217,7 +217,7 @@ The main tables managed by Liquibase:
 
 | Table | Description | Created By |
 |-------|-------------|------------|
-| `order` | Pokemon card orders (synced from Symfony) | Liquibase |
+| card_order | Pokemon card orders (synced from Symfony) | Liquibase |
 | `card_certification` | Individual cards being processed | Liquibase |
 | `employee` | Employees with work hours and efficiency | Liquibase |
 | `team` | Roles (Admin, Manager, Grader, etc.) | Liquibase |
@@ -487,7 +487,7 @@ class PlanningExportController extends AbstractController
             // Count total
             $countSql = "
                 SELECT COUNT(DISTINCT o.id) as total
-                FROM `order` o
+                FROM card_order o
                 WHERE o.annulee = 0
             ";
 
@@ -522,7 +522,7 @@ class PlanningExportController extends AbstractController
                     o.status,
                     COALESCE(i.total_ttc, 0.0) as price,
                     o.delai as delai
-                FROM `order` o
+                FROM card_order o
                 LEFT JOIN customer c ON o.customer_id = c.id
                 LEFT JOIN card_certification_order cco ON cco.order_id = o.id
                 LEFT JOIN invoice i ON i.order_id = o.id
@@ -618,7 +618,7 @@ class PlanningExportController extends AbstractController
                 SELECT COUNT(*) as total
                 FROM card_certification cc
                 JOIN card_certification_order cco ON cco.card_certification_id = cc.id
-                INNER JOIN `order` o ON cco.order_id = o.id
+                INNER JOIN card_order o ON cco.order_id = o.id
                 WHERE cc.deleted = 0
                 AND o.annulee = 0
             ";
@@ -662,7 +662,7 @@ class PlanningExportController extends AbstractController
                     0 as packaging_completed
                 FROM card_certification cc
                 JOIN card_certification_order cco ON cco.card_certification_id = cc.id
-                INNER JOIN `order` o ON cco.order_id = o.id
+                INNER JOIN card_order o ON cco.order_id = o.id
                 JOIN card ON cc.card_id = card.id
                 LEFT JOIN card_translation ct ON ct.translatable_id = card.id AND ct.locale = 'us'
                 WHERE cc.deleted = 0
@@ -756,11 +756,11 @@ class PlanningExportController extends AbstractController
             }
 
             // Count total orders
-            $sql = "SELECT COUNT(*) as total FROM `order` WHERE annulee = 0";
+            $sql = "SELECT COUNT(*) as total FROM card_order WHERE annulee = 0";
             $totalOrders = $this->connection->executeQuery($sql)->fetchOne();
 
             // Count exportable orders
-            $sql = "SELECT COUNT(*) as exportable FROM `order` o " . $whereClause;
+            $sql = "SELECT COUNT(*) as exportable FROM card_order o " . $whereClause;
             $stmt = $this->connection->prepare($sql);
             foreach ($params as $key => $value) {
                 $stmt->bindValue($key, $value, $types[$key]);
@@ -776,7 +776,7 @@ class PlanningExportController extends AbstractController
                 SELECT COUNT(*) as exportable
                 FROM card_certification cc
                 JOIN card_certification_order cco ON cco.card_certification_id = cc.id
-                INNER JOIN `order` o ON cco.order_id = o.id
+                INNER JOIN card_order o ON cco.order_id = o.id
                 WHERE cc.deleted = 0
             ";
 
@@ -827,7 +827,7 @@ class PlanningExportController extends AbstractController
 
             $sql = "
                 SELECT COUNT(DISTINCT o.id) as total
-                FROM `order` o
+                FROM card_order o
                 WHERE o.annulee = 0
             ";
 
@@ -885,7 +885,7 @@ class PlanningExportController extends AbstractController
                 SELECT COUNT(*) as total
                 FROM card_certification cc
                 JOIN card_certification_order cco ON cco.card_certification_id = cc.id
-                INNER JOIN `order` o ON cco.order_id = o.id
+                INNER JOIN card_order o ON cco.order_id = o.id
                 WHERE cc.deleted = 0
                 AND o.annulee = 0
             ";

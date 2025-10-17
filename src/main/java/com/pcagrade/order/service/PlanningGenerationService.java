@@ -63,7 +63,7 @@ public class PlanningGenerationService {
                     HEX(o.id) as orderId,
                     o.num_commande as orderNumber,
                     o.date as orderDate
-                FROM `order` o
+                FROM card_order o
                 WHERE o.date >= ?
                 ORDER BY o.date ASC
                 LIMIT 10

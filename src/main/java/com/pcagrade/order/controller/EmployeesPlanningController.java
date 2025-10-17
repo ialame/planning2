@@ -291,7 +291,7 @@ public class EmployeesPlanningController {
                 p.progress_percentage,
                 ROUND(p.estimated_duration_minutes / 60.0, 2) as estimatedHours
             FROM planning p
-            LEFT JOIN `order` o ON p.order_id = o.id
+            LEFT JOIN card_order o ON p.order_id = o.id
             WHERE HEX(p.employee_id) = ?"""
                     + dateFilter + """
             ORDER BY p.planning_date DESC, p.start_time ASC

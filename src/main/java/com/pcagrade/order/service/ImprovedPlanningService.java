@@ -204,7 +204,7 @@ public class ImprovedPlanningService {
                 COALESCE(o.total_cards, 0) as cardCount,
                 o.delai,
                 o.date as date
-            FROM `order` o
+            FROM card_order o
             WHERE o.status = ?
             ORDER BY
                 CASE o.delai

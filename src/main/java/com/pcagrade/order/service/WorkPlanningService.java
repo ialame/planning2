@@ -44,66 +44,94 @@ public class WorkPlanningService {
     public List<WorkAssignment> generateWorkPlan() {
         log.info("Starting work plan generation...");
 
-        // Get all pending orders sorted by priority
-        List<Order> pendingOrders = orderRepository
-                .findByStatus(OrderStatus.PENDING)
-                .stream()
-                .sorted(Comparator.comparing(Order::getPriorityScore))
-                .collect(Collectors.toList());
-
-        log.info("Found {} pending orders to schedule", pendingOrders.size());
+        // Clear previous assignments
+        workAssignmentRepository.deleteAll();
 
         List<WorkAssignment> allAssignments = new ArrayList<>();
 
-        // Process each stage in sequence
-        for (String stage : STAGE_ROLE_MAP.keySet()) {
-            String requiredRole = STAGE_ROLE_MAP.get(stage);
+        // ✅ FIX: Process orders by their CURRENT status only
 
-            // Get available employees for this stage
-            List<Employee> availableEmployees = employeeRepository
-                    .findByActiveAndRolesContaining(true, requiredRole);
+        // 1. GRADING: orders with status = 2 (A_NOTER)
+        List<Order> ordersToGrade = orderRepository.findByStatusInteger(2);
+        allAssignments.addAll(assignOrdersToStage(ordersToGrade, "GRADING", "ROLE_GRADER"));
+        log.info("✅ Created {} GRADING assignments", ordersToGrade.size());
 
-            if (availableEmployees.isEmpty()) {
-                log.warn("No employees available for stage: {}", stage);
-                continue;
-            }
+        // 2. CERTIFYING: orders with status = 3 (A_CERTIFIER)
+        List<Order> ordersToCertify = orderRepository.findByStatusInteger(3);
+        allAssignments.addAll(assignOrdersToStage(ordersToCertify, "CERTIFYING", "ROLE_CERTIFIER"));
+        log.info("✅ Created {} CERTIFYING assignments", ordersToCertify.size());
 
-            log.info("Scheduling {} stage with {} employees", stage, availableEmployees.size());
+        // 3. PACKAGING: orders with status = 4 (A_PREPARER)
+        List<Order> ordersToPackage = orderRepository.findByStatusInteger(4);
+        allAssignments.addAll(assignOrdersToStage(ordersToPackage, "PACKAGING", "ROLE_PACKAGER"));
+        log.info("✅ Created {} PACKAGING assignments", ordersToPackage.size());
 
-            // Create employee workload tracker
-            Map<UUID, EmployeeWorkload> workloadMap = new HashMap<>();
-            for (Employee emp : availableEmployees) {
-                workloadMap.put(emp.getId(), new EmployeeWorkload(emp));
-            }
-
-            // Distribute orders to employees
-            for (Order order : pendingOrders) {
-                // Find employee with least workload
-                Employee selectedEmployee = selectEmployeeWithMinWorkload(workloadMap);
-
-                // Create work assignment
-                WorkAssignment assignment = createAssignment(
-                        selectedEmployee,
-                        order,
-                        stage,
-                        workloadMap.get(selectedEmployee.getId())
-                );
-
-                allAssignments.add(assignment);
-
-                // Update workload tracker
-                workloadMap.get(selectedEmployee.getId())
-                        .addWorkload(assignment.getEstimatedDurationMinutes());
-            }
-        }
+        // 4. SCANNING: orders with status = 10 (A_SCANNER)
+        List<Order> ordersToScan = orderRepository.findByStatusInteger(10);
+        allAssignments.addAll(assignOrdersToStage(ordersToScan, "SCANNING", "ROLE_SCANNER"));
+        log.info("✅ Created {} SCANNING assignments", ordersToScan.size());
 
         // Save all assignments
         List<WorkAssignment> savedAssignments = workAssignmentRepository.saveAll(allAssignments);
 
-        log.info("Work plan generated: {} assignments created", savedAssignments.size());
+        log.info("🎉 Work plan generated: {} total assignments created for {} orders",
+                savedAssignments.size(),
+                ordersToGrade.size() + ordersToCertify.size() + ordersToPackage.size() + ordersToScan.size());
 
         return savedAssignments;
     }
+
+    // Add the helper method
+    private List<WorkAssignment> assignOrdersToStage(List<Order> orders, String stage, String requiredRole) {
+        List<WorkAssignment> assignments = new ArrayList<>();
+
+        if (orders.isEmpty()) {
+            log.info("No orders found for stage: {}", stage);
+            return assignments;
+        }
+
+        // Get available employees for this role
+        List<Employee> availableEmployees = employeeRepository
+                .findByActiveAndRolesContaining(true, requiredRole);
+
+        if (availableEmployees.isEmpty()) {
+            log.warn("⚠️ No employees available for stage: {} with role: {}", stage, requiredRole);
+            return assignments;
+        }
+
+        log.info("📋 Scheduling {} orders for {} stage with {} employees",
+                orders.size(), stage, availableEmployees.size());
+
+        // Create employee workload tracker
+        Map<UUID, EmployeeWorkload> workloadMap = new HashMap<>();
+        for (Employee emp : availableEmployees) {
+            workloadMap.put(emp.getId(), new EmployeeWorkload(emp));
+        }
+
+        // Sort orders by priority
+        List<Order> sortedOrders = orders.stream()
+                .sorted(Comparator.comparing(Order::getPriorityScore))
+                .collect(Collectors.toList());
+
+        // Distribute orders to employees
+        for (Order order : sortedOrders) {
+            Employee selectedEmployee = selectEmployeeWithMinWorkload(workloadMap);
+
+            WorkAssignment assignment = createAssignment(
+                    selectedEmployee,
+                    order,
+                    stage,
+                    workloadMap.get(selectedEmployee.getId())
+            );
+
+            assignments.add(assignment);
+            workloadMap.get(selectedEmployee.getId())
+                    .addWorkload(assignment.getEstimatedDurationMinutes());
+        }
+
+        return assignments;
+    }
+
 
     /**
      * Create a work assignment

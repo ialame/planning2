@@ -211,7 +211,7 @@ public class PlanningService {
                     o.prix_total as prixTotal,
                     o.date_creation as dateCreation,
                     o.duree_estimee_minutes as dureeEstimee
-                FROM `order` o 
+                FROM card_order o 
                 WHERE o.date_creation >= :fromDate 
                   AND o.statut = 1 
                 ORDER BY 

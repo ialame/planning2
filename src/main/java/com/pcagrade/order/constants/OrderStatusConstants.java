@@ -283,7 +283,7 @@ public final class OrderStatusConstants {
 
     // Example 3: Filter orders by planning stages
     String sql = """
-        SELECT * FROM `order`
+        SELECT * FROM card_order
         WHERE status IN (2, 3, 4, 6, 7, 10, 11)
           AND annulee = 0
         """;

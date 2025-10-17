@@ -432,24 +432,31 @@ public class TeamController {
      * Add an employee to a team
      * POST /api/v2/teams/{teamId}/employees/{employeeId}
      */
+    // Dans TeamController.java, ligne ~145
+
     @PostMapping("/{teamId}/employees/{employeeId}")
     public ResponseEntity<?> addEmployeeToTeam(
             @PathVariable String teamId,
             @PathVariable String employeeId) {
         try {
-            // Formater les UUIDs (ajouter tirets si manquants)
+            log.info("➕ Adding employee {} to team {}", employeeId, teamId);
+
             UUID teamUuid = parseUUID(teamId);
             UUID employeeUuid = parseUUID(employeeId);
 
-            teamService.assignEmployeeToTeam(teamUuid, employeeUuid);
-            return ResponseEntity.ok().body(Map.of("message", "Employee added to team successfully"));
+            // ✅ Ordre correct : employeeId PUIS teamId
+            teamService.assignEmployeeToTeam(employeeUuid, teamUuid);
+
+            return ResponseEntity.ok().body(Map.of(
+                    "message", "Employee added to team successfully",
+                    "success", true
+            ));
         } catch (Exception e) {
-            log.error("Error adding employee to team", e);
+            log.error("❌ Error adding employee to team", e);
             return ResponseEntity.badRequest()
                     .body(Map.of("error", e.getMessage()));
         }
     }
-
 
     /**
      * Parse UUID avec ou sans tirets

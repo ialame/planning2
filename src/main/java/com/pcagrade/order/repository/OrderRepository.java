@@ -18,6 +18,13 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     
     Optional<Order> findByOrderNumber(String orderNumber);
 
+    //List<Order> findByStatus(Integer status);
+
+    // Add this to OrderRepository.java
+
+    @Query(value = "SELECT * FROM card_order WHERE status = :status", nativeQuery = true)
+    List<Order> findByStatusInteger(@Param("status") Integer status);
+
     /**
      * Find orders by customer name (case insensitive search)
      */

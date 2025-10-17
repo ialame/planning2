@@ -191,7 +191,9 @@ public class TeamService {
         team.getEmployees().add(employee);
         employee.getTeams().add(team);
 
+        // ✅ IMPORTANT: Ne sauvegarder qu'une seule entité pour éviter la récursion
         teamRepository.save(team);
+
         log.info("Employee {} assigned to team {} successfully", employeeId, teamId);
     }
 

@@ -302,10 +302,10 @@ curl -X POST http://localhost:8080/api/sync/incremental
 ```sql
 -- Trigger on dev.order insert/update
 CREATE TRIGGER sync_order_to_planning
-AFTER INSERT ON dev.`order`
+AFTER INSERT ON dev.card_order
 FOR EACH ROW
 BEGIN
-    INSERT INTO `dev-planning`.`order` VALUES (NEW.*);
+    INSERT INTO `dev-planning`.card_order VALUES (NEW.*);
 END;
 ```
 
@@ -338,8 +338,8 @@ Control what gets synced by modifying `DataSyncController.java`:
 ```java
 // Sync only specific statuses
 String sql = """
-    INSERT INTO `order` 
-    SELECT * FROM dev.`order` 
+    INSERT INTO card_order 
+    SELECT * FROM dev.card_order 
     WHERE status IN (2, 3, 4, 10)
     """;
 ```
@@ -348,8 +348,8 @@ String sql = """
 ```java
 // Use INSERT IGNORE or ON DUPLICATE KEY UPDATE
 String sql = """
-    INSERT INTO `order` 
-    SELECT * FROM dev.`order`
+    INSERT INTO card_order 
+    SELECT * FROM dev.card_order
     ON DUPLICATE KEY UPDATE
         status = VALUES(status),
         date_modification = VALUES(date_modification)
@@ -387,10 +387,10 @@ curl http://localhost:8080/api/sync/status | jq
 mysql -u ia -pfoufafou << 'EOF'
 SELECT 
     'order' as table_name,
-    (SELECT COUNT(*) FROM dev.`order`) as dev,
-    (SELECT COUNT(*) FROM `dev-planning`.`order`) as planning,
-    (SELECT COUNT(*) FROM dev.`order`) - 
-    (SELECT COUNT(*) FROM `dev-planning`.`order`) as diff
+    (SELECT COUNT(*) FROM dev.card_order) as dev,
+    (SELECT COUNT(*) FROM `dev-planning`.card_order) as planning,
+    (SELECT COUNT(*) FROM dev.card_order) - 
+    (SELECT COUNT(*) FROM `dev-planning`.card_order) as diff
 UNION ALL
 SELECT 'card',
     (SELECT COUNT(*) FROM dev.`card`),
@@ -471,7 +471,7 @@ For databases with millions of records:
 int batchSize = 1000;
 for (int offset = 0; offset < totalRecords; offset += batchSize) {
     String sql = String.format(
-        "INSERT INTO `order` SELECT * FROM dev.`order` LIMIT %d, %d",
+        "INSERT INTO card_order SELECT * FROM dev.card_order LIMIT %d, %d",
         offset, batchSize
     );
     // execute

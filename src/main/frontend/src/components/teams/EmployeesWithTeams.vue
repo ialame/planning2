@@ -74,7 +74,7 @@
             class="btn-secondary"
           >
             <Filter class="w-4 h-4 mr-2" />
-            Clear
+            Clear Filters
           </button>
         </div>
       </div>
@@ -85,26 +85,20 @@
       <div
         v-for="employee in filteredEmployees"
         :key="employee.id"
-        class="card hover:shadow-md transition-shadow"
+        class="card hover:shadow-lg transition-shadow"
       >
-        <div class="flex items-center justify-between">
+        <div class="flex items-center">
           <!-- Employee Info -->
-          <div class="flex items-center space-x-4">
-            <div class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
+          <div class="flex items-center space-x-4 w-1/3">
+            <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
               {{ getEmployeeInitials(employee) }}
             </div>
             <div>
-              <h3 class="text-lg font-semibold text-gray-900">{{ employee.fullName }}</h3>
-              <p class="text-gray-600">{{ employee.email }}</p>
-              <div class="flex items-center space-x-2 mt-1">
-                <span class="text-sm bg-gray-100 text-gray-800 px-2 py-1 rounded">
-                  {{ employee.workHoursPerDay }}h/day
-                </span>
-                <span class="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">
-                  {{ employee.efficiencyRating }}x efficiency
-                </span>
+              <h3 class="font-semibold text-gray-900">{{ employee.fullName }}</h3>
+              <p class="text-sm text-gray-600">{{ employee.email }}</p>
+              <div class="mt-1">
                 <span :class="[
-                  'text-sm px-2 py-1 rounded',
+                  'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
                   employee.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                 ]">
                   {{ employee.active ? 'Active' : 'Inactive' }}
@@ -186,13 +180,13 @@
       <p class="text-gray-600">Loading employees...</p>
     </div>
 
-    <!-- Employee Team Management Modal -->
+    <!-- Employee Team Management Modal - FIXED -->
     <EmployeeTeamManagementModal
       v-if="selectedEmployee"
       :employee="selectedEmployee"
-      :current-teams="selectedEmployee.teams"
-      @close="selectedEmployee = null"
-      @updated="onEmployeeTeamsUpdated"
+      :availableTeams="allTeams"
+      @close="handleModalClose"
+      @saved="handleModalSaved"
     />
   </div>
 </template>
@@ -230,6 +224,7 @@ interface Team {
   description: string
   permissionLevel: number
   active: boolean
+  employeeCount?: number
 }
 
 // ========== PROPS & EMITS ==========
@@ -242,6 +237,7 @@ const loading = ref(false)
 const searchTerm = ref('')
 const roleFilter = ref('')
 const employees = ref<Employee[]>([])
+const allTeams = ref<Team[]>([])
 const selectedEmployee = ref<Employee | null>(null)
 
 // ========== COMPUTED ==========
@@ -255,11 +251,14 @@ const employeeStats = computed(() => {
   }
 
   employees.value.forEach(emp => {
-    const highestLevel = getHighestPermissionLevel(emp)
-    if (highestLevel >= 8) stats.admins++
-    else if (highestLevel >= 5) stats.managers++
-    else if (highestLevel >= 3) stats.processors++
-    else stats.unassigned++
+    if (emp.teams.length === 0) {
+      stats.unassigned++
+    } else {
+      const highestLevel = Math.max(...emp.teams.map(t => t.permissionLevel))
+      if (highestLevel >= 8) stats.admins++
+      else if (highestLevel >= 5) stats.managers++
+      else stats.processors++
+    }
   })
 
   return stats
@@ -274,70 +273,105 @@ const filteredEmployees = computed(() => {
     filtered = filtered.filter(emp =>
       emp.fullName.toLowerCase().includes(search) ||
       emp.email.toLowerCase().includes(search) ||
-      emp.teams.some(g => g.name.toLowerCase().includes(search))
+      emp.teams.some(t => t.name.toLowerCase().includes(search))
     )
   }
 
   // Role filter
   if (roleFilter.value) {
     filtered = filtered.filter(emp => {
-      const highestLevel = getHighestPermissionLevel(emp)
+      if (roleFilter.value === 'unassigned') {
+        return emp.teams.length === 0
+      }
+
+      const highestLevel = emp.teams.length > 0
+        ? Math.max(...emp.teams.map(t => t.permissionLevel))
+        : 0
+
       switch (roleFilter.value) {
         case 'admin': return highestLevel >= 8
         case 'manager': return highestLevel >= 5 && highestLevel < 8
         case 'processor': return highestLevel >= 3 && highestLevel < 5
-        case 'viewer': return highestLevel >= 1 && highestLevel < 3
-        case 'unassigned': return emp.teams.length === 0
+        case 'viewer': return highestLevel > 0 && highestLevel < 3
         default: return true
       }
     })
   }
 
-  return filtered.sort((a, b) => {
-    // Sort by highest permission level (descending), then by name
-    const aLevel = getHighestPermissionLevel(a)
-    const bLevel = getHighestPermissionLevel(b)
-    if (aLevel !== bLevel) return bLevel - aLevel
-    return a.fullName.localeCompare(b.fullName)
-  })
+  return filtered
 })
 
 // ========== METHODS ==========
 const loadEmployees = async () => {
   loading.value = true
+  console.log('🔄 Starting to load employees...')
+
   try {
-    const response = await fetch(`${API_BASE_URL}/api/employees`)
+    const url = `${API_BASE_URL}/api/employees`
+    console.log('📡 Fetching from:', url)
+
+    const response = await fetch(url)
+    console.log('📥 Response status:', response.status, response.statusText)
+
     if (response.ok) {
       const data = await response.json()
+      console.log('📦 Raw API response:', data)
+      console.log('📦 Data type:', typeof data, 'Is array?', Array.isArray(data))
 
-      // ✅ FIXED: Handle both response formats
-      let employeeList = []
-      if (data.employees && Array.isArray(data.employees)) {
-        // Format: { employees: [...] }
-        employeeList = data.employees
-        console.log('✅ Loaded employees from data.employees:', employeeList.length)
-      } else if (Array.isArray(data)) {
-        // Format: [...]
-        employeeList = data
-        console.log('✅ Loaded employees from direct array:', employeeList.length)
+      let employeeList: Employee[] = []
+
+      // The /api/employees endpoint returns a direct array
+      if (Array.isArray(data)) {
+        employeeList = data.map(emp => ({
+          id: emp.id,
+          firstName: emp.firstName,
+          lastName: emp.lastName,
+          fullName: emp.fullName || `${emp.firstName} ${emp.lastName}`,
+          email: emp.email,
+          active: emp.active,
+          workHoursPerDay: emp.workHoursPerDay,
+          efficiencyRating: emp.efficiencyRating || 1.0,
+          teams: []
+        }))
+        console.log('✅ Using direct array format, count:', employeeList.length)
+      } else if (data.employees && Array.isArray(data.employees)) {
+        // Fallback for wrapped format
+        employeeList = data.employees.map(emp => ({
+          id: emp.id,
+          firstName: emp.firstName,
+          lastName: emp.lastName,
+          fullName: emp.fullName || `${emp.firstName} ${emp.lastName}`,
+          email: emp.email,
+          active: emp.active,
+          workHoursPerDay: emp.workHoursPerDay,
+          efficiencyRating: emp.efficiencyRating || 1.0,
+          teams: []
+        }))
+        console.log('✅ Using data.employees format, count:', employeeList.length)
       } else {
         console.error('❌ Unexpected response format:', data)
+        console.error('❌ Available keys:', Object.keys(data))
         return
       }
+
+      console.log('👥 Employee list sample:', employeeList.slice(0, 2))
 
       // Load teams for each employee
       const employeesWithTeams = await Promise.all(
         employeeList.map(async (emp: Employee) => {
           try {
-            const teamsResponse = await fetch(`${API_BASE_URL}/api/v2/teams/employee/${emp.id}`)
+            // Format UUID with hyphens for API call
+            const formattedId = formatUUID(emp.id)
+            const teamsResponse = await fetch(`${API_BASE_URL}/api/v2/teams/employee/${formattedId}`)
             if (teamsResponse.ok) {
               const teamsData = await teamsResponse.json()
               emp.teams = teamsData.teams || []
             } else {
+              console.warn(`⚠️ Failed to load teams for employee ${emp.id}:`, teamsResponse.status)
               emp.teams = []
             }
           } catch (error) {
-            console.error(`Error loading teams for employee ${emp.id}:`, error)
+            console.error(`❌ Error loading teams for employee ${emp.id}:`, error)
             emp.teams = []
           }
           return emp
@@ -345,21 +379,54 @@ const loadEmployees = async () => {
       )
 
       employees.value = employeesWithTeams
-      console.log(`✅ Final result: ${employees.value.length} employees with teams loaded`)
+      console.log('✅ SUCCESS! Employees loaded:', employees.value.length)
+      console.log('👤 First employee sample:', employees.value[0])
+      console.log('🔍 filteredEmployees computed:', filteredEmployees.value.length)
     } else {
-      console.error('❌ Failed to load employees:', response.status, response.statusText)
+      console.error('❌ HTTP Error:', response.status, response.statusText)
     }
   } catch (error) {
-    console.error('❌ Error loading employees:', error)
+    console.error('❌ Exception during loadEmployees:', error)
   } finally {
     loading.value = false
+    console.log('✅ loadEmployees completed, loading =', loading.value)
   }
 }
 
-const onEmployeeTeamsUpdated = async () => {
+const loadAllTeams = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v2/teams`)
+    if (response.ok) {
+      const data = await response.json()
+      allTeams.value = data.teams || data || []
+      console.log(`✅ Loaded ${allTeams.value.length} teams`)
+    } else {
+      console.error('❌ Failed to load teams:', response.status)
+    }
+  } catch (error) {
+    console.error('❌ Error loading teams:', error)
+  }
+}
+
+const manageEmployeeTeams = (employee: Employee) => {
+  console.log('🔧 Opening modal for employee:', employee.fullName)
+  selectedEmployee.value = employee
+}
+
+const handleModalClose = () => {
+  console.log('❌ Modal closed')
   selectedEmployee.value = null
+}
+
+const handleModalSaved = async () => {
+  console.log('✅ Modal saved, reloading employees')
   await loadEmployees()
+  selectedEmployee.value = null
   emit('updated')
+}
+
+const viewEmployeeDetails = (employee: Employee) => {
+  alert(`Employee Details:\n\nName: ${employee.fullName}\nEmail: ${employee.email}\nWork Hours: ${employee.workHoursPerDay}h/day\nTeams: ${employee.teams.length}`)
 }
 
 const clearFilters = () => {
@@ -368,37 +435,53 @@ const clearFilters = () => {
 }
 
 const exportEmployeeRoles = () => {
-  // Generate CSV export of employee roles
-  const csvContent = generateEmployeeRolesCSV()
-  downloadCSV(csvContent, 'employee-roles.csv')
+  const headers = ['Name', 'Email', 'Teams', 'Highest Permission', 'Primary Role', 'Status']
+  const rows = filteredEmployees.value.map(emp => [
+    emp.fullName,
+    emp.email,
+    emp.teams.map(t => t.name).join('; '),
+    emp.teams.length > 0 ? Math.max(...emp.teams.map(t => t.permissionLevel)) : '0',
+    getPrimaryRole(emp),
+    emp.active ? 'Active' : 'Inactive'
+  ])
+
+  const csv = [headers, ...rows].map(row =>
+    row.map(cell => `"${cell}"`).join(',')
+  ).join('\n')
+
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `employee-roles-${new Date().toISOString().split('T')[0]}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(url)
 }
 
-// ========== UTILITY FUNCTIONS ==========
 const getEmployeeInitials = (employee: Employee) => {
-  return `${employee.firstName?.charAt(0) || ''}${employee.lastName?.charAt(0) || ''}`
-}
-
-const getHighestPermissionLevel = (employee: Employee) => {
-  if (employee.teams.length === 0) return 0
-  return Math.max(...employee.teams.map(g => g.permissionLevel))
+  return `${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}`.toUpperCase()
 }
 
 const getPrimaryRole = (employee: Employee) => {
-  const level = getHighestPermissionLevel(employee)
-  if (level >= 8) return 'Administrator'
-  if (level >= 5) return 'Manager'
-  if (level >= 3) return 'Processor'
-  if (level >= 1) return 'Viewer'
-  return 'Unassigned'
+  if (employee.teams.length === 0) return 'No Role'
+
+  const highestLevel = Math.max(...employee.teams.map(t => t.permissionLevel))
+  if (highestLevel >= 8) return 'Administrator'
+  if (highestLevel >= 5) return 'Manager'
+  if (highestLevel >= 3) return 'Processor'
+  return 'Viewer'
 }
 
 const getPrimaryRoleColor = (employee: Employee) => {
-  const level = getHighestPermissionLevel(employee)
-  if (level >= 8) return 'text-red-600'
-  if (level >= 5) return 'text-yellow-600'
-  if (level >= 3) return 'text-blue-600'
-  if (level >= 1) return 'text-gray-600'
-  return 'text-gray-400'
+  if (employee.teams.length === 0) return 'text-gray-600'
+
+  const highestLevel = Math.max(...employee.teams.map(t => t.permissionLevel))
+  if (highestLevel >= 8) return 'text-red-600'
+  if (highestLevel >= 5) return 'text-yellow-600'
+  if (highestLevel >= 3) return 'text-blue-600'
+  return 'text-gray-600'
 }
 
 const getPermissionBadgeColor = (level: number) => {
@@ -415,56 +498,25 @@ const getTeamIcon = (level: number) => {
   return '👀'
 }
 
-const generateEmployeeRolesCSV = () => {
-  const headers = ['Name', 'Email', 'Teams', 'Highest Permission Level', 'Primary Role', 'Status']
-  const rows = employees.value.map(emp => [
-    emp.fullName,
-    emp.email,
-    emp.teams.map(g => g.name).join('; '),
-    getHighestPermissionLevel(emp),
-    getPrimaryRole(emp),
-    emp.active ? 'Active' : 'Inactive'
-  ])
+// Helper function to format UUID with hyphens
+const formatUUID = (uuid: string) => {
+  if (!uuid) return uuid
 
-  return [headers, ...rows].map(row =>
-    row.map(cell => `"${cell}"`).join(',')
-  ).join('\n')
+  // Remove any existing hyphens and convert to lowercase
+  const cleaned = uuid.replace(/-/g, '').toLowerCase()
+
+  // Add hyphens in the correct positions for UUID format: 8-4-4-4-12
+  if (cleaned.length === 32) {
+    return `${cleaned.slice(0, 8)}-${cleaned.slice(8, 12)}-${cleaned.slice(12, 16)}-${cleaned.slice(16, 20)}-${cleaned.slice(20)}`
+  }
+
+  return uuid
 }
 
-const downloadCSV = (content: string, filename: string) => {
-  const blob = new Blob([content], { type: 'text/csv' })
-  const url = window.URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  window.URL.revokeObjectURL(url)
-}
-// Dans EmployeesWithTeams.vue, remplacez ces méthodes par :
-
-const manageEmployeeTeams = (employee: Employee) => {
-  console.log('🔧 Managing teams for employee:', employee)
-  console.log('Employee data:', {
-    id: employee.id,
-    name: employee.fullName,
-    email: employee.email,
-    teams: employee.teams
-  })
-
-  selectedEmployee.value = employee
-  console.log('✅ selectedEmployee set to:', selectedEmployee.value)
-}
-
-const viewEmployeeDetails = (employee: Employee) => {
-  console.log('👁️ Viewing details for employee:', employee)
-  // Pour l'instant, juste un log - vous pouvez implementer une modal de détails plus tard
-  alert(`Employee Details:\n\nName: ${employee.fullName}\nEmail: ${employee.email}\nWork Hours: ${employee.workHoursPerDay}h/day\nTeams: ${employee.teams.length}`)
-}
 // ========== LIFECYCLE ==========
 onMounted(() => {
   loadEmployees()
+  loadAllTeams()
 })
 </script>
 

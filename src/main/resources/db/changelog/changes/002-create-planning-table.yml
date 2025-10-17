@@ -130,7 +130,7 @@ databaseChangeLog:
             onDelete: CASCADE
             onUpdate: CASCADE
 
-        # Note: NO foreign key to `order` table (read-only, managed externally)
+        # Note: NO foreign key to card_order table (read-only, managed externally)
         # We reference order_id but don't enforce FK constraint
 
         # Create indexes for performance
