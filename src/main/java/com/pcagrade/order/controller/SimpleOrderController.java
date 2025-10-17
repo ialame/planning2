@@ -1,7 +1,10 @@
 package com.pcagrade.order.controller;
 
+import com.pcagrade.order.entity.Card;
+import com.pcagrade.order.entity.CardCertification;
 import com.pcagrade.order.entity.Order;
 import com.pcagrade.order.entity.OrderStatus;
+import com.pcagrade.order.repository.CardCertificationRepository;
 import com.pcagrade.order.repository.OrderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,9 +29,15 @@ public class SimpleOrderController {
     private static final Logger log = LoggerFactory.getLogger(SimpleOrderController.class);
 
     private final OrderRepository orderRepository;
+    private final CardCertificationRepository cardCertificationRepository;
 
-    public SimpleOrderController(OrderRepository orderRepository) {
+
+
+    public SimpleOrderController(
+            OrderRepository orderRepository,
+            CardCertificationRepository cardCertificationRepository) {
         this.orderRepository = orderRepository;
+        this.cardCertificationRepository = cardCertificationRepository;
     }
 
     /**
@@ -263,5 +272,141 @@ public class SimpleOrderController {
         }
 
         return stats;
+    }
+
+
+    // Add these methods to SimpleOrderController.java after the getOrder method
+
+    /**
+     * GET /api/orders/{id}/cards
+     * Get all cards for a specific order from card_certification table
+     */
+    @GetMapping("/{id}/cards")
+    public ResponseEntity<Map<String, Object>> getOrderCards(@PathVariable String id) {
+        try {
+            log.info("🃏 GET /api/orders/{}/cards", id);
+
+            // Try to find order by order number first
+            Optional<Order> orderOpt = orderRepository.findByOrderNumber(id);
+
+            // If not found, try by UUID
+            if (orderOpt.isEmpty()) {
+                try {
+                    UUID uuid = UUID.fromString(id);
+                    orderOpt = orderRepository.findById(uuid);
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid order identifier: {}", id);
+                }
+            }
+
+            if (orderOpt.isEmpty()) {
+                log.warn("Order not found: {}", id);
+                return ResponseEntity.status(404).body(Map.of(
+                        "success", false,
+                        "error", "Order not found"
+                ));
+            }
+
+            Order order = orderOpt.get();
+
+            // ✅ Get cards from card_certification table
+            List<CardCertification> certifications = cardCertificationRepository.findByOrderId(order.getId());
+
+            log.info("✅ Found {} cards in card_certification for order {}", certifications.size(), order.getOrderNumber());
+
+            // Convert certifications to response format
+            List<Map<String, Object>> cardMaps = new ArrayList<>();
+
+            if (certifications.isEmpty() && order.getTotalCards() != null && order.getTotalCards() > 0) {
+                // Fallback: generate virtual cards
+                log.info("   No certifications found, generating {} virtual cards", order.getTotalCards());
+
+                for (int i = 1; i <= order.getTotalCards(); i++) {
+                    Map<String, Object> virtualCard = new HashMap<>();
+                    virtualCard.put("id", UUID.randomUUID().toString());
+                    virtualCard.put("cardName", "Card " + i);
+                    virtualCard.put("name", "Card " + i);
+                    virtualCard.put("cardNumber", String.valueOf(i));
+                    virtualCard.put("labelName", order.getOrderNumber() + "-" + i);
+                    virtualCard.put("label_name", order.getOrderNumber() + "-" + i);
+                    virtualCard.put("code_barre", order.getOrderNumber() + "-" + i);
+                    virtualCard.put("barcode", order.getOrderNumber() + "-" + i);
+                    virtualCard.put("status", order.getStatus().name());
+                    virtualCard.put("grade", "Not graded");
+                    virtualCard.put("duration", 3);
+                    virtualCard.put("quantity", 1);
+                    virtualCard.put("amount", 1);
+                    cardMaps.add(virtualCard);
+                }
+            } else {
+                // Use actual certifications
+                cardMaps = certifications.stream()
+                        .map(this::certificationToMap)
+                        .collect(Collectors.toList());
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("cards", cardMaps);
+            response.put("total", cardMaps.size());
+            response.put("orderNumber", order.getOrderNumber());
+            response.put("orderStatus", order.getStatus().name());
+            response.put("source", certifications.isEmpty() ? "virtual" : "card_certification");
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("❌ Error loading cards for order {}", id, e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "error", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Convert CardCertification to Map
+     */
+    private Map<String, Object> certificationToMap(CardCertification cert) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", cert.getId().toString());
+        map.put("cardName", cert.getCardName() != null ? cert.getCardName() : "Unknown Card");
+        map.put("name", cert.getCardName() != null ? cert.getCardName() : "Unknown Card");
+        map.put("cardId", cert.getCardId() != null ? cert.getCardId() : "N/A");
+        map.put("cardNumber", cert.getCardId() != null ? cert.getCardId().toString() : "N/A");
+        map.put("labelName", cert.getSymfonyCertificationId());
+        map.put("label_name", cert.getSymfonyCertificationId());
+        map.put("code_barre", cert.getSymfonyCertificationId());
+        map.put("barcode", cert.getSymfonyCertificationId());
+
+        // Status based on completion flags
+        String status;
+        if (Boolean.TRUE.equals(cert.getPackagingCompleted())) {
+            status = "COMPLETED";
+        } else if (Boolean.TRUE.equals(cert.getScanningCompleted())) {
+            status = "PACKAGING";
+        } else if (Boolean.TRUE.equals(cert.getCertificationCompleted())) {
+            status = "SCANNING";
+        } else if (Boolean.TRUE.equals(cert.getGradingCompleted())) {
+            status = "CERTIFYING";
+        } else {
+            status = "GRADING";
+        }
+        map.put("status", status);
+
+        // Completion flags
+        map.put("gradingCompleted", cert.getGradingCompleted());
+        map.put("certificationCompleted", cert.getCertificationCompleted());
+        map.put("scanningCompleted", cert.getScanningCompleted());
+        map.put("packagingCompleted", cert.getPackagingCompleted());
+
+        // Additional fields
+        map.put("assignedGrade", cert.getGradingCompleted() ? "Graded" : null);
+        map.put("grade", cert.getGradingCompleted() ? "Graded" : "Not graded");
+        map.put("duration", 3);
+        map.put("quantity", 1);
+        map.put("amount", 1);
+
+        return map;
     }
 }

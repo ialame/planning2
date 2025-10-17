@@ -313,6 +313,9 @@ const loadEmployeeData = async () => {
   }
 }
 
+// Replace the loadEmployeeOrders method in EmployeeDetailPage.vue
+// Around line 329-371
+
 const loadEmployeeOrders = async () => {
   if (!props.employeeId) {
     console.warn('⚠️ No employeeId provided for loading orders')
@@ -342,22 +345,33 @@ const loadEmployeeOrders = async () => {
       if (data.success === false) {
         console.error('❌ API returned error:', data.error)
         orders.value = []
-      } else if (data && data.orders && Array.isArray(data.orders)) {
+      }
+      // ✅ FIXED: Check for data.assignments first (this is what the backend returns!)
+      else if (data && data.assignments && Array.isArray(data.assignments)) {
+        orders.value = data.assignments
+        console.log(`✅ Loaded ${orders.value.length} orders from data.assignments`)
+      }
+      else if (data && data.orders && Array.isArray(data.orders)) {
         orders.value = data.orders
         console.log(`✅ Loaded ${orders.value.length} orders from data.orders`)
-      } else if (data && Array.isArray(data.plannings)) {
+      }
+      else if (data && Array.isArray(data.plannings)) {
         orders.value = data.plannings
         console.log(`✅ Loaded ${orders.value.length} orders from data.plannings`)
-      } else if (Array.isArray(data)) {
+      }
+      else if (Array.isArray(data)) {
         orders.value = data
         console.log(`✅ Loaded ${orders.value.length} orders from data array`)
-      } else {
+      }
+      else {
         console.warn('⚠️ No orders found in response:', data)
         orders.value = []
       }
 
       if (orders.value.length === 0) {
         console.log('ℹ️ No orders found for this employee on', localSelectedDate.value)
+      } else {
+        console.log(`✅ Successfully loaded ${orders.value.length} assignments for employee`)
       }
     } else {
       console.error('❌ API error:', response.status, response.statusText)
@@ -371,7 +385,6 @@ const loadEmployeeOrders = async () => {
     console.log('✅ Loading complete')
   }
 }
-
 const handleDateChange = () => {
   console.log('📅 Manual date change to:', localSelectedDate.value)
   loadEmployeeOrders()

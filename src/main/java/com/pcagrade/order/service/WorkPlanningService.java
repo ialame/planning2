@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -25,156 +26,207 @@ public class WorkPlanningService {
     private final EmployeeRepository employeeRepository;
     private final WorkAssignmentRepository workAssignmentRepository;
 
-    // Processing time per card per stage (in minutes)
     private static final int MINUTES_PER_CARD = 3;
 
-    // Processing stages and required roles
-    private static final Map<String, String> STAGE_ROLE_MAP = Map.of(
-            "GRADING", "ROLE_GRADER",
-            "CERTIFYING", "ROLE_CERTIFIER",
-            "SCANNING", "ROLE_SCANNER",
-            "PACKAGING", "ROLE_PACKAGER"
-    );
-
     /**
-     * Generate work assignments for all pending orders
-     * Priority is based on delivery deadline (earlier = higher priority)
+     * Generate work plan for all orders based on their OrderStatus ENUM
      */
     @Transactional
     public List<WorkAssignment> generateWorkPlan() {
-        log.info("Starting work plan generation...");
+        log.info("🚀 Starting work plan generation...");
 
         // Clear previous assignments
         workAssignmentRepository.deleteAll();
+        log.info("🗑️ Cleared previous assignments");
 
         List<WorkAssignment> allAssignments = new ArrayList<>();
 
-        // ✅ FIX: Process orders by their CURRENT status only
+        // ✅ DEBUG: Check what orders exist in database
+        List<Order> allOrders = orderRepository.findAll();
+        log.info("📦 Total orders in database: {}", allOrders.size());
 
-        // 1. GRADING: orders with status = 2 (A_NOTER)
-        List<Order> ordersToGrade = orderRepository.findByStatusInteger(2);
-        allAssignments.addAll(assignOrdersToStage(ordersToGrade, "GRADING", "ROLE_GRADER"));
-        log.info("✅ Created {} GRADING assignments", ordersToGrade.size());
+        // Count orders by status ENUM
+        Map<OrderStatus, Long> statusCounts = allOrders.stream()
+                .filter(o -> o.getStatus() != null)
+                .collect(Collectors.groupingBy(Order::getStatus, Collectors.counting()));
 
-        // 2. CERTIFYING: orders with status = 3 (A_CERTIFIER)
-        List<Order> ordersToCertify = orderRepository.findByStatusInteger(3);
-        allAssignments.addAll(assignOrdersToStage(ordersToCertify, "CERTIFYING", "ROLE_CERTIFIER"));
-        log.info("✅ Created {} CERTIFYING assignments", ordersToCertify.size());
+        log.info("📊 Orders by status (ENUM):");
+        statusCounts.forEach((status, count) ->
+                log.info("   {}: {} orders", status, count)
+        );
 
-        // 3. PACKAGING: orders with status = 4 (A_PREPARER)
-        List<Order> ordersToPackage = orderRepository.findByStatusInteger(4);
-        allAssignments.addAll(assignOrdersToStage(ordersToPackage, "PACKAGING", "ROLE_PACKAGER"));
-        log.info("✅ Created {} PACKAGING assignments", ordersToPackage.size());
+        // Check employees
+        log.info("👥 Checking available employees:");
+        List<Employee> allEmployees = employeeRepository.findByActiveTrue();
+        log.info("   Total active employees: {}", allEmployees.size());
 
-        // 4. SCANNING: orders with status = 10 (A_SCANNER)
-        List<Order> ordersToScan = orderRepository.findByStatusInteger(10);
-        allAssignments.addAll(assignOrdersToStage(ordersToScan, "SCANNING", "ROLE_SCANNER"));
-        log.info("✅ Created {} SCANNING assignments", ordersToScan.size());
+        Map<String, Long> roleCount = allEmployees.stream()
+                .flatMap(e -> e.getRoles().stream())
+                .collect(Collectors.groupingBy(r -> r, Collectors.counting()));
+
+        roleCount.forEach((role, count) ->
+                log.info("   {}: {} employees", role, count)
+        );
+
+        // ✅ FIXED: Process orders by OrderStatus ENUM (not integer)
+        allAssignments.addAll(processStage(OrderStatus.GRADING, "GRADING", "ROLE_GRADER"));
+        allAssignments.addAll(processStage(OrderStatus.CERTIFYING, "CERTIFYING", "ROLE_CERTIFIER"));
+        allAssignments.addAll(processStage(OrderStatus.PACKAGING, "PACKAGING", "ROLE_PACKAGER"));
+        allAssignments.addAll(processStage(OrderStatus.SCANNING, "SCANNING", "ROLE_SCANNER"));
 
         // Save all assignments
         List<WorkAssignment> savedAssignments = workAssignmentRepository.saveAll(allAssignments);
 
-        log.info("🎉 Work plan generated: {} total assignments created for {} orders",
-                savedAssignments.size(),
-                ordersToGrade.size() + ordersToCertify.size() + ordersToPackage.size() + ordersToScan.size());
+        log.info("✅ Work plan generated: {} total assignments", savedAssignments.size());
+
+        // Summary by stage
+        Map<String, Long> stageCounts = savedAssignments.stream()
+                .collect(Collectors.groupingBy(WorkAssignment::getProcessingStage, Collectors.counting()));
+
+        log.info("📊 Assignments by stage:");
+        stageCounts.forEach((stage, count) ->
+                log.info("   {}: {} tasks", stage, count)
+        );
 
         return savedAssignments;
     }
 
-    // Add the helper method
-    private List<WorkAssignment> assignOrdersToStage(List<Order> orders, String stage, String requiredRole) {
-        List<WorkAssignment> assignments = new ArrayList<>();
+    /**
+     * Process a single stage using OrderStatus ENUM
+     */
+    private List<WorkAssignment> processStage(OrderStatus orderStatus, String stage, String requiredRole) {
+        log.info("🔄 Processing {} stage (status = {}, role = {})", stage, orderStatus, requiredRole);
+
+        // ✅ Find orders with this OrderStatus ENUM
+        List<Order> orders = orderRepository.findByStatus(orderStatus);
+        log.info("   Found {} orders with status {}", orders.size(), orderStatus);
 
         if (orders.isEmpty()) {
-            log.info("No orders found for stage: {}", stage);
-            return assignments;
+            log.info("   ⏭️ No orders to process for {}", stage);
+            return new ArrayList<>();
         }
 
-        // Get available employees for this role
-        List<Employee> availableEmployees = employeeRepository
-                .findByActiveAndRolesContaining(true, requiredRole);
+        // Find employees with required role
+        List<Employee> employees = employeeRepository.findByActiveAndRolesContaining(true, requiredRole);
+        log.info("   Found {} employees with role {}", employees.size(), requiredRole);
 
-        if (availableEmployees.isEmpty()) {
-            log.warn("⚠️ No employees available for stage: {} with role: {}", stage, requiredRole);
-            return assignments;
+        if (employees.isEmpty()) {
+            log.warn("   ⚠️ No employees available for {} stage!", stage);
+            return new ArrayList<>();
         }
 
-        log.info("📋 Scheduling {} orders for {} stage with {} employees",
-                orders.size(), stage, availableEmployees.size());
+        // Sort orders by priority (delai code: X > F+ > F > C > E)
+        // Handle null dates safely
+        orders.sort(Comparator.comparingInt(Order::getPriorityScore).reversed()
+                .thenComparing(o -> o.getDate() != null ? o.getDate() : LocalDate.MIN));
 
-        // Create employee workload tracker
-        Map<UUID, EmployeeWorkload> workloadMap = new HashMap<>();
-        for (Employee emp : availableEmployees) {
-            workloadMap.put(emp.getId(), new EmployeeWorkload(emp));
+        // Log top priority orders
+        log.info("   📋 Top 5 priority orders:");
+        orders.stream().limit(5).forEach(o ->
+                log.info("      - {} ({} cards, delai: {}, priority: {})",
+                        o.getOrderNumber(), o.getCardCount(), o.getDelai(), o.getPriorityScore())
+        );
+
+        // Assign orders to employees using load balancing
+        return assignOrdersToEmployees(orders, employees, stage);
+    }
+
+    /**
+     * Assign orders to employees with load balancing
+     */
+    private List<WorkAssignment> assignOrdersToEmployees(
+            List<Order> orders,
+            List<Employee> employees,
+            String stage) {
+
+        List<WorkAssignment> assignments = new ArrayList<>();
+
+        // Track each employee's current end time
+        Map<UUID, LocalDateTime> employeeSchedule = new HashMap<>();
+        LocalDateTime now = LocalDateTime.now();
+
+        // Initialize all employees at current time
+        for (Employee emp : employees) {
+            employeeSchedule.put(emp.getId(), now);
         }
 
-        // Sort orders by priority
-        List<Order> sortedOrders = orders.stream()
-                .sorted(Comparator.comparing(Order::getPriorityScore))
-                .collect(Collectors.toList());
+        int assignmentCount = 0;
+        int skippedCount = 0;
 
-        // Distribute orders to employees
-        for (Order order : sortedOrders) {
-            Employee selectedEmployee = selectEmployeeWithMinWorkload(workloadMap);
+        for (Order order : orders) {
+            int cardCount = order.getCardCount();
 
-            WorkAssignment assignment = createAssignment(
-                    selectedEmployee,
-                    order,
-                    stage,
-                    workloadMap.get(selectedEmployee.getId())
-            );
+            if (cardCount == 0) {
+                log.debug("   ⚠️ Order {} has 0 cards, skipping", order.getOrderNumber());
+                skippedCount++;
+                continue;
+            }
+
+            // Find employee with earliest availability
+            Employee selectedEmployee = employees.stream()
+                    .min(Comparator.comparing(e -> employeeSchedule.get(e.getId())))
+                    .orElse(employees.get(0));
+
+            LocalDateTime startTime = employeeSchedule.get(selectedEmployee.getId());
+            int durationMinutes = cardCount * MINUTES_PER_CARD;
+            LocalDateTime endTime = startTime.plusMinutes(durationMinutes);
+
+            // Create assignment
+            WorkAssignment assignment = new WorkAssignment();
+            assignment.setOrder(order);
+            assignment.setEmployee(selectedEmployee);
+            assignment.setProcessingStage(stage);
+            assignment.setCardCount(cardCount);
+            assignment.setEstimatedDurationMinutes(durationMinutes);
+            assignment.setScheduledStart(startTime);
+            assignment.setScheduledEnd(endTime);
+            assignment.setStatus(AssignmentStatus.SCHEDULED);
+            assignment.setPriorityScore((long) order.getPriorityScore());
 
             assignments.add(assignment);
-            workloadMap.get(selectedEmployee.getId())
-                    .addWorkload(assignment.getEstimatedDurationMinutes());
+
+            // Update employee's next available time
+            employeeSchedule.put(selectedEmployee.getId(), endTime);
+
+            assignmentCount++;
+
+            // Log every 100th assignment
+            if (assignmentCount % 100 == 0) {
+                log.debug("   ... {} assignments created", assignmentCount);
+            }
         }
+
+        if (skippedCount > 0) {
+            log.warn("   ⚠️ Skipped {} orders with 0 cards", skippedCount);
+        }
+
+        log.info("   ✅ Created {} assignments for {} stage", assignmentCount, stage);
+
+        // Log workload distribution
+        Map<String, Integer> workloadByEmployee = new HashMap<>();
+        for (WorkAssignment assignment : assignments) {
+            String empName = assignment.getEmployee().getFirstName() + " " +
+                    assignment.getEmployee().getLastName();
+            workloadByEmployee.merge(empName, assignment.getEstimatedDurationMinutes(), Integer::sum);
+        }
+
+        log.info("   👥 Workload distribution:");
+        workloadByEmployee.forEach((name, minutes) ->
+                log.info("      - {}: {} minutes ({} hours)", name, minutes, minutes / 60)
+        );
 
         return assignments;
     }
 
-
     /**
-     * Create a work assignment
-     */
-    private WorkAssignment createAssignment(Employee employee, Order order,
-                                            String stage, EmployeeWorkload workload) {
-        WorkAssignment assignment = new WorkAssignment();
-        assignment.setEmployee(employee);
-        assignment.setOrder(order);
-        assignment.setProcessingStage(stage);
-        assignment.setCardCount(order.getCards().size());
-        assignment.setEstimatedDurationMinutes(order.getCards().size() * MINUTES_PER_CARD);
-        assignment.setPriorityScore((long) order.getPriorityScore());
-
-        // Schedule start time based on current workload
-        LocalDateTime startTime = workload.getNextAvailableTime();
-        assignment.setScheduledStart(startTime);
-        assignment.setScheduledEnd(startTime.plusMinutes(assignment.getEstimatedDurationMinutes()));
-
-        assignment.setStatus(AssignmentStatus.SCHEDULED);
-
-        return assignment;
-    }
-
-    /**
-     * Select employee with minimum workload
-     */
-    private Employee selectEmployeeWithMinWorkload(Map<UUID, EmployeeWorkload> workloadMap) {
-        return workloadMap.values().stream()
-                .min(Comparator.comparing(EmployeeWorkload::getTotalMinutes))
-                .map(EmployeeWorkload::getEmployee)
-                .orElseThrow(() -> new IllegalStateException("No employees available"));
-    }
-
-    /**
-     * Get work assignments for specific employee
+     * Get all assignments for an employee
      */
     public List<WorkAssignment> getEmployeeAssignments(UUID employeeId) {
         return workAssignmentRepository.findByEmployeeIdOrderByScheduledStartAsc(employeeId);
     }
 
     /**
-     * Get work assignments for specific order
+     * Get all assignments for an order
      */
     public List<WorkAssignment> getOrderAssignments(UUID orderId) {
         return workAssignmentRepository.findByOrderIdOrderByScheduledStartAsc(orderId);
@@ -186,49 +238,16 @@ public class WorkPlanningService {
     @Transactional
     public WorkAssignment updateAssignmentStatus(UUID assignmentId, AssignmentStatus newStatus) {
         WorkAssignment assignment = workAssignmentRepository.findById(assignmentId)
-                .orElseThrow(() -> new IllegalArgumentException("Assignment not found"));
+                .orElseThrow(() -> new RuntimeException("Assignment not found: " + assignmentId));
 
-        if (newStatus == AssignmentStatus.IN_PROGRESS) {
-            assignment.start();
-        } else if (newStatus == AssignmentStatus.COMPLETED) {
-            assignment.complete();
-        } else {
-            assignment.setStatus(newStatus);
+        assignment.setStatus(newStatus);
+
+        if (newStatus == AssignmentStatus.IN_PROGRESS && assignment.getActualStart() == null) {
+            assignment.setActualStart(LocalDateTime.now());
+        } else if (newStatus == AssignmentStatus.COMPLETED && assignment.getActualEnd() == null) {
+            assignment.setActualEnd(LocalDateTime.now());
         }
 
         return workAssignmentRepository.save(assignment);
-    }
-
-    /**
-     * Inner class to track employee workload
-     */
-    private static class EmployeeWorkload {
-        private final Employee employee;
-        private int totalMinutes;
-        private LocalDateTime nextAvailableTime;
-
-        public EmployeeWorkload(Employee employee) {
-            this.employee = employee;
-            this.totalMinutes = 0;
-            // Start scheduling from current time
-            this.nextAvailableTime = LocalDateTime.now();
-        }
-
-        public void addWorkload(int minutes) {
-            this.totalMinutes += minutes;
-            this.nextAvailableTime = this.nextAvailableTime.plusMinutes(minutes);
-        }
-
-        public Employee getEmployee() {
-            return employee;
-        }
-
-        public int getTotalMinutes() {
-            return totalMinutes;
-        }
-
-        public LocalDateTime getNextAvailableTime() {
-            return nextAvailableTime;
-        }
     }
 }

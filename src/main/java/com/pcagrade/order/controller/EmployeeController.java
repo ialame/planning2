@@ -160,27 +160,29 @@ public class EmployeeController {
      * 👤 GET EMPLOYEE BY ID
      * Endpoint: GET /api/employees/{id}
      */
+
     @GetMapping("/{employeeId}")
     public ResponseEntity<Map<String, Object>> getEmployeeById(@PathVariable String employeeId) {
         try {
-            System.out.println("👤 Getting employee by ID: " + employeeId);
+            log.info("👤 Getting employee by ID: {}", employeeId);
 
             // Clean employee ID (remove dashes if UUID format)
-            String cleanEmployeeId = employeeId.replace("-", "");
+            String cleanEmployeeId = employeeId.replace("-", "").toUpperCase();
 
             String sql = """
-                SELECT 
-                    HEX(id) as id,
-                    first_name as firstName,
-                    last_name as lastName,
-                    email,
-                    work_hours_per_day as workHoursPerDay,
-                    active,
-                    creation_date as creationDate,
-                    modification_date as modificationDate
-                FROM employee
-                WHERE HEX(id) = ? AND active = 1
-                """;
+            SELECT 
+                HEX(id) as id,
+                COALESCE(first_name, 'Unknown') as firstName,
+                COALESCE(last_name, 'User') as lastName,
+                email,
+                COALESCE(daily_capacity_minutes, 480) as dailyCapacityMinutes,
+                ROUND(COALESCE(daily_capacity_minutes, 480) / 60.0, 2) as workHoursPerDay,
+                COALESCE(active, 1) as active,
+                creation_date as creationDate,
+                modification_date as modificationDate
+            FROM employee
+            WHERE HEX(id) = ?
+            """;
 
             Query query = entityManager.createNativeQuery(sql);
             query.setParameter(1, cleanEmployeeId);
@@ -188,29 +190,40 @@ public class EmployeeController {
             @SuppressWarnings("unchecked")
             List<Object[]> results = query.getResultList();
 
-            if (!results.isEmpty()) {
-                Object[] row = results.get(0);
-                Map<String, Object> employeeData = new HashMap<>();
-                employeeData.put("id", row[0]);
-                employeeData.put("firstName", row[1]);
-                employeeData.put("lastName", row[2]);
-                employeeData.put("email", row[3]);
-                employeeData.put("workHoursPerDay", row[4]);
-                employeeData.put("active", row[5]);
-                employeeData.put("creationDate", row[6]);
-                employeeData.put("modificationDate", row[7]);
-                employeeData.put("fullName", row[1] + " " + row[2]);
-
-                return ResponseEntity.ok(employeeData);
-            } else {
-                return ResponseEntity.notFound().build();
+            if (results.isEmpty()) {
+                log.warn("❌ Employee not found: {}", employeeId);
+                return ResponseEntity.status(404).body(Map.of(
+                        "success", false,
+                        "error", "Employee not found"
+                ));
             }
 
+            Object[] row = results.get(0);
+            Map<String, Object> employeeData = new HashMap<>();
+            employeeData.put("id", row[0]);
+            employeeData.put("firstName", row[1]);
+            employeeData.put("lastName", row[2]);
+            employeeData.put("email", row[3]);
+            employeeData.put("workHoursPerDay", row[4]);
+            employeeData.put("dailyCapacityMinutes", row[5]);
+            employeeData.put("active", ((Number) row[6]).intValue() == 1);
+            employeeData.put("creationDate", row[7]);
+            employeeData.put("modificationDate", row[8]);
+            employeeData.put("fullName", row[1] + " " + row[2]);
+            employeeData.put("success", true);
+
+            log.info("✅ Employee found: {} {}", row[1], row[2]);
+            return ResponseEntity.ok(employeeData);
+
         } catch (Exception e) {
-            System.err.println("❌ Error getting employee by ID: " + e.getMessage());
-            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+            log.error("❌ Error getting employee by ID: {}", employeeId, e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "error", e.getMessage()
+            ));
         }
     }
+
 
     /**
      * 🔧 INITIALIZE EMPLOYEE TABLE (if needed)
