@@ -127,21 +127,7 @@ public class TeamDataInitializer implements ApplicationRunner {
     }
 
     private void initializeSampleOrders() {
-        List<Order> orders = List.of(
-                createOrder("ORD-001", "Alice Williams", "alice@email.com",
-                        LocalDateTime.now().plusDays(7), 15),
-                createOrder("ORD-002", "Bob Thompson", "bob@email.com",
-                        LocalDateTime.now().plusDays(5), 20),
-                createOrder("ORD-003", "Carol Martinez", "carol@email.com",
-                        LocalDateTime.now().plusDays(10), 10),
-                createOrder("ORD-004", "Daniel Anderson", "daniel@email.com",
-                        LocalDateTime.now().plusDays(3), 25),
-                createOrder("ORD-005", "Eva Moore", "eva@email.com",
-                        LocalDateTime.now().plusDays(14), 30)
-        );
 
-        orderRepository.saveAll(orders);
-        log.info("Created {} sample orders", orders.size());
     }
 
     private Order createOrder(String orderNumber, String customerName, String customerEmail,

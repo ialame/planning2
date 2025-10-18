@@ -1,55 +1,48 @@
 <template>
   <div class="data-sync-container">
+    <!-- Header -->
     <div class="sync-header">
-      <h2>🔄 Data Synchronization</h2>
-      <p class="subtitle">Sync data from Symfony backend (dev) to Planning system (dev-planning)</p>
+      <h2>🔄 Database Synchronization</h2>
+      <p class="subtitle">Sync data between Symfony (dev) and Spring Boot (dev-planning)</p>
     </div>
 
-    <!-- ========== PROGRESS BAR - AVEC SSE ========== -->
-    <div v-if="syncing" class="progress-card card">
+    <!-- Real-time Progress (only shown during sync) -->
+    <div v-if="syncing" class="card progress-card">
       <div class="progress-content">
         <div class="progress-header">
           <span class="progress-operation">{{ currentOperation }}</span>
-          <span class="progress-percentage">{{ progress }}%</span>
+          <span class="progress-percentage">{{ Math.round(progress) }}%</span>
         </div>
 
         <div class="progress-bar-container">
-          <div
-            class="progress-bar-fill"
-            :style="{ width: progress + '%' }"
-            :class="{ 'progress-complete': progress === 100 }"
-          ></div>
+          <div class="progress-bar-fill" :style="{ width: progress + '%' }"></div>
         </div>
 
         <div class="progress-details">
-          <div class="progress-info">
-            <span class="spinner" v-if="progress < 100">⏳</span>
-            <span v-else>✅</span>
-            <span>{{ progressMessage }}</span>
+          <div class="detail-row">
+            <span class="detail-label">Status:</span>
+            <span :class="['detail-value', phaseClass]">{{ progressMessage }}</span>
           </div>
-
-          <div v-if="itemsProcessed > 0" class="progress-items">
-            <span>{{ itemsProcessed.toLocaleString() }} / {{ totalItems.toLocaleString() }} items</span>
+          <div class="detail-row" v-if="totalItems > 0">
+            <span class="detail-label">Progress:</span>
+            <span class="detail-value">{{ itemsProcessed.toLocaleString() }} / {{ totalItems.toLocaleString() }} items</span>
           </div>
-
-          <div v-if="estimatedSecondsRemaining > 0" class="progress-estimate">
-            <span>Estimated: ~{{ formatDuration(estimatedSecondsRemaining) }} remaining</span>
+          <div class="detail-row" v-if="estimatedSecondsRemaining > 0">
+            <span class="detail-label">Time remaining:</span>
+            <span class="detail-value">~{{ Math.ceil(estimatedSecondsRemaining) }}s</span>
           </div>
-        </div>
-
-        <!-- Phase indicator -->
-        <div class="progress-phase">
-          <span :class="['phase-badge', phaseClass]">{{ phase }}</span>
         </div>
       </div>
     </div>
 
-    <!-- Sync Status Card -->
+    <!-- Status Check -->
     <div class="card status-card">
-      <h3>📊 Sync Status</h3>
+      <h3>📊 Current Synchronization Status</h3>
+      <p class="text-muted">Compare data between Symfony (dev) and Spring Boot (dev-planning)</p>
+
       <button
         @click="checkSyncStatus"
-        :disabled="loadingStatus || syncing"
+        :disabled="loadingStatus"
         class="btn btn-secondary"
       >
         {{ loadingStatus ? '⏳ Checking...' : '🔍 Check Status' }}
@@ -236,67 +229,6 @@ const addToHistory = (message: string, success: boolean, duration?: number) => {
   }
 }
 
-// Connect to SSE for real-time progress
-const connectSSE = (syncId: string) => {
-  currentSyncId.value = syncId
-  const url = `${API_BASE_URL}/api/sync/progress/stream/${syncId}`
-
-  console.log('🔌 Connecting to SSE:', url)
-
-  eventSource = new EventSource(url)
-
-  eventSource.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data)
-
-      if (data.type === 'KEEP_ALIVE') {
-        return
-      }
-
-      progress.value = data.progress || 0
-      currentOperation.value = data.operation || ''
-      progressMessage.value = data.message || ''
-      phase.value = data.phase || ''
-      itemsProcessed.value = data.itemsProcessed || 0
-      totalItems.value = data.totalItems || 0
-      estimatedSecondsRemaining.value = data.estimatedSecondsRemaining || 0
-
-      if (data.type === 'COMPLETED') {
-        console.log('✅ Sync completed')
-        showNotification('✅ Synchronization completed successfully', 'success')
-        setTimeout(() => {
-          closeSSEConnection()
-          syncing.value = false
-          checkSyncStatus()
-        }, 2000)
-      }
-
-      if (data.type === 'ERROR') {
-        console.error('❌ Sync error:', data.message)
-        showNotification(`❌ Sync failed: ${data.message}`, 'error')
-        closeSSEConnection()
-        syncing.value = false
-      }
-    } catch (error) {
-      console.error('Error parsing SSE message:', error)
-    }
-  }
-
-  eventSource.onerror = (error) => {
-    console.error('❌ SSE connection error:', error)
-
-    if (eventSource?.readyState === EventSource.CLOSED) {
-      console.log('SSE connection closed by server')
-      showNotification('Connection closed. Please try again.', 'error')
-      syncing.value = false
-    }
-  }
-
-  eventSource.onopen = () => {
-    console.log('✅ SSE connection established')
-  }
-}
-
 // Close SSE connection
 const closeSSEConnection = () => {
   if (eventSource) {
@@ -306,8 +238,80 @@ const closeSSEConnection = () => {
   }
 }
 
+// Connect to SSE for real-time progress
+const connectSSE = (syncId: string) => {
+  // ✅ CRITICAL: Close any existing connection first
+  closeSSEConnection()
+
+  currentSyncId.value = syncId
+  const url = `${API_BASE_URL}/api/sync/progress/stream/${syncId}`
+
+  console.log('🔌 Connecting to SSE:', url)
+
+  eventSource = new EventSource(url)
+
+  // ✅ CRITICAL: Listen to 'progress' event (not 'message')
+  eventSource.addEventListener('progress', (event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data)
+
+      console.log('📊 Progress update received:', data)
+
+      // Update progress state
+      progress.value = data.percentage || 0
+      currentOperation.value = data.currentOperation || ''
+      progressMessage.value = data.message || ''
+      phase.value = data.phase || ''
+      itemsProcessed.value = data.itemsProcessed || 0
+      totalItems.value = data.totalItems || 0
+      estimatedSecondsRemaining.value = data.estimatedSecondsRemaining || 0
+
+      // Handle completion
+      if (data.completed) {
+        if (data.error) {
+          console.error('❌ Sync error:', data.errorMessage)
+          showNotification(`❌ ${data.errorMessage || 'Sync failed'}`, 'error')
+        } else {
+          console.log('✅ Sync completed')
+          showNotification('✅ Synchronization completed successfully', 'success')
+        }
+
+        setTimeout(() => {
+          closeSSEConnection()
+          syncing.value = false
+          checkSyncStatus()
+        }, 2000)
+      }
+    } catch (error) {
+      console.error('Error parsing SSE message:', error)
+    }
+  })
+
+  eventSource.onerror = (error) => {
+    console.error('❌ SSE connection error:', error)
+
+    if (eventSource?.readyState === EventSource.CLOSED) {
+      console.log('SSE connection closed by server')
+      if (syncing.value && progress.value < 100) {
+        showNotification('Connection lost. Please try again.', 'error')
+        syncing.value = false
+      }
+    }
+  }
+
+  eventSource.onopen = () => {
+    console.log('✅ SSE connection established')
+  }
+}
+
 // Generic sync function with SSE
 const performSync = async (endpoint: string, operationName: string) => {
+  // ✅ CRITICAL: Ensure no existing sync is running
+  if (syncing.value) {
+    console.warn('⚠️ Sync already in progress, ignoring request')
+    return
+  }
+
   syncing.value = true
   progress.value = 0
   currentOperation.value = operationName
@@ -319,6 +323,7 @@ const performSync = async (endpoint: string, operationName: string) => {
 
   const syncId = `sync-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
+  // Connect to SSE BEFORE starting sync
   connectSSE(syncId)
 
   const startTime = Date.now()
@@ -397,12 +402,16 @@ const syncIncremental = async () => {
 }
 
 // ✅ LIFECYCLE - Auto check status on mount
-onMounted(() => {
+onMounted(async () => {
   console.log('📊 DataSync page mounted - checking status automatically')
-  checkSyncStatus()
+  // Use setTimeout to ensure DOM is ready and avoid race conditions
+  setTimeout(async () => {
+    await checkSyncStatus()
+  }, 100)
 })
 
 onUnmounted(() => {
+  console.log('🔌 DataSync unmounting - cleaning up SSE connections')
   closeSSEConnection()
 })
 </script>
@@ -443,6 +452,17 @@ onUnmounted(() => {
   animation: slideIn 0.3s ease-out;
 }
 
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .progress-content {
   display: flex;
   flex-direction: column;
@@ -481,233 +501,104 @@ onUnmounted(() => {
   background: linear-gradient(90deg, #3b82f6, #2563eb);
   border-radius: 9999px;
   transition: width 0.5s ease-out;
-  position: relative;
-}
-
-.progress-bar-fill::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.3),
-    transparent
-  );
-  animation: shimmer 2s infinite;
-}
-
-.progress-complete {
-  background: linear-gradient(90deg, #10b981, #059669) !important;
-}
-
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
 }
 
 .progress-details {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e5e7eb;
 }
 
-.progress-info {
+.detail-row {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.95rem;
-  color: #374151;
+  justify-content: space-between;
+  font-size: 0.875rem;
+}
+
+.detail-label {
+  color: #6b7280;
   font-weight: 500;
 }
 
-.progress-items, .progress-estimate {
-  font-size: 0.875rem;
-  color: #6b7280;
-  padding-left: 1.5rem;
-}
-
-.spinner {
-  animation: spin 2s linear infinite;
-  display: inline-block;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.progress-phase {
-  display: flex;
-  justify-content: flex-start;
-}
-
-.phase-badge {
-  padding: 0.375rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
+.detail-value {
+  color: #1f2937;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
-.phase-starting { background: #dbeafe; color: #1e40af; }
-.phase-fetching { background: #fef3c7; color: #92400e; }
-.phase-processing { background: #ddd6fe; color: #5b21b6; }
-.phase-saving { background: #fbcfe8; color: #9f1239; }
-.phase-completed { background: #d1fae5; color: #065f46; }
-.phase-error { background: #fee2e2; color: #991b1b; }
+/* Phase classes */
+.phase-starting {
+  color: #f59e0b;
+}
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.phase-fetching {
+  color: #3b82f6;
+}
+
+.phase-processing {
+  color: #8b5cf6;
+}
+
+.phase-saving {
+  color: #10b981;
+}
+
+.phase-completed {
+  color: #059669;
+}
+
+.phase-error {
+  color: #ef4444;
 }
 
 /* Status Card */
 .status-card h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-}
-
-.status-table {
-  margin-top: 1rem;
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-thead {
-  background: #f9fafb;
-}
-
-th {
-  padding: 0.75rem 1rem;
-  text-align: left;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #6b7280;
-  text-transform: uppercase;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.text-danger {
-  color: #dc2626;
-  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #1f2937;
 }
 
 .text-muted {
   color: #6b7280;
   font-size: 0.875rem;
-}
-
-.mt-2 {
-  margin-top: 0.5rem;
-}
-
-/* Sync Actions */
-.sync-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.action-card h3 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-
-.action-card p {
-  font-size: 0.875rem;
-  color: #6b7280;
   margin-bottom: 1rem;
 }
 
-/* Buttons */
-.btn {
+.status-table {
+  margin-top: 1.5rem;
+}
+
+.status-table table {
   width: 100%;
-  padding: 0.625rem 1rem;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
+  border-collapse: collapse;
 }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
-}
-
-.btn-secondary {
-  background: #e5e7eb;
+.status-table th {
+  background: #f9fafb;
+  padding: 0.75rem;
+  text-align: left;
+  font-weight: 600;
   color: #374151;
+  border-bottom: 2px solid #e5e7eb;
 }
 
-.btn-secondary:hover:not(:disabled) {
-  background: #d1d5db;
+.status-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.btn-info {
-  background: #06b6d4;
-  color: white;
-}
-
-.btn-info:hover:not(:disabled) {
-  background: #0891b2;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px rgba(6, 182, 212, 0.3);
-}
-
-.btn-success {
-  background: #10b981;
-  color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-  background: #059669;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);
+.text-danger {
+  color: #ef4444;
+  font-weight: 600;
 }
 
 /* Badges */
 .badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.625rem;
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .badge-success {
@@ -725,75 +616,167 @@ td {
   color: #991b1b;
 }
 
-/* History Card */
-.history-card h3 {
-  font-size: 1.25rem;
+/* Buttons */
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
   font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.btn-secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #4b5563;
+}
+
+.btn-info {
+  background: #0ea5e9;
+  color: white;
+}
+
+.btn-info:hover:not(:disabled) {
+  background: #0284c7;
+}
+
+.btn-success {
+  background: #10b981;
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: #059669;
+}
+
+/* Sync Actions */
+.sync-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.action-card {
+  text-align: center;
+}
+
+.action-card h3 {
+  font-size: 1.125rem;
+  margin-bottom: 0.5rem;
+  color: #1f2937;
+}
+
+.action-card p {
+  color: #6b7280;
+  font-size: 0.875rem;
   margin-bottom: 1rem;
+}
+
+/* History */
+.history-card h3 {
+  margin-bottom: 1rem;
+  color: #1f2937;
 }
 
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .history-entry {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
+  gap: 0.75rem;
+  padding: 0.75rem;
   border-radius: 6px;
-  border: 1px solid;
+  font-size: 0.875rem;
 }
 
 .history-entry.success {
   background: #f0fdf4;
-  border-color: #bbf7d0;
+  border-left: 3px solid #10b981;
 }
 
 .history-entry.error {
   background: #fef2f2;
-  border-color: #fecaca;
+  border-left: 3px solid #ef4444;
 }
 
 .history-entry .time {
-  font-size: 0.75rem;
   color: #6b7280;
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .history-entry .message {
   flex: 1;
-  margin: 0 1rem;
-  font-size: 0.875rem;
+  color: #1f2937;
+  font-weight: 500;
 }
 
 .history-entry .duration {
-  font-size: 0.75rem;
   color: #6b7280;
-  font-style: italic;
+  font-size: 0.75rem;
 }
 
-/* Notification */
+/* Notifications */
 .notification {
   position: fixed;
-  bottom: 1rem;
+  top: 1rem;
   right: 1rem;
   padding: 1rem 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
-  color: white;
+  border-radius: 6px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   font-weight: 500;
-  animation: slideIn 0.3s ease-out;
   z-index: 1000;
-  max-width: 400px;
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 .notification.success {
-  background: #10b981;
+  background: #d1fae5;
+  color: #065f46;
+  border-left: 4px solid #10b981;
 }
 
 .notification.error {
-  background: #ef4444;
+  background: #fee2e2;
+  color: #991b1b;
+  border-left: 4px solid #ef4444;
+}
+
+.mt-2 {
+  margin-top: 0.5rem;
 }
 </style>

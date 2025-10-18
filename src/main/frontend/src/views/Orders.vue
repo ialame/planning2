@@ -1,13 +1,9 @@
 <template>
-  <div class="orders-view">
-    <!-- Header -->
-    <div class="mb-6">
-      <h1 class="text-3xl font-bold text-gray-900">📦 Orders Management</h1>
-      <p class="text-gray-600 mt-1">View and manage all Pokemon card orders</p>
-    </div>
+  <div class="orders-page">
+    <h1 class="text-3xl font-bold text-gray-900 mb-8">📋 Orders Management</h1>
 
-    <!-- ✅ DELAI STATISTICS  -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" v-if="statistics">
+    <!-- ✅ DELAI STATISTICS -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
       <div class="bg-white p-6 rounded-lg shadow border-l-4 border-red-500">
         <div class="flex items-center justify-between">
           <div>
@@ -55,7 +51,7 @@
 
     <!-- ✅ STATUS STATISTICS -->
     <div class="bg-gray-50 rounded-lg p-6 mb-6" v-if="statusStatistics">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">📊 Status Distribution</h3>
+<!--      <h3 class="text-lg font-semibold text-gray-900 mb-4">📊 Status Distribution</h3>-->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div v-for="(stat, status) in statusStatistics" :key="status" class="bg-white p-4 rounded-lg shadow-sm">
           <p class="text-sm font-medium text-gray-600">{{ getStatusText(status) }}</p>
@@ -67,7 +63,7 @@
 
     <!-- Filters -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">🔍 Filters</h3>
+<!--      <h3 class="text-lg font-semibold text-gray-900 mb-4">🔍 Filters</h3>-->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">Search by Customer</label>
@@ -89,11 +85,11 @@
           >
             <option value="all">All Status</option>
             <option value="PENDING">Pending</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="GRADING_COMPLETED">Grading Completed</option>
-            <option value="CERTIFICATION_COMPLETED">Certification Completed</option>
-            <option value="FULLY_COMPLETED">Fully Completed</option>
-            <option value="CANCELLED">Cancelled</option>
+            <option value="GRADING">Grading</option>
+            <option value="CERTIFYING">Certifying</option>
+            <option value="SCANNING">Scanning</option>
+            <option value="PACKAGING">Packaging</option>
+            <option value="DELIVERED">Delivered</option>
           </select>
         </div>
 
@@ -156,6 +152,7 @@
           <thead class="bg-gray-50">
           <tr>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cards</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Delai</th>
@@ -170,11 +167,13 @@
               <div class="text-sm text-gray-500">{{ order.clientOrderNumber }}</div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-              {{ order.creationDate }}
+              {{ order.customerName }}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              {{ order.date }}
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-              <div class="text-sm text-gray-900">{{ order.cardCount }} cards</div>
-              <div class="text-sm text-gray-500">{{ order.cardsWithName }} with name ({{ order.namePercentage }}%)</div>
+              <div class="text-sm font-medium text-gray-900">{{ order.cardCount }} cards</div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
               <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium', getDelaiColor(order.delai)]">
@@ -307,11 +306,11 @@ const getDelaiColor = (delai) => {
 const getStatusText = (status) => {
   const statusMap = {
     'PENDING': 'Pending',
-    'IN_PROGRESS': 'In Progress',
-    'GRADING_COMPLETED': 'Grading Done',
-    'CERTIFICATION_COMPLETED': 'Certification Done',
-    'FULLY_COMPLETED': 'Completed',
-    'CANCELLED': 'Cancelled'
+    'GRADING': 'Grading',
+    'CERTIFYING': 'Certifying',
+    'SCANNING': 'Scanning',
+    'PACKAGING': 'Packaging',
+    'DELIVERED': 'Delivered'
   }
   return statusMap[status] || status
 }
@@ -324,106 +323,58 @@ const formatNumber = (num) => {
   return num ? num.toLocaleString() : '0'
 }
 
-// Main load function
+// Debounced search
+let searchTimeout
+const debouncedSearch = () => {
+  clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    loadOrders(0)
+  }, 300)
+}
+
+// Load orders with pagination
 const loadOrders = async (page = 0) => {
   loading.value = true
-
-  console.log('Loading with filters:', {
-    delai: filters.value.delai,
-    status: filters.value.status,
-    search: filters.value.search
-  })
-
   try {
     const params = new URLSearchParams({
       page: page.toString(),
-      size: '500'
+      size: '20'
     })
 
-    if (filters.value.delai !== 'all') {
-      console.log('Adding delai filter:', filters.value.delai)
-      params.append('delai', filters.value.delai)
-    }
-
-    if (filters.value.status !== 'all') {
-      console.log('Adding status filter:', filters.value.status)
-      params.append('status', filters.value.status)
-    }
-
-    if (filters.value.search.trim()) {
-      params.append('search', filters.value.search.trim())
-    }
-
-    console.log('Loading orders with params:', params.toString())
+    if (filters.value.search) params.append('search', filters.value.search)
+    if (filters.value.status !== 'all') params.append('status', filters.value.status)
+    if (filters.value.delai !== 'all') params.append('delai', filters.value.delai)
 
     const response = await fetch(`${API_BASE_URL}/api/orders?${params}`)
+    const data = await response.json()
 
-    if (response.ok) {
-      const data = await response.json()
-      orders.value = data.orders || []
-      pagination.value = data.pagination || {}
-      statistics.value = data.delaiDistribution || {}
-      statusStatistics.value = data.statusStats || {}
+    // Backend sorts by date DESC before pagination
+    orders.value = data.orders || []
+    pagination.value = data.pagination || null
+    statistics.value = data.delaiStatistics || {}
+    statusStatistics.value = data.statusStatistics || {}
 
-      console.log('✅ Loaded statistics:', statistics.value)
-      console.log('✅ Loaded status statistics:', statusStatistics.value)
-      console.log(`✅ Loaded ${orders.value.length} orders - Page cards: ${pagination.value.pageCardTotal}, Total cards: ${pagination.value.totalCards}`)
-
-    } else {
-      throw new Error(`HTTP ${response.status}`)
+    console.log('📦 Loaded orders:', orders.value.length)
+    if (orders.value.length > 0) {
+      console.log('   First order:', orders.value[0].orderNumber, 'date:', orders.value[0].date, 'delai:', orders.value[0].delai)
+      console.log('   Last order:', orders.value[orders.value.length-1].orderNumber, 'date:', orders.value[orders.value.length-1].date, 'delai:', orders.value[orders.value.length-1].delai)
     }
-
   } catch (error) {
-    console.error('❌ Error loading orders:', error)
-    orders.value = []
-    pagination.value = null
-    statistics.value = {}
-    statusStatistics.value = {}
-
+    console.error('Error loading orders:', error)
   } finally {
     loading.value = false
   }
 }
 
-// Debounced search
-let searchTimeout = null
-const debouncedSearch = () => {
-  clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(() => {
-    loadOrders(0)
-  }, 500)
-}
-
-// Lifecycle
 onMounted(() => {
-  console.log('Orders view mounted')
-  loadOrders(0)
+  loadOrders()
 })
 </script>
 
 <style scoped>
-.orders-view {
+.orders-page {
+  padding: 2rem;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 24px;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.hover\:bg-gray-50:hover {
-  background-color: #f9fafb;
-}
-
-.transition-colors {
-  transition-property: color, background-color, border-color;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
 }
 </style>

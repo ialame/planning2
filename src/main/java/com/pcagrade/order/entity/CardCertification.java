@@ -58,17 +58,10 @@ public class CardCertification extends AbstractUlidEntity {
     @Column(name = "code_barre", nullable = false)
     private String codeBarre = "";
 
-    @Column(name = "custom_label", nullable = false)
-    private String customLabel = "";
-
-    @Column(name = "custom_qr_code_url", nullable = false)
-    private String customQrCodeUrl = "";
 
     @Column(name = "date", nullable = false)
     private LocalDateTime date = LocalDateTime.now();
 
-    @Column(name = "deleted", nullable = false)
-    private Boolean deleted = false;
 
     @Column(name = "status", nullable = false)
     private Integer status = 0;
@@ -76,51 +69,7 @@ public class CardCertification extends AbstractUlidEntity {
     @Column(name = "langue", nullable = false)
     private String langue = "FR";
 
-    @Column(name = "langue_mention", nullable = false)
-    private String langueMention = "FR";
 
-    @Column(name = "shadowless", nullable = false)
-    private Boolean shadowless = false;
-
-    @Column(name = "manuelle", nullable = false)
-    private Boolean manuelle = false;
-
-    @Column(name = "descellee", nullable = false)
-    private Boolean descellee = false;
-
-    @Column(name = "csn", nullable = false)
-    private Boolean csn = false;
-
-    @Column(name = "photo", nullable = false)
-    private Boolean photo = false;
-
-    @Column(name = "vd_cc", nullable = false)
-    private Integer vdCc = 1;
-
-    // ============================================================
-    // OPTIONAL FIELDS
-    // ============================================================
-
-    @Column(name = "annotation")
-    private Boolean annotation;
-
-    @Column(name = "bug")
-    private Boolean bug;
-
-    @Column(name = "edition")
-    private Integer edition = 2;
-
-    @Column(name = "foil")
-    private Boolean foil = false;
-
-    @Column(name = "multi_grade")
-    private Boolean multiGrade;
-
-    @Column(name = "reverse")
-    private Boolean reverse = false;
-
-    @Column(name = "type")
-    private String type;
 
     // ============================================================
     // LIFECYCLE HOOKS - Ensures all required fields have values
@@ -130,18 +79,8 @@ public class CardCertification extends AbstractUlidEntity {
     protected void setDefaults() {
         if (date == null) date = LocalDateTime.now();
         if (codeBarre == null) codeBarre = "";
-        if (customLabel == null) customLabel = "";
-        if (customQrCodeUrl == null) customQrCodeUrl = "";
         if (langue == null) langue = "FR";
-        if (langueMention == null) langueMention = "FR";
         if (status == null) status = 0;
-        if (deleted == null) deleted = false;
-        if (shadowless == null) shadowless = false;
-        if (manuelle == null) manuelle = false;
-        if (descellee == null) descellee = false;
-        if (csn == null) csn = false;
-        if (photo == null) photo = false;
-        if (vdCc == null) vdCc = 1;
 
         // Planning flags defaults
         if (gradingCompleted == null) gradingCompleted = false;

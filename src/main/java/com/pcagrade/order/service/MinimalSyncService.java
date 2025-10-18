@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -95,7 +96,7 @@ public class MinimalSyncService {
         order.setDelai(getString(orderData, "delai"));
 
         // Set order creation date
-        order.setDate(parseDate(getString(orderData, "date")));
+        order.setDate(parseDate(getString(orderData, "order_date")));
 
         // Set total cards count
         order.setTotalCards(getInteger(orderData, "total_cards"));
@@ -199,18 +200,18 @@ public class MinimalSyncService {
         }
     }
 
-    private LocalDate parseDate(String dateStr) {
+    private LocalDateTime parseDate(String dateStr) {
         if (dateStr == null || dateStr.isEmpty()) {
             return null;
         }
-
         try {
-            // Try ISO format first (yyyy-MM-dd)
-            return LocalDate.parse(dateStr, DATE_FORMATTER);
+            // Parse as LocalDate then convert to LocalDateTime
+            LocalDate localDate = LocalDate.parse(dateStr, DATE_FORMATTER);
+            return localDate.atStartOfDay();
         } catch (Exception e) {
             try {
-                // Try with default parser
-                return LocalDate.parse(dateStr);
+                LocalDate localDate = LocalDate.parse(dateStr);
+                return localDate.atStartOfDay();
             } catch (Exception ex) {
                 log.warn("Cannot parse date: {}", dateStr);
                 return null;

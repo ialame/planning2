@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -78,7 +78,7 @@ public class Order extends AbstractUlidEntity {
      * Order creation date (from Symfony)
      */
     @Column(name = "date")
-    private LocalDate date;
+    private LocalDateTime date;
 
     /**
      * Current processing status
@@ -98,7 +98,7 @@ public class Order extends AbstractUlidEntity {
     protected void onOrderCreate() {
         super.onCreate();
         if (date == null) {
-            date = LocalDate.now();
+            date = LocalDateTime.now();
         }
     }
 
@@ -182,8 +182,8 @@ public class Order extends AbstractUlidEntity {
     /**
      * Calculate estimated delivery date based on order date and delai
      */
-    public LocalDate getEstimatedDeliveryDate() {
-        LocalDate baseDate = date != null ? date : LocalDate.now();
+    public LocalDateTime getEstimatedDeliveryDate() {
+        LocalDateTime baseDate = date != null ? date : LocalDateTime.now();
         return baseDate.plusDays(getEstimatedDeliveryDays());
     }
 
@@ -191,8 +191,8 @@ public class Order extends AbstractUlidEntity {
      * Check if order is likely overdue (past estimated delivery date)
      */
     public boolean isLikelyOverdue() {
-        LocalDate estimatedDelivery = getEstimatedDeliveryDate();
-        return LocalDate.now().isAfter(estimatedDelivery)
+        LocalDateTime estimatedDelivery = getEstimatedDeliveryDate();
+        return LocalDateTime.now().isAfter(estimatedDelivery)
                 && status != OrderStatus.COMPLETED
                 && status != OrderStatus.DELIVERED;
     }

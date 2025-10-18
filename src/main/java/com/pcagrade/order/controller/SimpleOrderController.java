@@ -15,6 +15,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -31,8 +33,6 @@ public class SimpleOrderController {
     private final OrderRepository orderRepository;
     private final CardCertificationRepository cardCertificationRepository;
 
-
-
     public SimpleOrderController(
             OrderRepository orderRepository,
             CardCertificationRepository cardCertificationRepository) {
@@ -43,6 +43,7 @@ public class SimpleOrderController {
     /**
      * GET /api/orders
      * Main endpoint for orders list with pagination and filters
+     * UPDATED: Sort by date DESC only (removed priority sorting)
      */
     @GetMapping("")
     public ResponseEntity<Map<String, Object>> getOrders(
@@ -56,32 +57,51 @@ public class SimpleOrderController {
             log.info("📦 GET /api/orders - page: {}, size: {}, delai: {}, status: {}, search: {}",
                     page, size, delai, status, search);
 
-            // Build pageable with sorting by priority
-            Pageable pageable = PageRequest.of(page, size,
-                    Sort.by(Sort.Direction.DESC, "createdAt"));
+            List<Order> orders = orderRepository.findAll();
 
-            List<Order> orders;
-
-            // Apply filters
+            // ✅ Apply ALL filters (not if-else, so multiple filters work together)
             if (delai != null && !delai.isEmpty() && !"all".equals(delai)) {
-                orders = orderRepository.findByDelai(delai);
-            } else if (status != null && !status.isEmpty() && !"all".equals(status)) {
-                try {
-                    OrderStatus orderStatus = OrderStatus.valueOf(status.toUpperCase());
-                    orders = orderRepository.findByStatus(orderStatus);
-                } catch (IllegalArgumentException e) {
-                    orders = orderRepository.findAll();
-                }
-            } else if (search != null && !search.trim().isEmpty()) {
-                orders = orderRepository.findByCustomerNameContainingIgnoreCase(search);
-            } else {
-                orders = orderRepository.findAll();
+                log.info("   Filtering by delai: {}", delai);
+                final String delaiFilter = delai;
+                orders = orders.stream()
+                        .filter(o -> delaiFilter.equals(o.getDelai()))
+                        .collect(Collectors.toList());
             }
 
-            // Sort by priority
+            if (status != null && !status.isEmpty() && !"all".equals(status)) {
+                log.info("   Filtering by status: {}", status);
+                try {
+                    OrderStatus orderStatus = OrderStatus.valueOf(status.toUpperCase());
+                    orders = orders.stream()
+                            .filter(o -> o.getStatus() == orderStatus)
+                            .collect(Collectors.toList());
+                } catch (IllegalArgumentException e) {
+                    log.warn("   Invalid status value: {}", status);
+                }
+            }
+
+            if (search != null && !search.trim().isEmpty()) {
+                log.info("   Filtering by search: {}", search);
+                final String searchLower = search.trim().toLowerCase();
+                orders = orders.stream()
+                        .filter(o -> o.getCustomerName() != null &&
+                                o.getCustomerName().toLowerCase().contains(searchLower))
+                        .collect(Collectors.toList());
+            }
+
+            // ✅ Sort by date DESC BEFORE pagination
             orders = orders.stream()
-                    .sorted(Comparator.comparingInt(Order::getPriorityScore))
+                    .sorted((a, b) -> {
+                        LocalDateTime dateA = a.getDate();
+                        LocalDateTime dateB = b.getDate();
+                        if (dateA == null && dateB == null) return 0;
+                        if (dateA == null) return 1; // nulls last
+                        if (dateB == null) return -1;
+                        return dateB.compareTo(dateA); // DESC
+                    })
                     .collect(Collectors.toList());
+
+            log.info("📅 Sorted {} orders by date DESC", orders.size());
 
             // Paginate manually
             int start = page * size;
@@ -116,8 +136,8 @@ public class SimpleOrderController {
             response.put("success", true);
             response.put("orders", orderMaps);
             response.put("pagination", pagination);
-            response.put("delaiDistribution", delaiStats);
-            response.put("statusStats", statusStats);
+            response.put("delaiStatistics", delaiStats);
+            response.put("statusStatistics", statusStats);
 
             log.info("✅ Returned {} orders (page {}/{})",
                     orderMaps.size(), page + 1, pagination.get("totalPages"));
@@ -126,41 +146,6 @@ public class SimpleOrderController {
 
         } catch (Exception e) {
             log.error("❌ Error loading orders", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("error", e.getMessage());
-            errorResponse.put("orders", new ArrayList<>());
-            return ResponseEntity.status(500).body(errorResponse);
-        }
-    }
-
-    /**
-     * GET /api/orders/high-priority
-     * Get high priority orders (X, F+, F)
-     */
-    @GetMapping("/high-priority")
-    public ResponseEntity<Map<String, Object>> getHighPriorityOrders() {
-        try {
-            log.info("🔴 GET /api/orders/high-priority");
-
-            List<Order> orders = orderRepository.findHighPriorityOrders();
-
-            List<Map<String, Object>> orderMaps = orders.stream()
-                    .map(this::orderToMap)
-                    .collect(Collectors.toList());
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("orders", orderMaps);
-            response.put("count", orders.size());
-            response.put("totalCards", orders.stream()
-                    .mapToInt(Order::getCardCount)
-                    .sum());
-
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("❌ Error loading high priority orders", e);
             return ResponseEntity.status(500).body(Map.of(
                     "success", false,
                     "error", e.getMessage()
@@ -239,174 +224,38 @@ public class SimpleOrderController {
                         Collectors.summingInt(Order::getCardCount)
                 ));
 
-        Map<String, Object> stats = new HashMap<>();
+        Map<String, Object> result = new HashMap<>();
         for (String delai : counts.keySet()) {
-            Map<String, Object> delaiStat = new HashMap<>();
-            delaiStat.put("count", counts.get(delai));
-            delaiStat.put("cards", cardCounts.getOrDefault(delai, 0));
-            stats.put(delai, delaiStat);
+            Map<String, Object> stat = new HashMap<>();
+            stat.put("count", counts.get(delai));
+            stat.put("cards", cardCounts.getOrDefault(delai, 0));
+            result.put(delai, stat);
         }
 
-        return stats;
+        return result;
     }
 
     private Map<String, Object> calculateStatusStatistics(List<Order> orders) {
-        Map<String, Long> counts = orders.stream()
+        Map<OrderStatus, Long> counts = orders.stream()
                 .collect(Collectors.groupingBy(
-                        o -> o.getStatus().name(),
+                        Order::getStatus,
                         Collectors.counting()
                 ));
 
-        Map<String, Integer> cardCounts = orders.stream()
+        Map<OrderStatus, Integer> cardCounts = orders.stream()
                 .collect(Collectors.groupingBy(
-                        o -> o.getStatus().name(),
+                        Order::getStatus,
                         Collectors.summingInt(Order::getCardCount)
                 ));
 
-        Map<String, Object> stats = new HashMap<>();
-        for (String status : counts.keySet()) {
-            Map<String, Object> statusStat = new HashMap<>();
-            statusStat.put("count", counts.get(status));
-            statusStat.put("cards", cardCounts.getOrDefault(status, 0));
-            stats.put(status, statusStat);
+        Map<String, Object> result = new HashMap<>();
+        for (OrderStatus status : counts.keySet()) {
+            Map<String, Object> stat = new HashMap<>();
+            stat.put("count", counts.get(status));
+            stat.put("cards", cardCounts.getOrDefault(status, 0));
+            result.put(status.name(), stat);
         }
 
-        return stats;
-    }
-
-
-    // Add these methods to SimpleOrderController.java after the getOrder method
-
-    /**
-     * GET /api/orders/{id}/cards
-     * Get all cards for a specific order from card_certification table
-     */
-    @GetMapping("/{id}/cards")
-    public ResponseEntity<Map<String, Object>> getOrderCards(@PathVariable String id) {
-        try {
-            log.info("🃏 GET /api/orders/{}/cards", id);
-
-            // Try to find order by order number first
-            Optional<Order> orderOpt = orderRepository.findByOrderNumber(id);
-
-            // If not found, try by UUID
-            if (orderOpt.isEmpty()) {
-                try {
-                    UUID uuid = UUID.fromString(id);
-                    orderOpt = orderRepository.findById(uuid);
-                } catch (IllegalArgumentException e) {
-                    log.warn("Invalid order identifier: {}", id);
-                }
-            }
-
-            if (orderOpt.isEmpty()) {
-                log.warn("Order not found: {}", id);
-                return ResponseEntity.status(404).body(Map.of(
-                        "success", false,
-                        "error", "Order not found"
-                ));
-            }
-
-            Order order = orderOpt.get();
-
-            // ✅ Get cards from card_certification table
-            List<CardCertification> certifications = cardCertificationRepository.findByOrderId(order.getId());
-
-            log.info("✅ Found {} cards in card_certification for order {}", certifications.size(), order.getOrderNumber());
-
-            // Convert certifications to response format
-            List<Map<String, Object>> cardMaps = new ArrayList<>();
-
-            if (certifications.isEmpty() && order.getTotalCards() != null && order.getTotalCards() > 0) {
-                // Fallback: generate virtual cards
-                log.info("   No certifications found, generating {} virtual cards", order.getTotalCards());
-
-                for (int i = 1; i <= order.getTotalCards(); i++) {
-                    Map<String, Object> virtualCard = new HashMap<>();
-                    virtualCard.put("id", UUID.randomUUID().toString());
-                    virtualCard.put("cardName", "Card " + i);
-                    virtualCard.put("name", "Card " + i);
-                    virtualCard.put("cardNumber", String.valueOf(i));
-                    virtualCard.put("labelName", order.getOrderNumber() + "-" + i);
-                    virtualCard.put("label_name", order.getOrderNumber() + "-" + i);
-                    virtualCard.put("code_barre", order.getOrderNumber() + "-" + i);
-                    virtualCard.put("barcode", order.getOrderNumber() + "-" + i);
-                    virtualCard.put("status", order.getStatus().name());
-                    virtualCard.put("grade", "Not graded");
-                    virtualCard.put("duration", 3);
-                    virtualCard.put("quantity", 1);
-                    virtualCard.put("amount", 1);
-                    cardMaps.add(virtualCard);
-                }
-            } else {
-                // Use actual certifications
-                cardMaps = certifications.stream()
-                        .map(this::certificationToMap)
-                        .collect(Collectors.toList());
-            }
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("cards", cardMaps);
-            response.put("total", cardMaps.size());
-            response.put("orderNumber", order.getOrderNumber());
-            response.put("orderStatus", order.getStatus().name());
-            response.put("source", certifications.isEmpty() ? "virtual" : "card_certification");
-
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("❌ Error loading cards for order {}", id, e);
-            return ResponseEntity.status(500).body(Map.of(
-                    "success", false,
-                    "error", e.getMessage()
-            ));
-        }
-    }
-
-    /**
-     * Convert CardCertification to Map
-     */
-    private Map<String, Object> certificationToMap(CardCertification cert) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", cert.getId().toString());
-        map.put("cardName", cert.getCardName() != null ? cert.getCardName() : "Unknown Card");
-        map.put("name", cert.getCardName() != null ? cert.getCardName() : "Unknown Card");
-        map.put("cardId", cert.getCardId() != null ? cert.getCardId() : "N/A");
-        map.put("cardNumber", cert.getCardId() != null ? cert.getCardId().toString() : "N/A");
-        map.put("labelName", cert.getSymfonyCertificationId());
-        map.put("label_name", cert.getSymfonyCertificationId());
-        map.put("code_barre", cert.getSymfonyCertificationId());
-        map.put("barcode", cert.getSymfonyCertificationId());
-
-        // Status based on completion flags
-        String status;
-        if (Boolean.TRUE.equals(cert.getPackagingCompleted())) {
-            status = "COMPLETED";
-        } else if (Boolean.TRUE.equals(cert.getScanningCompleted())) {
-            status = "PACKAGING";
-        } else if (Boolean.TRUE.equals(cert.getCertificationCompleted())) {
-            status = "SCANNING";
-        } else if (Boolean.TRUE.equals(cert.getGradingCompleted())) {
-            status = "CERTIFYING";
-        } else {
-            status = "GRADING";
-        }
-        map.put("status", status);
-
-        // Completion flags
-        map.put("gradingCompleted", cert.getGradingCompleted());
-        map.put("certificationCompleted", cert.getCertificationCompleted());
-        map.put("scanningCompleted", cert.getScanningCompleted());
-        map.put("packagingCompleted", cert.getPackagingCompleted());
-
-        // Additional fields
-        map.put("assignedGrade", cert.getGradingCompleted() ? "Graded" : null);
-        map.put("grade", cert.getGradingCompleted() ? "Graded" : "Not graded");
-        map.put("duration", 3);
-        map.put("quantity", 1);
-        map.put("amount", 1);
-
-        return map;
+        return result;
     }
 }

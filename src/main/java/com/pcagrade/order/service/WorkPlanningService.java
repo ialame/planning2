@@ -118,7 +118,7 @@ public class WorkPlanningService {
         // Sort orders by priority (delai code: X > F+ > F > C > E)
         // Handle null dates safely
         orders.sort(Comparator.comparingInt(Order::getPriorityScore).reversed()
-                .thenComparing(o -> o.getDate() != null ? o.getDate() : LocalDate.MIN));
+                .thenComparing(o -> o.getDate() != null ? o.getDate() : LocalDateTime.MIN));
 
         // Log top priority orders
         log.info("   📋 Top 5 priority orders:");

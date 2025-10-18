@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -561,15 +562,17 @@ public class MinimalSyncController {
             // Set Symfony ID for tracking
             order.setSymfonyOrderId(symfonyId);
 
-            // Map Symfony fields only
+            // Map Symfony fields
             order.setOrderNumber(getString(orderData, "order_number"));
             order.setCustomerName(getString(orderData, "customer_name"));
 
             // Set delai priority code (X, F+, F, C, E)
             order.setDelai(getString(orderData, "delai", "C")); // Default: Classic
 
-            // Set order creation date
-            order.setDate(parseDate(getString(orderData, "date")));
+            // ✅ FIX: Use "order_date" instead of "date"
+            // Symfony returns "order_date", not "date"
+            String dateStr = getString(orderData, "order_date");
+            order.setDate(parseDate(dateStr));
 
             // Set total cards count
             order.setTotalCards(getInteger(orderData, "total_cards", 0));
@@ -664,20 +667,23 @@ public class MinimalSyncController {
         }
     }
 
-    private LocalDate parseDate(String dateStr) {
+    private LocalDateTime parseDate(String dateStr) {
         if (dateStr == null || dateStr.isEmpty()) {
             return null;
         }
-
         try {
-            return LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            // Parse yyyy-MM-dd and convert to LocalDateTime at start of day
+            LocalDate localDate = LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            return localDate.atStartOfDay();
         } catch (Exception e) {
             try {
-                return LocalDate.parse(dateStr);
+                LocalDate localDate = LocalDate.parse(dateStr);
+                return localDate.atStartOfDay();
             } catch (Exception ex) {
                 log.warn("Cannot parse date: {}", dateStr);
                 return null;
             }
         }
     }
+
 }
