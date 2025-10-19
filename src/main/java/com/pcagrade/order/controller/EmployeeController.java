@@ -170,19 +170,20 @@ public class EmployeeController {
             String cleanEmployeeId = employeeId.replace("-", "").toUpperCase();
 
             String sql = """
-            SELECT 
-                HEX(id) as id,
-                COALESCE(first_name, 'Unknown') as firstName,
-                COALESCE(last_name, 'User') as lastName,
-                email,
-                COALESCE(daily_capacity_minutes, 480) as dailyCapacityMinutes,
-                ROUND(COALESCE(daily_capacity_minutes, 480) / 60.0, 2) as workHoursPerDay,
-                COALESCE(active, 1) as active,
-                creation_date as creationDate,
-                modification_date as modificationDate
-            FROM employee
-            WHERE HEX(id) = ?
-            """;
+                SELECT 
+                    HEX(id) as id,
+                    COALESCE(first_name, 'Unknown') as firstName,
+                    COALESCE(last_name, 'User') as lastName,
+                    email,
+                    photo_url as photoUrl,
+                    COALESCE(work_hours_per_day, 8) as workHoursPerDay,
+                    COALESCE(active, 1) as active,
+                    creation_date as creationDate,
+                    modification_date as modificationDate
+                FROM employee
+                WHERE HEX(id) = ?
+                """;
+
 
             Query query = entityManager.createNativeQuery(sql);
             query.setParameter(1, cleanEmployeeId);
@@ -204,8 +205,11 @@ public class EmployeeController {
             employeeData.put("firstName", row[1]);
             employeeData.put("lastName", row[2]);
             employeeData.put("email", row[3]);
-            employeeData.put("workHoursPerDay", row[4]);
-            employeeData.put("dailyCapacityMinutes", row[5]);
+            Object workHours = row[5];
+            employeeData.put("workHoursPerDay", workHours);
+            employeeData.put("dailyCapacityMinutes", workHours != null ?
+                    ((Number) workHours).intValue() * 60 : 480);
+            employeeData.put("photoUrl", row[4]);
             employeeData.put("active", ((Number) row[6]).intValue() == 1);
             employeeData.put("creationDate", row[7]);
             employeeData.put("modificationDate", row[8]);

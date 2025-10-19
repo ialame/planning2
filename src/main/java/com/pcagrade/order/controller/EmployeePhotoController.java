@@ -16,11 +16,10 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * Controller for employee profile pictures
- * Handles upload, download, and deletion of employee photos
+ * Supports both URL-based photos and binary uploads
  */
 @Slf4j
 @RestController
@@ -37,6 +36,7 @@ public class EmployeePhotoController {
     /**
      * Upload employee profile picture
      * POST /api/employees/{employeeId}/photo
+     * Note: Currently stores as base64 data URL in photo_url column
      */
     @PostMapping("/{employeeId}/photo")
     public ResponseEntity<Map<String, Object>> uploadPhoto(
@@ -46,10 +46,12 @@ public class EmployeePhotoController {
         Map<String, Object> response = new HashMap<>();
 
         try {
-            log.info("📸 Uploading photo for employee: {}", employeeId);
+            log.info("📸 Uploading photo for employee: {} (size: {} bytes, type: {})",
+                    employeeId, file.getSize(), file.getContentType());
 
             // Validate file
             if (file.isEmpty()) {
+                log.warn("File is empty");
                 response.put("success", false);
                 response.put("error", "File is empty");
                 return ResponseEntity.badRequest().body(response);
@@ -57,6 +59,7 @@ public class EmployeePhotoController {
 
             // Validate file size
             if (file.getSize() > MAX_FILE_SIZE) {
+                log.warn("File size too large: {} bytes", file.getSize());
                 response.put("success", false);
                 response.put("error", "File size exceeds 5MB limit");
                 return ResponseEntity.badRequest().body(response);
@@ -65,35 +68,52 @@ public class EmployeePhotoController {
             // Validate file type
             String contentType = file.getContentType();
             if (contentType == null || !contentType.startsWith("image/")) {
+                log.warn("Invalid content type: {}", contentType);
                 response.put("success", false);
                 response.put("error", "File must be an image (JPEG, PNG, GIF)");
                 return ResponseEntity.badRequest().body(response);
             }
 
+            log.debug("Reading image file...");
             // Read and resize image
             BufferedImage originalImage = ImageIO.read(new ByteArrayInputStream(file.getBytes()));
             if (originalImage == null) {
+                log.error("Failed to read image - ImageIO returned null");
                 response.put("success", false);
                 response.put("error", "Invalid image file");
                 return ResponseEntity.badRequest().body(response);
             }
 
+            log.debug("Original image size: {}x{}", originalImage.getWidth(), originalImage.getHeight());
+
             // Create thumbnail
             BufferedImage thumbnail = resizeImage(originalImage, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+            log.debug("Thumbnail size: {}x{}", thumbnail.getWidth(), thumbnail.getHeight());
 
             // Convert to bytes
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ImageIO.write(thumbnail, "jpg", baos);
             byte[] imageBytes = baos.toByteArray();
+            log.debug("Thumbnail byte size: {} bytes", imageBytes.length);
+
+            // Convert to base64 data URL
+            String base64Image = java.util.Base64.getEncoder().encodeToString(imageBytes);
+            String dataUrl = "data:image/jpeg;base64," + base64Image;
+            log.debug("Data URL length: {} characters", dataUrl.length());
 
             // Format employee ID for database
             String formattedId = formatEmployeeId(employeeId);
+            log.debug("Formatted employee ID: {}", formattedId);
 
-            // Update database
-            String sql = "UPDATE employee SET profile_picture = ? WHERE HEX(id) = ?";
-            int updated = jdbcTemplate.update(sql, imageBytes, formattedId);
+            // Update database with data URL
+            String sql = "UPDATE employee SET photo_url = ? WHERE HEX(id) = ?";
+            log.debug("Executing SQL: {}", sql);
+
+            int updated = jdbcTemplate.update(sql, dataUrl, formattedId);
+            log.info("Updated {} rows", updated);
 
             if (updated == 0) {
+                log.warn("Employee not found: {}", employeeId);
                 response.put("success", false);
                 response.put("error", "Employee not found");
                 return ResponseEntity.notFound().build();
@@ -118,37 +138,41 @@ public class EmployeePhotoController {
     /**
      * Download employee profile picture
      * GET /api/employees/{employeeId}/photo
+     * Returns the photo URL directly
      */
     @GetMapping("/{employeeId}/photo")
-    public ResponseEntity<byte[]> downloadPhoto(@PathVariable String employeeId) {
+    public ResponseEntity<Map<String, String>> downloadPhoto(@PathVariable String employeeId) {
         try {
-            log.debug("📥 Downloading photo for employee: {}", employeeId);
+            log.debug("📥 Getting photo URL for employee: {}", employeeId);
 
             String formattedId = formatEmployeeId(employeeId);
 
-            String sql = "SELECT profile_picture FROM employee WHERE HEX(id) = ?";
+            String sql = "SELECT photo_url FROM employee WHERE HEX(id) = ?";
 
-            byte[] photoData = jdbcTemplate.query(sql,
+            String photoUrl = jdbcTemplate.query(sql,
                     rs -> {
                         if (rs.next()) {
-                            return rs.getBytes("profile_picture");
+                            return rs.getString("photo_url");
                         }
                         return null;
                     },
                     formattedId
             );
 
-            if (photoData == null || photoData.length == 0) {
+            if (photoUrl == null || photoUrl.isEmpty()) {
                 log.debug("No photo found for employee: {}", employeeId);
                 return ResponseEntity.notFound().build();
             }
 
-            return ResponseEntity.ok()
-                    .contentType(MediaType.IMAGE_JPEG)
-                    .body(photoData);
+            Map<String, String> response = new HashMap<>();
+            response.put("photoUrl", photoUrl);
+
+            log.debug("✅ Photo URL retrieved: {} chars", photoUrl.length());
+
+            return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("❌ Error downloading photo for employee: {}", employeeId, e);
+            log.error("❌ Error getting photo for employee: {}", employeeId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -166,7 +190,7 @@ public class EmployeePhotoController {
 
             String formattedId = formatEmployeeId(employeeId);
 
-            String sql = "UPDATE employee SET profile_picture = NULL WHERE HEX(id) = ?";
+            String sql = "UPDATE employee SET photo_url = NULL WHERE HEX(id) = ?";
             int updated = jdbcTemplate.update(sql, formattedId);
 
             if (updated == 0) {

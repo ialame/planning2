@@ -35,14 +35,55 @@ public class Employee extends AbstractUlidEntity {
     @Column(nullable = false, unique = true, length = 100)
     private String email;
 
-    @Column(length = 255)
+    /**
+     * Photo URL or base64 data URL
+     *
+     * Options for column type:
+     *
+     * 1. MEDIUMTEXT (RECOMMENDED) - Up to 16MB
+     *    Supports large base64 images (up to ~12MB original image)
+     */
+    @Lob
+    @Column(name = "photo_url", columnDefinition = "MEDIUMTEXT")
     private String photoUrl;
+
+    /**
+     * Alternative option if you want smaller limit:
+     *
+     * 2. TEXT - Up to 64KB
+     *    Supports smaller base64 images (up to ~48KB original image)
+     *
+     * @Lob
+     * @Column(name = "photo_url", columnDefinition = "TEXT")
+     * private String photoUrl;
+     */
+
+    /**
+     * Work hours per day (e.g., 8 hours)
+     */
+    @Column(name = "work_hours_per_day", nullable = false)
+    private Integer workHoursPerDay = 8;
+
+    /**
+     * Is employee currently active?
+     */
+    @Column(nullable = false)
+    private Boolean active = true;
+
+    /**
+     * Employee efficiency rating (0.0 to 2.0)
+     * 1.0 = normal speed
+     * 1.5 = 50% faster
+     * 0.8 = 20% slower
+     */
+    @Column(name = "efficiency_rating", nullable = false)
+    private Double efficiencyRating = 1.0;
 
     /**
      * Teams (roles) this employee belongs to
      * Each team represents a role (ROLE_GRADER, ROLE_AUTHENTICATOR, etc.)
      */
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany
     @JoinTable(
             name = "employee_team",
             joinColumns = @JoinColumn(name = "employee_id"),
@@ -51,48 +92,70 @@ public class Employee extends AbstractUlidEntity {
     @JsonIgnore
     private Set<Team> teams = new HashSet<>();
 
-    @Column(name = "active")
-    private Boolean active = true;
-
-    @Column(name = "daily_capacity_minutes")
-    private Integer dailyCapacityMinutes = 480; // 8 hours = 480 minutes
-
-    @Column(name = "efficiency_rating")
-    private Double efficiencyRating = 1.0; // 1.0 = 100% efficiency
+    // ========== BUSINESS LOGIC METHODS ==========
 
     /**
-     * Check if employee has a specific role by team name
-     * @param roleName Role name (e.g., "ROLE_GRADER")
-     * @return true if employee belongs to this team/role
+     * Get employee's full name
      */
-    public boolean hasRole(String roleName) {
-        if (teams == null || teams.isEmpty()) {
-            return false;
-        }
-        return teams.stream()
-                .anyMatch(team -> team.getName().equals(roleName));
+    public String getFullName() {
+        return firstName + " " + lastName;
     }
 
     /**
-     * Check if employee has any of the specified roles
-     * @param roleNames Multiple role names to check
-     * @return true if employee has at least one of these roles
+     * Get daily capacity in minutes (without efficiency consideration)
+     * Used for backward compatibility
+     * Returns Integer (nullable) instead of int for null safety
      */
-    public boolean hasAnyRole(String... roleNames) {
-        if (teams == null || teams.isEmpty()) {
-            return false;
+    public Integer getDailyCapacityMinutes() {
+        if (workHoursPerDay == null) {
+            return null;
         }
-        for (String roleName : roleNames) {
-            if (hasRole(roleName)) {
-                return true;
-            }
-        }
-        return false;
+        return workHoursPerDay * 60;
     }
 
     /**
-     * Get all role names this employee has
-     * @return Set of role names (e.g., ["ROLE_GRADER", "ROLE_SCANNER"])
+     * Set daily capacity in minutes
+     * Converts back to work hours (backward compatibility)
+     */
+    public void setDailyCapacityMinutes(Integer minutes) {
+        if (minutes == null) {
+            this.workHoursPerDay = 8; // default value
+        } else {
+            this.workHoursPerDay = minutes / 60;
+        }
+    }
+
+    /**
+     * Get effective daily capacity in minutes considering efficiency
+     * Formula: work_hours_per_day * 60 * efficiency_rating
+     */
+    public int getEffectiveDailyCapacityMinutes() {
+        return (int) (workHoursPerDay * 60 * efficiencyRating);
+    }
+
+    /**
+     * Add a team to this employee
+     */
+    public void addTeam(Team team) {
+        if (teams == null) {
+            teams = new HashSet<>();
+        }
+        teams.add(team);
+        team.getEmployees().add(this);
+    }
+
+    /**
+     * Remove a team from this employee
+     */
+    public void removeTeam(Team team) {
+        if (teams != null) {
+            teams.remove(team);
+            team.getEmployees().remove(this);
+        }
+    }
+
+    /**
+     * Get role names from teams
      */
     public Set<String> getRoleNames() {
         if (teams == null) {
@@ -104,42 +167,25 @@ public class Employee extends AbstractUlidEntity {
     }
 
     /**
-     * Get employee full name
-     * @return First name + Last name
+     * Check if employee has a specific role
      */
-    public String getFullName() {
-        return firstName + " " + lastName;
-    }
-
-    /**
-     * Get effective daily capacity in minutes (accounting for efficiency)
-     * @return Adjusted capacity based on efficiency rating
-     */
-    public int getEffectiveDailyCapacityMinutes() {
-        if (efficiencyRating == null || efficiencyRating <= 0) {
-            return dailyCapacityMinutes;
-        }
-        return (int) (dailyCapacityMinutes * efficiencyRating);
-    }
-
-    /**
-     * Add a team/role to this employee
-     */
-    public void addTeam(Team team) {
+    public boolean hasRole(String roleName) {
         if (teams == null) {
-            teams = new HashSet<>();
+            return false;
         }
-        teams.add(team);
-        team.getEmployees().add(this);
+        return teams.stream()
+                .anyMatch(team -> team.getName().equals(roleName));
     }
 
     /**
-     * Remove a team/role from this employee
+     * Get number of active teams
      */
-    public void removeTeam(Team team) {
-        if (teams != null) {
-            teams.remove(team);
-            team.getEmployees().remove(this);
+    public int getActiveTeamCount() {
+        if (teams == null) {
+            return 0;
         }
+        return (int) teams.stream()
+                .filter(team -> Boolean.TRUE.equals(team.getActive()))
+                .count();
     }
 }

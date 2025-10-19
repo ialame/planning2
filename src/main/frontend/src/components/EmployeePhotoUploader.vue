@@ -85,27 +85,47 @@ onMounted(() => {
   loadPhoto()
 })
 
-// Reload photo when employeeId changes
+// Watch for employee ID changes
 watch(() => props.employeeId, () => {
   loadPhoto()
 })
 
 /**
- * Load employee photo from backend
+ * Load employee photo from server
  */
 const loadPhoto = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/employees/${props.employeeId}/photo/exists`)
+    console.log(`🔍 Loading photo for employee: ${props.employeeId}`)
 
-    if (response.ok) {
-      const data = await response.json()
+    // First check if photo exists
+    const existsResponse = await fetch(
+      `${API_BASE_URL}/api/employees/${props.employeeId}/photo/exists`
+    )
 
-      if (data.hasPhoto) {
-        // Add timestamp to prevent caching
-        photoUrl.value = `${API_BASE_URL}/api/employees/${props.employeeId}/photo?t=${Date.now()}`
-      } else {
-        photoUrl.value = null
-      }
+    if (!existsResponse.ok) {
+      photoUrl.value = null
+      return
+    }
+
+    const existsData = await existsResponse.json()
+
+    if (!existsData.hasPhoto) {
+      console.log('No photo found for employee')
+      photoUrl.value = null
+      return
+    }
+
+    // Get the photo URL
+    const photoResponse = await fetch(
+      `${API_BASE_URL}/api/employees/${props.employeeId}/photo`
+    )
+
+    if (photoResponse.ok) {
+      const data = await photoResponse.json()
+      photoUrl.value = data.photoUrl
+      console.log('✅ Photo loaded successfully')
+    } else {
+      photoUrl.value = null
     }
   } catch (err) {
     console.error('Error loading photo:', err)
@@ -125,39 +145,39 @@ const triggerFileInput = () => {
 /**
  * Handle file selection
  */
-const handleFileSelect = async (event: Event) => {
+const handleFileSelect = (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
 
-  if (!file) return
-
-  // Validate file
-  if (!file.type.startsWith('image/')) {
-    showError('Please select an image file')
-    return
+  if (file) {
+    uploadPhoto(file)
   }
-
-  if (file.size > 5 * 1024 * 1024) {
-    showError('File size must be less than 5MB')
-    return
-  }
-
-  await uploadPhoto(file)
 }
 
 /**
- * Upload photo to backend
+ * Upload photo to server
  */
 const uploadPhoto = async (file: File) => {
-  uploading.value = true
-  uploadProgress.value = 0
-  error.value = null
-  success.value = null
-
   try {
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      showError('File size must be less than 5MB')
+      return
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      showError('Please select a valid image file')
+      return
+    }
+
+    uploading.value = true
+    uploadProgress.value = 0
+
     const formData = new FormData()
     formData.append('file', file)
 
+    // Use XMLHttpRequest for progress tracking
     const xhr = new XMLHttpRequest()
 
     // Track upload progress
@@ -168,12 +188,12 @@ const uploadPhoto = async (file: File) => {
     })
 
     // Handle completion
-    xhr.addEventListener('load', () => {
+    xhr.addEventListener('load', async () => {
       if (xhr.status === 200) {
         const response = JSON.parse(xhr.responseText)
         if (response.success) {
-          showSuccess('Photo uploaded successfully!')
-          loadPhoto()
+          showSuccess('Photo uploaded successfully')
+          await loadPhoto()
           emit('photoUpdated')
         } else {
           showError(response.error || 'Upload failed')
@@ -324,8 +344,7 @@ const showSuccess = (message: string) => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 0.3s;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s;
 }
 
 .photo-placeholder:hover {
@@ -341,12 +360,12 @@ const showSuccess = (message: string) => {
 }
 
 .placeholder-icon {
-  font-size: 64px;
+  font-size: 48px;
 }
 
 .placeholder-text {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .upload-progress {
@@ -364,13 +383,13 @@ const showSuccess = (message: string) => {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  transition: width 0.3s;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.3s ease;
 }
 
 .progress-text {
   margin-top: 8px;
-  font-size: 14px;
+  font-size: 12px;
   color: #6b7280;
   text-align: center;
 }
@@ -379,17 +398,15 @@ const showSuccess = (message: string) => {
   padding: 12px 16px;
   background: #fee2e2;
   color: #991b1b;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 14px;
-  text-align: center;
 }
 
 .success-message {
   padding: 12px 16px;
   background: #d1fae5;
   color: #065f46;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 14px;
-  text-align: center;
 }
 </style>

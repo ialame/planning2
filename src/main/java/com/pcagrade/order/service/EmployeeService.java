@@ -111,18 +111,20 @@ public class EmployeeService {
             log.debug("Getting all active employees");
 
             String sql = """
-                SELECT 
-                    HEX(e.id) as id,
-                    e.first_name as firstName,
-                    e.last_name as lastName,
-                    e.email,
-                    COALESCE(e.active, 1) as active,
-                    COALESCE(e.daily_capacity_minutes, 480) as dailyCapacityMinutes,
-                    e.creation_date as creationDate
-                FROM employee e
-                WHERE COALESCE(e.active, 1) = 1
-                ORDER BY e.first_name, e.last_name
-                """;
+            SELECT 
+                HEX(e.id) as id,
+                e.first_name as firstName,
+                e.last_name as lastName,
+                e.email,
+                e.photo_url as photoUrl,
+                COALESCE(e.active, 1) as active,
+                COALESCE(e.work_hours_per_day, 8) as workHoursPerDay,
+                COALESCE(e.efficiency_rating, 1.0) as efficiencyRating,
+                e.creation_date as creationDate
+            FROM employee e
+            WHERE COALESCE(e.active, 1) = 1
+            ORDER BY e.first_name, e.last_name
+            """;
 
             Query query = entityManager.createNativeQuery(sql);
 
@@ -139,23 +141,38 @@ public class EmployeeService {
                     String firstName = (String) row[1];
                     String lastName = (String) row[2];
                     Object emailObj = row[3];
-                    Object activeObj = row[4];
-                    Object capacityObj = row[5];
-                    Object creationDateObj = row[6];
+                    Object photoUrlObj = row[4];
+                    Object activeObj = row[5];
+                    Object workHoursObj = row[6];
+                    Object efficiencyObj = row[7];
+                    Object creationDateObj = row[8];
 
+                    // Basic info
                     employee.put("id", id);
                     employee.put("firstName", firstName != null ? firstName : "Unknown");
                     employee.put("lastName", lastName != null ? lastName : "User");
+                    employee.put("fullName", (firstName != null ? firstName : "Unknown") + " " +
+                            (lastName != null ? lastName : "User"));
                     employee.put("email", emailObj);
-                    employee.put("dailyCapacityMinutes", capacityObj != null ?
-                            ((Number) capacityObj).intValue() : 480);
-                    // Convert to hours for display
-                    employee.put("workHoursPerDay", capacityObj != null ?
-                            ((Number) capacityObj).intValue() / 60 : 8);
+                    employee.put("photoUrl", photoUrlObj);
+
+                    // Work capacity
+                    int workHours = workHoursObj != null ?
+                            ((Number) workHoursObj).intValue() : 8;
+                    employee.put("workHoursPerDay", workHours);
+                    employee.put("dailyCapacityMinutes", workHours * 60);
+
+                    // Efficiency
+                    double efficiency = efficiencyObj != null ?
+                            ((Number) efficiencyObj).doubleValue() : 1.0;
+                    employee.put("efficiencyRating", efficiency);
+
+                    // Status
                     employee.put("active", activeObj != null ?
                             ((Number) activeObj).intValue() == 1 : true);
+
+                    // Dates
                     employee.put("creationDate", creationDateObj);
-                    employee.put("fullName", firstName + " " + lastName);
 
                     employees.add(employee);
 
@@ -169,10 +186,9 @@ public class EmployeeService {
 
         } catch (Exception e) {
             log.error("Error getting active employees", e);
-            return new ArrayList<>();
+            throw new RuntimeException("Error retrieving employees", e);
         }
     }
-
     /**
      * Validate new employee business rules
      */

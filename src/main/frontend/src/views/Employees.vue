@@ -1,39 +1,53 @@
 <template>
-  <div class="container mx-auto p-6">
-    <!-- Header with Mode Toggle -->
+  <div class="employees-page">
+    <!-- Header -->
     <div class="flex justify-between items-center mb-6">
-      <div>
-        <h1 class="text-3xl font-bold text-gray-900">👥 Employee Management & Planning</h1>
-        <p class="text-gray-600 mt-1">
-          {{ currentView === 'management' ? 'Manage team members and their information' : 'View employee schedules and workload distribution' }}
-        </p>
-      </div>
+      <h1 class="text-3xl font-bold text-gray-900">Team Management</h1>
 
-      <!-- Mode Toggle -->
-      <div class="flex bg-white rounded-lg shadow-sm border p-1">
+      <!-- View Switcher -->
+      <div class="flex space-x-2 bg-gray-100 rounded-lg p-1">
         <button
           @click="currentView = 'management'"
           :class="[
             'px-4 py-2 rounded-md text-sm font-medium transition-colors',
-            currentView === 'management' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
+            currentView === 'management'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
           ]"
         >
-          👤 Management
+          👥 Management
         </button>
         <button
           @click="currentView = 'planning'"
           :class="[
             'px-4 py-2 rounded-md text-sm font-medium transition-colors',
-            currentView === 'planning' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
+            currentView === 'planning'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
           ]"
         >
-          📋 Planning View
+          📅 Planning
         </button>
       </div>
     </div>
 
-    <!-- Stats Dashboard -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <!-- Date Selector (Planning view only) -->
+    <div v-if="currentView === 'planning' && !selectedEmployeeId" class="mb-6">
+      <div class="bg-white rounded-lg shadow-md p-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          Select Date for Planning
+        </label>
+        <input
+          v-model="selectedDate"
+          type="date"
+          @change="loadPlanningForSelectedDate"
+          class="input-field max-w-xs"
+        />
+      </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
       <div class="card">
         <div class="flex items-center">
           <div class="bg-blue-500 rounded-lg p-3 mr-4">
@@ -42,7 +56,7 @@
             </svg>
           </div>
           <div>
-            <p class="text-sm text-gray-600">Total Team</p>
+            <p class="text-sm text-gray-600">Total Employees</p>
             <p class="text-2xl font-semibold text-gray-900">{{ stats.total }}</p>
           </div>
         </div>
@@ -134,145 +148,155 @@
           </form>
         </div>
 
+        <!-- Employee Cards Grid (MANAGEMENT VIEW) -->
+        <div class="p-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div
+              v-for="employee in managementEmployees"
+              :key="employee.id"
+              class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200"
+            >
+              <div class="p-6">
+                <!-- Employee Header -->
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center">
+                    <!-- ✅ Avatar Component -->
+                    <EmployeeAvatar
+                      :key="`avatar-${employee.id}-${avatarKey}`"
+                      :employeeId="employee.id"
+                      :employeeName="`${employee.firstName} ${employee.lastName}`"
+                      size="md"
+                    />
 
-        <!-- Employee Cards Grid (NORMAL FORMAT) -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div
-            v-for="employee in managementEmployees"
-            :key="employee.id"
-            class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow"
-          >
-            <div class="p-6">
-              <!-- Employee Header -->
-              <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center">
-                  <div class="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-              <span class="text-white font-bold">
-<!--                {{ getInitials(employee) }}-->
-                <!-- ✅ NOUVEAU : Composant Avatar -->
-                  <EmployeeAvatar
-                    :employeeId="employee.id"
-                    :employeeName="`${employee.firstName} ${employee.lastName}`"
-                    size="md"
-                  />
-              </span>
+                    <div class="ml-3">
+                      <h3 class="text-lg font-semibold text-gray-900">
+                        {{ employee.firstName }} {{ employee.lastName }}
+                      </h3>
+                      <p class="text-sm text-gray-600">{{ employee.email }}</p>
+                    </div>
                   </div>
-                  <div class="ml-3">
-                    <h3 class="text-lg font-semibold text-gray-900">{{ employee.firstName }} {{ employee.lastName }}</h3>
-                    <p class="text-sm text-gray-600">{{ employee.email }}</p>
+
+                  <span :class="[
+                    'px-2 py-1 rounded-full text-xs font-medium',
+                    employee.status === 'AVAILABLE' ? 'bg-green-100 text-green-800' :
+                    employee.status === 'BUSY' ? 'bg-orange-100 text-orange-800' :
+                    employee.status === 'OVERLOADED' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
+                  ]">
+                    {{ employee.status || 'AVAILABLE' }}
+                  </span>
+                </div>
+
+                <!-- Employee Details -->
+                <div class="space-y-2 mb-4">
+                  <div class="flex justify-between text-sm">
+                    <span class="text-gray-600">Work Hours:</span>
+                    <span class="font-medium">{{ employee.workHoursPerDay }}h/day</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-gray-600">Teams:</span>
+                    <span class="font-medium">{{ employee.teams?.length || 0 }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-gray-600">Active:</span>
+                    <span :class="employee.active ? 'text-green-600' : 'text-red-600'">
+                      {{ employee.active ? '✓ Yes' : '✗ No' }}
+                    </span>
                   </div>
                 </div>
 
-                <span :class="[
-            'px-2 py-1 rounded-full text-xs font-medium',
-            employee.status === 'AVAILABLE' ? 'bg-green-100 text-green-800' :
-            employee.status === 'BUSY' ? 'bg-orange-100 text-orange-800' :
-            'bg-gray-100 text-gray-800'
-          ]">
-            {{ employee.status || 'AVAILABLE' }}
-          </span>
-              </div>
+                <!-- Action Buttons -->
+                <div class="flex space-x-2">
+                  <!-- Upload Photo Button -->
+                  <button
+                    @click="openPhotoUpload(employee.id)"
+                    class="flex-1 bg-purple-50 text-purple-600 px-3 py-2 rounded text-sm font-medium hover:bg-purple-100 flex items-center justify-center gap-1"
+                    title="Upload Photo"
+                  >
+                    📷 Photo
+                  </button>
 
-              <!-- Employee Stats -->
-              <div class="space-y-2 mb-4">
-                <div class="flex justify-between text-sm">
-                  <span class="text-gray-600">Work Hours:</span>
-                  <span class="font-medium">{{ employee.workHoursPerDay || 8 }}h/day</span>
+                  <!-- View Details Button -->
+                  <button
+                    @click="viewEmployeeDetails(employee.id)"
+                    class="flex-1 bg-blue-50 text-blue-600 px-3 py-2 rounded text-sm font-medium hover:bg-blue-100"
+                  >
+                    👁️ Details
+                  </button>
                 </div>
-                <div class="flex justify-between text-sm">
-                  <span class="text-gray-600">Active Orders:</span>
-                  <span class="font-medium">{{ employee.activeOrders || 0 }}</span>
-                </div>
-              </div>
-
-              <!-- ✅ CORRECT ACTIONS (View Details + View Planning) -->
-              <div class="flex space-x-2">
-                <button
-                  @click="viewEmployee(employee.id)"
-                  class="flex-1 bg-blue-50 text-blue-600 px-3 py-2 rounded text-sm font-medium hover:bg-blue-100"
-                >
-                  👁️ View Details
-                </button>
-                <button
-                  @click="viewEmployeePlanning(employee.id)"
-                  class="flex-1 bg-green-50 text-green-600 px-3 py-2 rounded text-sm font-medium hover:bg-green-100"
-                >
-                  📋 View Planning
-                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-
       <!-- ✅ PLANNING VIEW -->
-      <!-- Planning Employee Grid (WORKLOAD FORMAT) -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div v-if="currentView === 'planning'" class="space-y-6">
         <div
           v-for="employee in employeesWithWorkload"
           :key="employee.id"
-          class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer"
+          class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow"
         >
           <div class="p-6">
-            <!-- Employee Header -->
+            <!-- Employee Info -->
             <div class="flex items-center justify-between mb-4">
               <div class="flex items-center">
-                <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-              <span class="text-white font-bold text-xl">
-                {{ getInitials(employee) }}
-              </span>
-                </div>
+                <EmployeeAvatar
+                  :employeeId="employee.id"
+                  :employeeName="`${employee.firstName} ${employee.lastName}`"
+                  size="lg"
+                />
                 <div class="ml-4">
-                  <h3 class="text-xl font-bold text-gray-900">{{ employee.firstName }} {{ employee.lastName }}</h3>
-                  <p class="text-gray-600">{{ employee.activeOrders || 0 }} active tasks</p>
+                  <h3 class="text-xl font-semibold text-gray-900">
+                    {{ employee.firstName }} {{ employee.lastName }}
+                  </h3>
+                  <p class="text-sm text-gray-600">{{ employee.email }}</p>
                 </div>
               </div>
 
-              <span :class="[
-            'px-3 py-1 rounded-full text-sm font-medium',
-            getWorkloadColor(employee.workload || 0)
-          ]">
-            {{ getWorkloadStatus(employee.workload || 0) }}
-          </span>
+              <!-- Workload Badge -->
+              <div :class="[
+                'px-4 py-2 rounded-lg text-sm font-semibold',
+                employee.workload < 0.8 ? 'bg-green-100 text-green-800' :
+                employee.workload < 1.0 ? 'bg-orange-100 text-orange-800' :
+                'bg-red-100 text-red-800'
+              ]">
+                {{ Math.round(employee.workload * 100) }}% Workload
+              </div>
             </div>
 
-            <!-- Workload Progress -->
+            <!-- Workload Bar -->
             <div class="mb-4">
-              <div class="flex justify-between text-sm mb-2">
-                <span class="text-gray-600">Daily Workload</span>
-                <span class="font-medium">{{ Math.round((employee.workload || 0) * 100) }}%</span>
+              <div class="flex justify-between text-sm text-gray-600 mb-1">
+                <span>Capacity</span>
+                <span>{{ employee.estimatedHours }}h / {{ employee.workHoursPerDay }}h</span>
               </div>
-              <div class="w-full bg-gray-200 rounded-full h-2">
+              <div class="w-full bg-gray-200 rounded-full h-3">
                 <div
-                  class="h-2 rounded-full transition-all duration-300"
-                  :class="getWorkloadBarColor(employee.workload || 0)"
-                  :style="{ width: `${Math.min((employee.workload || 0) * 100, 100)}%` }"
+                  :class="[
+                    'h-3 rounded-full transition-all',
+                    employee.workload < 0.8 ? 'bg-green-500' :
+                    employee.workload < 1.0 ? 'bg-orange-500' :
+                    'bg-red-500'
+                  ]"
+                  :style="{ width: Math.min(employee.workload * 100, 100) + '%' }"
                 ></div>
               </div>
-              <div class="text-xs text-gray-500 mt-1">
-                {{ employee.estimatedHours || 0 }}h / {{ employee.workHoursPerDay || 8 }}h
-              </div>
             </div>
 
-            <!-- Date Filter for Planning View -->
-            <div v-if="currentView === 'planning'" class="bg-white rounded-lg shadow p-4 mb-6">
-              <div class="flex items-center justify-between">
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-900">📅 Planning Date</h3>
-                  <p class="text-sm text-gray-600">Select date to view planning assignments</p>
-                </div>
-                <div class="flex items-center space-x-4">
-                  <label class="text-sm font-medium text-gray-700">Date:</label>
-                  <input
-                    type="date"
-                    v-model="selectedDate"
-                    class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-                  />
-                  <div class="text-sm text-gray-500">
-                    Current: {{ selectedDate }}
-                  </div>
-                </div>
+            <!-- Stats -->
+            <div class="grid grid-cols-3 gap-4 mb-4">
+              <div class="text-center p-3 bg-gray-50 rounded-lg">
+                <p class="text-2xl font-bold text-gray-900">{{ employee.totalCards || 0 }}</p>
+                <p class="text-xs text-gray-600">Total Cards</p>
+              </div>
+              <div class="text-center p-3 bg-gray-50 rounded-lg">
+                <p class="text-2xl font-bold text-gray-900">{{ employee.activeOrders || 0 }}</p>
+                <p class="text-xs text-gray-600">Active Orders</p>
+              </div>
+              <div class="text-center p-3 bg-gray-50 rounded-lg">
+                <p class="text-2xl font-bold text-gray-900">{{ selectedDate }}</p>
+                <p class="text-xs text-gray-600">Planning Date</p>
               </div>
             </div>
 
@@ -293,7 +317,6 @@
           </div>
         </div>
       </div>
-    </div>
 
       <!-- Empty State -->
       <div v-if="employees.length === 0 && !loading" class="bg-white rounded-lg shadow-md p-8 text-center">
@@ -314,27 +337,94 @@
       </div>
     </div>
 
+    <!-- ✅ EMPLOYEE DETAIL VIEW -->
+    <div v-if="selectedEmployeeId" class="space-y-6">
+      <EmployeeDetailPage
+        :key="`${selectedEmployeeId}-${selectedDate}`"
+        :employeeId="selectedEmployeeId"
+        :selectedDate="selectedDate"
+        :mode="currentView"
+        @back="handleEmployeeBack"
+        @refresh="loadEmployees"
+      />
+    </div>
 
-  <!-- ✅ EMPLOYEE DETAIL VIEW -->
-  <div v-if="selectedEmployeeId" class="space-y-6">
-    <EmployeeDetailPage
-      :key="`${selectedEmployeeId}-${selectedDate}`"
-      :employeeId="selectedEmployeeId"
-      :selectedDate="selectedDate"
-      :mode="currentView"
-      @back="handleEmployeeBack"
-      @refresh="loadEmployees"
-    />
+    <!-- ✅ PHOTO UPLOAD MODAL -->
+    <div
+      v-if="showPhotoUploadModal"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      @click.self="closePhotoUpload"
+    >
+      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold text-gray-900">Upload Employee Photo</h3>
+          <button
+            @click="closePhotoUpload"
+            class="text-gray-400 hover:text-gray-600 text-2xl leading-none hover:bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <!-- Photo Uploader Component -->
+        <EmployeePhotoUploader
+          v-if="selectedPhotoEmployeeId"
+          :employeeId="selectedPhotoEmployeeId"
+          :editable="true"
+          @photo-updated="handlePhotoUploaded"
+          @photo-deleted="handlePhotoDeleted"
+        />
+
+        <div class="mt-4 text-sm text-gray-500 text-center">
+          <p>📸 Upload a photo (max 5MB)</p>
+          <p class="mt-1">Supported formats: JPG, PNG, GIF</p>
+        </div>
+
+        <!-- Close Button -->
+        <div class="mt-6 flex justify-end">
+          <button
+            @click="closePhotoUpload"
+            class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import EmployeeDetailPage from '../components/EmployeeDetailPage.vue'
-import { API_BASE_URL, API_ENDPOINTS } from '@/config/api'
-import EmployeePhotoUploader from "@/components/EmployeePhotoUploader.vue";
-import EmployeeAvatar from "@/components/EmployeeAvatar.vue";
+import EmployeeAvatar from '@/components/EmployeeAvatar.vue'
+import EmployeePhotoUploader from '@/components/EmployeePhotoUploader.vue'
+import { API_BASE_URL } from '@/config/api'
 
+// ========== INTERFACES ==========
+interface Employee {
+  id: string
+  firstName: string
+  lastName: string
+  fullName?: string
+  name?: string
+  email: string
+  workHoursPerDay: number
+  active: boolean
+  status?: string
+  workload?: number
+  estimatedHours?: number
+  totalCards?: number
+  activeOrders?: number
+  teams?: any[]
+}
+
+interface NewEmployee {
+  firstName: string
+  lastName: string
+  email: string
+}
 
 // ========== STATE ==========
 const currentView = ref<'management' | 'planning'>('management')
@@ -343,20 +433,17 @@ const loading = ref(false)
 const showAddForm = ref(false)
 const selectedDate = ref(new Date().toISOString().split('T')[0])
 
-const isCheckingOtherDates = ref(false) // ← NOUVEAU : empêche la récursion
-// Employee data
+// Photo upload modal state
+const showPhotoUploadModal = ref(false)
+const selectedPhotoEmployeeId = ref<string | null>(null)
+const avatarKey = ref(0) // Key to force avatar reload
+
 const employees = ref<Employee[]>([])
 const newEmployee = ref<NewEmployee>({
   firstName: '',
   lastName: '',
   email: ''
 })
-
-const loadPlanningForSelectedDate = async () => {
-  if (selectedEmployeeId.value && currentView.value === 'planning') {
-    await loadEmployeePlannings(selectedEmployeeId.value)
-  }
-}
 
 // ========== COMPUTED ==========
 const stats = computed(() => ({
@@ -366,15 +453,13 @@ const stats = computed(() => ({
   overloaded: employees.value.filter(e => e.workload && e.workload >= 1.0).length
 }))
 
-// For management view (normal employee cards)
 const managementEmployees = computed(() => {
-  return employees.value.filter(emp => emp)  // Just return all employees normally
+  return employees.value.filter(emp => emp)
 })
 
-// For planning view (employees with workload data)
 const employeesWithWorkload = computed(() => {
   if (currentView.value !== 'planning') {
-    return []  // Don't compute workload data unless in planning view
+    return []
   }
 
   return employees.value.map(emp => ({
@@ -387,105 +472,38 @@ const employeesWithWorkload = computed(() => {
 })
 
 // ========== METHODS ==========
+
+/**
+ * Load employees
+ */
 const loadEmployees = async () => {
   loading.value = true
   try {
-    console.log('👥 Loading employees in management mode')
+    console.log('👥 Loading employees')
 
     const response = await fetch(`${API_BASE_URL}/api/employees`, { method: 'GET' })
 
     if (response.ok) {
       const data = await response.json()
-
-      // ✅ Load employees in NORMAL format (not workload format)
-      employees.value = (data.employees || data || []).map(emp => ({
-        id: emp.id,
-        firstName: emp.firstName,
-        lastName: emp.lastName,
-        email: emp.email,
-        status: emp.status || 'AVAILABLE',
-        workHoursPerDay: emp.workHoursPerDay || 8,
-        activeOrders: emp.activeOrders || 0,
-        // Don't include workload data in management view
-      }))
-
-      console.log(`✅ Loaded ${employees.value.length} employees in management mode`)
+      employees.value = data
+      console.log(`✅ Loaded ${employees.value.length} employees`)
     } else {
-      console.error('Failed to load employees:', response.status)
+      console.error('❌ Failed to load employees')
     }
   } catch (error) {
-    console.error('Error loading employees:', error)
+    console.error('❌ Error loading employees:', error)
   } finally {
     loading.value = false
   }
 }
 
-
-const loadPlanningData = async () => {
-  if (currentView.value === 'planning') {
-    try {
-      await generateUnifiedPlanning()
-      // const response = await fetch(`/api/frontend/employees/planning-data?date=${selectedDate.value}`) // ✅ Nouveau endpoint
-      // if (response.ok) {
-      //   const data = await response.json()
-      //   employees.value = data.employees || employees.value
-      //   console.log('✅ Planning data loaded:', data.employees?.length, 'employees')
-      // }
-    } catch (error) {
-      console.error('Error loading planning data:', error)
-    }
-  }
-}
-const generateUnifiedPlanning = async () => {
-  try {
-    loading.value = true
-    console.log('🔄 Generating unified planning...')
-
-    // Afficher un message de progression
-    showNotification('Generating planning, please wait...', 'info')
-
-    const response = await fetch(`${API_BASE_URL}/api/planning/generate-unified`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        startDate: '2025-06-01',
-        planningDate: selectedDate.value,
-        timePerCard: 3,
-        cleanFirst: true
-      })
-    })
-
-    if (response.ok) {
-      const result = await response.json()
-      console.log('✅ Unified planning result:', result)
-
-      if (result.success) {
-        // Mettre à jour les données des employés
-        if (result.employeeAssignments) {
-          employees.value = result.employeeAssignments
-        }
-
-        const totalAssigned = result.totalOrdersAssigned || 0
-        showNotification(`Planning generated! ${totalAssigned} orders assigned`, 'success')
-
-      } else {
-        showNotification(result.message || 'Planning generation failed', 'error')
-      }
-    } else {
-      throw new Error(`HTTP ${response.status}`)
-    }
-
-  } catch (error) {
-    console.error('❌ Error generating unified planning:', error)
-    showNotification('Error generating unified planning. Please try again.', 'error')
-  } finally {
-    loading.value = false
-  }
-}
-
-
+/**
+ * Add new employee
+ */
 const addEmployee = async () => {
   try {
+    console.log('➕ Adding employee:', newEmployee.value)
+
     const response = await fetch(`${API_BASE_URL}/api/employees`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -493,230 +511,89 @@ const addEmployee = async () => {
     })
 
     if (response.ok) {
+      console.log('✅ Employee added successfully')
       newEmployee.value = { firstName: '', lastName: '', email: '' }
       showAddForm.value = false
       await loadEmployees()
+    } else {
+      console.error('❌ Failed to add employee')
     }
   } catch (error) {
-    console.error('Error adding employee:', error)
+    console.error('❌ Error adding employee:', error)
   }
 }
 
-const handleEmployeeBack = () => {
-  console.log('🔙 Handling back from employee detail')
-
-  // ✅ CRITICAL: Reset to management view and clear selection
-  currentView.value = 'management'  // NOT 'planning'!
-  selectedEmployeeId.value = null
-
-  // Reload employees in normal format (not workload format)
-  loadEmployees()
+/**
+ * Load planning for selected date
+ */
+const loadPlanningForSelectedDate = async () => {
+  if (selectedEmployeeId.value && currentView.value === 'planning') {
+    console.log('📅 Loading planning for date:', selectedDate.value)
+  }
 }
 
-
-const viewEmployee = (employeeId: string) => {
+/**
+ * View employee details
+ */
+const viewEmployeeDetails = (employeeId: string) => {
   console.log('👁️ Viewing employee details:', employeeId)
   selectedEmployeeId.value = employeeId
-  // Stay in management view for detail viewing
 }
 
-
-const viewEmployeePlanning = async (employeeId: string) => {
-  console.log('📋 Viewing employee planning:', employeeId)
-
-  try {
-    // Set to planning mode and select employee
-    currentView.value = 'planning'
-    selectedEmployeeId.value = employeeId
-
-    // Load planning data if needed
-    await loadEmployeePlannings(employeeId)
-
-  } catch (error) {
-    console.error('❌ Error viewing employee planning:', error)
-    if (showNotification) {
-      showNotification('Error loading employee planning', 'error')
-    }
-  }
-}
-const loadEmployeePlannings = async (employeeId: string) => {
-  try {
-    loading.value = true
-    console.log('📋 Loading plannings for employee:', employeeId, 'for date:', selectedDate.value)
-
-    const response = await fetch(`${API_BASE_URL}/api/planning/employee/${employeeId}?date=${selectedDate.value}`)
-
-    if (response.ok) {
-      const data = await response.json()
-      console.log('✅ Employee plannings loaded:', data)
-
-      // Update the display with employee plannings
-      const employee = employees.value.find(emp => emp.id === employeeId)
-      if (employee) {
-        employee.plannings = data.plannings || []
-        employee.assignedOrders = data.orders || []
-        employee.totalWorkload = data.totalMinutes || 0
-      }
-
-      const orderCount = data.orders?.length || 0
-
-      // ✅ FIX: Only check other dates if not already checking
-      if (orderCount === 0 && !isCheckingOtherDates.value) {
-        await checkForOrdersOnOtherDates(employeeId)
-      } else if (orderCount > 0) {
-        showNotification(`✅ Loaded ${orderCount} orders for employee on ${selectedDate.value}`, 'success')
-      } else if (isCheckingOtherDates.value) {
-        // Already checked, no orders found anywhere
-        showNotification('No orders found for this employee on any date. Generate planning first.', 'info')
-      }
-
-    } else if (response.status === 404) {
-      console.log('ℹ️ No plannings found for employee:', employeeId, 'on date:', selectedDate.value)
-
-      // ✅ FIX: Only check other dates if not already checking
-      if (!isCheckingOtherDates.value) {
-        await checkForOrdersOnOtherDates(employeeId)
-      } else {
-        showNotification('No orders found for this employee on any date. Generate planning first.', 'info')
-      }
-    } else {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-
-  } catch (error) {
-    console.error('❌ Error loading employee plannings:', error)
-    showNotification('Error loading employee planning. Please try again.', 'error')
-  } finally {
-    loading.value = false
-  }
-}
-
-
-// ========== 3. ADD FUNCTION TO CHECK OTHER DATES ==========
-
-// Dans Employees.vue, section <script setup>
-// Remplacez COMPLÈTEMENT la fonction checkForOrdersOnOtherDates par celle-ci :
-
-const checkForOrdersOnOtherDates = async (employeeId: string) => {
-  // Protection contre récursion
-  if (isCheckingOtherDates.value) {
-    console.log('⚠️ Already checking other dates, skipping...')
-    return
-  }
-
-  try {
-    isCheckingOtherDates.value = true
-    console.log('🔍 Checking for orders on other dates for employee:', employeeId)
-
-    // Chercher sans filtre de date
-    const response = await fetch(`${API_BASE_URL}/api/planning/employee/${employeeId}`)
-
-    if (response.ok) {
-      const data = await response.json()
-      const totalOrders = data.orders?.length || 0
-
-      if (totalOrders > 0) {
-        // Trouver les dates avec des commandes
-        const orderDates = [...new Set(data.orders.map((order: any) => order.planningDate))]
-          .sort()
-
-        console.log('📅 Found orders on dates:', orderDates)
-
-        if (orderDates.length > 0) {
-          const firstDate = orderDates[0]
-          console.log(`🎯 Auto-selecting first available date: ${firstDate}`)
-
-          showNotification(
-            `Found ${totalOrders} orders. Auto-loading date: ${firstDate}`,
-            'info'
-          )
-
-          // ✅ Changer seulement la date - la key fera le reste
-          selectedDate.value = firstDate
-        }
-      } else {
-        console.log('ℹ️ No orders found on any date')
-        showNotification(
-          'No orders found for this employee on any date. Generate planning first.',
-          'info'
-        )
-      }
-    }
-  } catch (error) {
-    console.error('❌ Error checking other dates:', error)
-  } finally {
-    // ✅ Toujours réinitialiser le flag
-    isCheckingOtherDates.value = false
-  }
-}
-
-
-const viewEmployeeOrders = (employeeId: string) => {
+/**
+ * View employee planning
+ */
+const viewEmployeePlanning = (employeeId: string) => {
+  console.log('📅 Viewing employee planning:', employeeId)
   selectedEmployeeId.value = employeeId
 }
 
-const refreshEmployees = () => {
+/**
+ * Handle back from employee detail
+ */
+const handleEmployeeBack = () => {
+  selectedEmployeeId.value = null
   loadEmployees()
-  if (currentView.value === 'planning') {
-    loadPlanningData()
-  }
 }
 
-// Helper functions
-const getInitials = (employee: Employee) => {
-  return `${employee.firstName?.charAt(0) || ''}${employee.lastName?.charAt(0) || ''}`
+/**
+ * Open photo upload modal
+ */
+const openPhotoUpload = (employeeId: string) => {
+  console.log('📷 Opening photo upload for employee:', employeeId)
+  selectedPhotoEmployeeId.value = employeeId
+  showPhotoUploadModal.value = true
 }
 
-const getWorkloadStatus = (workload: number) => {
-  if (workload < 0.5) return '🟢 Available'
-  if (workload < 0.8) return '🟡 Moderate'
-  if (workload < 1.0) return '🟠 Busy'
-  return '🔴 Overloaded'
+/**
+ * Close photo upload modal
+ */
+const closePhotoUpload = () => {
+  showPhotoUploadModal.value = false
+  selectedPhotoEmployeeId.value = null
 }
 
-const getWorkloadColor = (workload: number) => {
-  if (workload < 0.5) return 'bg-green-100 text-green-800'
-  if (workload < 0.8) return 'bg-yellow-100 text-yellow-800'
-  if (workload < 1.0) return 'bg-orange-100 text-orange-800'
-  return 'bg-red-100 text-red-800'
+/**
+ * Handle photo uploaded
+ */
+const handlePhotoUploaded = () => {
+  closePhotoUpload()
+  avatarKey.value++ // ✨ Force reload
+  setTimeout(() => loadEmployees(), 300)
 }
 
-const getWorkloadProgressColor = (workload: number) => {
-  if (workload < 0.8) return 'bg-green-500'
-  if (workload < 1.0) return 'bg-yellow-500'
-  return 'bg-red-500'
+/**
+ * Handle photo deleted
+ */
+const handlePhotoDeleted = () => {
+  console.log('🗑️ Photo deleted')
+  // Close modal
+  closePhotoUpload()
+  // Refresh employee list
+  setTimeout(() => {
+    loadEmployees()
+  }, 500)
 }
-
-const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-  console.log(`${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'} ${message}`)
-
-  // Créer une notification temporaire (optionnel)
-  if (typeof window !== 'undefined') {
-    const notification = document.createElement('div')
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 12px 20px;
-      border-radius: 8px;
-      color: white;
-      font-weight: 500;
-      z-index: 9999;
-      max-width: 400px;
-      background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
-    `
-    notification.textContent = message
-    document.body.appendChild(notification)
-
-    // Supprimer après 3 secondes
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification)
-      }
-    }, 3000)
-  }
-}
-
 
 // ========== LIFECYCLE ==========
 onMounted(() => {
@@ -725,27 +602,62 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.employees-page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
 .card {
-  @apply bg-white rounded-lg shadow-sm border p-6;
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .btn-primary {
-  @apply bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .btn-secondary {
-  @apply bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors;
+  background: white;
+  color: #667eea;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  border: 2px solid #667eea;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background: #f0f4ff;
 }
 
 .input-field {
-  @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s;
 }
 
-.transition-colors {
-  transition: background-color 0.2s, color 0.2s;
-}
-
-.transition-shadow {
-  transition: box-shadow 0.2s ease;
+.input-field:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 </style>

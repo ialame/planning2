@@ -92,16 +92,7 @@ public interface TeamRepository extends JpaRepository<Team, String> {
      */
     boolean existsByName(String name);
 
-    /**
-     * Get total capacity for a specific team
-     * @param teamName Team name
-     * @return Total daily capacity in minutes
-     */
-    @Query("SELECT COALESCE(SUM(e.dailyCapacityMinutes * e.efficiencyRating), 0) " +
-            "FROM Team t " +
-            "JOIN t.employees e " +
-            "WHERE t.name = :teamName AND e.active = true AND t.active = true")
-    Integer getTotalTeamCapacity(@Param("teamName") String teamName);
+
 
     /**
      * Get team statistics (count of employees per team)
@@ -112,4 +103,18 @@ public interface TeamRepository extends JpaRepository<Team, String> {
             "LEFT JOIN t.employees e " +
             "GROUP BY t.id, t.name")
     List<Object[]> getTeamStatistics();
+
+    /**
+     * Get total capacity for a specific team
+     * @param teamName Team name
+     * @return Total daily capacity in minutes
+     *
+     * FIXED: Use workHoursPerDay instead of dailyCapacityMinutes
+     * Formula: workHoursPerDay * 60 * efficiencyRating
+     */
+    @Query("SELECT COALESCE(SUM(e.workHoursPerDay * 60 * e.efficiencyRating), 0) " +
+            "FROM Team t " +
+            "JOIN t.employees e " +
+            "WHERE t.name = :teamName AND e.active = true AND t.active = true")
+    Integer getTotalTeamCapacity(@Param("teamName") String teamName);
 }
