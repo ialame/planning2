@@ -148,7 +148,13 @@
                 <div class="flex items-center">
                   <div class="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
               <span class="text-white font-bold">
-                {{ getInitials(employee) }}
+<!--                {{ getInitials(employee) }}-->
+                <!-- ✅ NOUVEAU : Composant Avatar -->
+                  <EmployeeAvatar
+                    :employeeId="employee.id"
+                    :employeeName="`${employee.firstName} ${employee.lastName}`"
+                    size="md"
+                  />
               </span>
                   </div>
                   <div class="ml-3">
@@ -326,6 +332,8 @@
 import { ref, computed, onMounted } from 'vue'
 import EmployeeDetailPage from '../components/EmployeeDetailPage.vue'
 import { API_BASE_URL, API_ENDPOINTS } from '@/config/api'
+import EmployeePhotoUploader from "@/components/EmployeePhotoUploader.vue";
+import EmployeeAvatar from "@/components/EmployeeAvatar.vue";
 
 
 // ========== STATE ==========

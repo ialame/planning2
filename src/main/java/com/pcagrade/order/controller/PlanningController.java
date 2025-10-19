@@ -546,19 +546,33 @@ public class PlanningController {
         }
     }
 
+
     /**
      * Convert CardCertification to Map for display
+     * UPDATED: Uses getId() instead of getSymfonyCertificationId()
+     * since we now use Symfony ID as primary key
      */
     private Map<String, Object> convertCertificationToMap(CardCertification cert) {
         Map<String, Object> dto = new HashMap<>();
-        dto.put("id", cert.getId().toString());
+
+        // Use ID as string (it's the Symfony certification ID)
+        String certificationId = cert.getId() != null ? cert.getId().toString() : "N/A";
+
+        dto.put("id", certificationId);
         dto.put("cardName", cert.getCardName() != null ? cert.getCardName() : "Unknown Card");
         dto.put("name", cert.getCardName() != null ? cert.getCardName() : "Unknown Card");
-        dto.put("cardId", cert.getCardId() != null ? cert.getCardId() : "N/A");
+        dto.put("cardId", cert.getCardId() != null ? cert.getCardId().toString() : "N/A");
         dto.put("cardNumber", cert.getCardId() != null ? cert.getCardId().toString() : "N/A");
-        dto.put("labelName", cert.getSymfonyCertificationId());
-        dto.put("barcode", cert.getSymfonyCertificationId());
-        dto.put("code_barre", cert.getSymfonyCertificationId());
+
+        // Use code_barre for labelName and barcode
+        // Fallback to certification ID if code_barre is empty
+        String barcode = (cert.getCodeBarre() != null && !cert.getCodeBarre().isEmpty())
+                ? cert.getCodeBarre()
+                : certificationId;
+
+        dto.put("labelName", barcode);
+        dto.put("barcode", barcode);
+        dto.put("code_barre", barcode);
 
         // Status based on completion flags
         String status;
@@ -588,6 +602,7 @@ public class PlanningController {
 
         return dto;
     }
+
     /**
      * Convert Card entity to Map
      */

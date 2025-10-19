@@ -6,30 +6,22 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
  * Repository for CardCertification entity
  * Handles database operations for card certifications with planning flags
+ *
+ * UPDATED: Removed findBySymfonyCertificationId and existsBySymfonyCertificationId
+ * because we now use Symfony ID directly as primary key (findById does the job)
  */
 @Repository
 public interface CardCertificationRepository extends JpaRepository<CardCertification, UUID> {
 
     /**
-     * Find certification by Symfony certification ID
-     */
-    Optional<CardCertification> findBySymfonyCertificationId(String symfonyCertificationId);
-
-    /**
      * Find all certifications for a specific order
      */
     List<CardCertification> findByOrderId(UUID orderId);
-
-    /**
-     * Check if certification exists by Symfony ID
-     */
-    boolean existsBySymfonyCertificationId(String symfonyCertificationId);
 
     // ============================================================
     // COUNTING METHODS FOR STATISTICS
@@ -75,33 +67,28 @@ public interface CardCertificationRepository extends JpaRepository<CardCertifica
             "c.packagingCompleted = false)")
     List<CardCertification> findIncompleteByOrderId(UUID orderId);
 
-    // ============================================================
-    // TASK-SPECIFIC QUERIES
-    // ============================================================
+    /**
+     * Count certifications by order
+     */
+    long countByOrderId(UUID orderId);
 
     /**
-     * Find all cards needing grading
+     * Find certifications that need grading
      */
     List<CardCertification> findByGradingCompletedFalse();
 
     /**
-     * Find all cards needing certification
+     * Find certifications that need certification
      */
-    @Query("SELECT c FROM CardCertification c WHERE " +
-            "c.gradingCompleted = true AND c.certificationCompleted = false")
-    List<CardCertification> findNeedingCertification();
+    List<CardCertification> findByCertificationCompletedFalse();
 
     /**
-     * Find all cards needing scanning
+     * Find certifications that need scanning
      */
-    @Query("SELECT c FROM CardCertification c WHERE " +
-            "c.certificationCompleted = true AND c.scanningCompleted = false")
-    List<CardCertification> findNeedingScanning();
+    List<CardCertification> findByScanningCompletedFalse();
 
     /**
-     * Find all cards needing packaging
+     * Find certifications that need packaging
      */
-    @Query("SELECT c FROM CardCertification c WHERE " +
-            "c.scanningCompleted = true AND c.packagingCompleted = false")
-    List<CardCertification> findNeedingPackaging();
+    List<CardCertification> findByPackagingCompletedFalse();
 }

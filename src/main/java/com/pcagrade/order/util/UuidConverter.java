@@ -31,7 +31,6 @@ public class UuidConverter implements AttributeConverter<UUID, byte[]> {
             buffer.putLong(uuid.getLeastSignificantBits());
 
             byte[] bytes = buffer.array();
-            System.out.println("💾 UUID → BINARY(16): " + uuid + " → " + bytesToHex(bytes));
 
             return bytes;
 
@@ -54,7 +53,6 @@ public class UuidConverter implements AttributeConverter<UUID, byte[]> {
             long leastSigBits = buffer.getLong();
 
             UUID uuid = new UUID(mostSigBits, leastSigBits);
-            System.out.println("🔄 BINARY(16) → UUID: " + bytesToHex(bytes) + " → " + uuid);
 
             return uuid;
 

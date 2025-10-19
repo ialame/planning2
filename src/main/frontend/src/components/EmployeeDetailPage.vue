@@ -8,6 +8,25 @@
         </svg>
         Back to Employees
       </button>
+
+      <!-- Employee Info with Photo -->
+      <div class="employee-header">
+        <!-- Photo Uploader -->
+        <EmployeePhotoUploader
+          :employeeId="props.employeeId"
+          :editable="props.mode === 'management'"
+          @photo-updated="handlePhotoUpdated"
+        />
+
+        <div class="employee-info">
+          <h1 class="employee-name">{{ employeeData?.firstName }} {{ employeeData?.lastName }}</h1>
+          <p class="employee-email">{{ employeeData?.email }}</p>
+          <p class="employee-hours">{{ employeeData?.workHoursPerDay }}h/day</p>
+        </div>
+      </div>
+    </div>
+
+
     </div>
 
     <!-- Employee Info Card -->
@@ -210,13 +229,12 @@
             </div>
           </div>
         </div>
-      </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-
+import EmployeePhotoUploader from './EmployeePhotoUploader.vue'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
 const props = defineProps<{
@@ -578,15 +596,29 @@ const getStatusClass = (status: number) => {
 }
 
 // ========== LIFECYCLE ==========
+// ========== LIFECYCLE - FIXED ==========
 onMounted(() => {
   console.log('🎯 EmployeeDetailPage mounted')
   console.log('   Employee ID:', props.employeeId)
   console.log('   Selected Date:', localSelectedDate.value)
   console.log('   Mode:', props.mode)
 
+  // ALWAYS load employee basic data (name, email, roles, etc.)
   loadEmployeeData()
-  loadEmployeeOrders()
+
+  // ONLY load orders/planning if in PLANNING mode
+  if (props.mode === 'planning') {
+    console.log('📋 Loading orders because mode is PLANNING')
+    loadEmployeeOrders()
+  } else {
+    console.log('👁️ Skipping orders because mode is MANAGEMENT (details only)')
+  }
 })
+const handlePhotoUpdated = () => {
+  console.log('✅ Photo updated successfully')
+  // Optionally reload employee data
+  loadEmployeeData()
+}
 </script>
 
 <!-- Le template reste identique -->
