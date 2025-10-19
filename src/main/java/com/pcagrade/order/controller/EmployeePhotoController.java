@@ -201,7 +201,7 @@ public class EmployeePhotoController {
         try {
             String formattedId = formatEmployeeId(employeeId);
 
-            String sql = "SELECT LENGTH(profile_picture) as size FROM employee WHERE HEX(id) = ?";
+            String sql = "SELECT LENGTH(photo_url) as size FROM employee WHERE HEX(id) = ?";
 
             Integer photoSize = jdbcTemplate.query(sql,
                     rs -> {

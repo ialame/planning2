@@ -1,140 +1,119 @@
 package com.pcagrade.order.service;
 
-import com.pcagrade.order.dto.TeamDto;
 import com.pcagrade.order.entity.Team;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
 /**
- * Mapper Service for converting between Team entities and TeamDto
- * Handles the conversion logic between database entities and API DTOs
+ * Service for mapping Team entities to DTOs
+ * Note: If you don't have TeamDTO, you can remove this service
  */
 @Service
 @RequiredArgsConstructor
 public class TeamMapperService {
 
     /**
-     * Convert Team entity to TeamDto Response
+     * Map Team entity to DTO
+     * NOTE: You need to create TeamDTO class or remove this method
      */
-    public TeamDto.Response toResponse(Team team) {
+    public TeamDTO toDTO(Team team) {
         if (team == null) {
             return null;
         }
 
-        TeamDto.Response response = new TeamDto.Response();
-        response.setId(String.valueOf(team.getId()));
-        response.setName(team.getName());
-        response.setDescription(team.getDescription());
-        response.setPermissionLevel(team.getPermissionLevel());
-        response.setActive(team.getActive());
-        response.setCreationDate(team.getCreationDate());
-        response.setModificationDate(team.getModificationDate());
+        TeamDTO dto = new TeamDTO();
+        dto.setId(team.getId().toString()); // Convert UUID to String
+        dto.setName(team.getName());
+        dto.setDescription(team.getDescription());
+        dto.setDisplayName(team.getDisplayName());
+        dto.setColor(team.getColor());
+        dto.setIcon(team.getIcon());
+        dto.setActive(team.getActive());
+        dto.setEmployeeCount(team.getActiveEmployeeCount());
 
-        return response;
+        return dto;
     }
 
     /**
-     * Convert TeamDto Request to Team entity
+     * Map DTO to Team entity
      */
-    public Team toEntity(TeamDto.Request request) {
-        if (request == null) {
+    public Team toEntity(TeamDTO dto) {
+        if (dto == null) {
             return null;
         }
 
         Team team = new Team();
-        team.setName(request.getName());
-        team.setDescription(request.getDescription());
-        team.setPermissionLevel(request.getPermissionLevel());
-        team.setActive(true); // Default to active
+        team.setName(dto.getName());
+        team.setDescription(dto.getDescription());
+        team.setDisplayName(dto.getDisplayName());
+        team.setColor(dto.getColor());
+        team.setIcon(dto.getIcon());
+        team.setActive(dto.getActive());
 
         return team;
     }
 
     /**
-     * Update existing Team entity from TeamDto Request
+     * Update entity from DTO
      */
-    public void updateEntity(Team team, TeamDto.Request request) {
-        if (team == null || request == null) {
+    public void updateEntityFromDTO(Team team, TeamDTO dto) {
+        if (team == null || dto == null) {
             return;
         }
 
-        if (request.getName() != null) {
-            team.setName(request.getName());
+        if (dto.getDescription() != null) {
+            team.setDescription(dto.getDescription());
         }
-        if (request.getDescription() != null) {
-            team.setDescription(request.getDescription());
+        if (dto.getDisplayName() != null) {
+            team.setDisplayName(dto.getDisplayName());
         }
-        if (request.getPermissionLevel() != null) {
-            team.setPermissionLevel(request.getPermissionLevel());
+        if (dto.getColor() != null) {
+            team.setColor(dto.getColor());
+        }
+        if (dto.getIcon() != null) {
+            team.setIcon(dto.getIcon());
+        }
+        if (dto.getActive() != null) {
+            team.setActive(dto.getActive());
         }
     }
 
     /**
-     * Convert Team entity to Summary DTO
+     * Simple DTO class (you can move this to a separate file)
      */
-    public TeamDto.Summary toSummary(Team team) {
-        if (team == null) {
-            return null;
-        }
+    public static class TeamDTO {
+        private String id;
+        private String name;
+        private String description;
+        private String displayName;
+        private String color;
+        private String icon;
+        private Boolean active;
+        private Integer employeeCount;
 
-        TeamDto.Summary summary = new TeamDto.Summary();
-        summary.setId(String.valueOf(team.getId()));
-        summary.setName(team.getName());
-        summary.setMemberCount(team.getEmployees() != null ? team.getEmployees().size() : 0);
-        summary.setActive(team.getActive());
+        // Getters and Setters
+        public String getId() { return id; }
+        public void setId(String id) { this.id = id; }
 
-        return summary;
-    }
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
 
-    /**
-     * Convert Team entity to Detailed DTO
-     */
-    public TeamDto.Detailed toDetailed(Team team) {
-        if (team == null) {
-            return null;
-        }
+        public String getDescription() { return description; }
+        public void setDescription(String description) { this.description = description; }
 
-        TeamDto.Detailed detailed = new TeamDto.Detailed();
-        detailed.setId(String.valueOf(team.getId()));
-        detailed.setName(team.getName());
-        detailed.setDescription(team.getDescription());
-        detailed.setPermissionLevel(team.getPermissionLevel());
-        detailed.setActive(team.getActive());
-        detailed.setCreationDate(team.getCreationDate());
-        detailed.setModificationDate(team.getModificationDate());
-        detailed.setMemberCount(team.getEmployees() != null ? team.getEmployees().size() : 0);
-        // activeAssignments would need additional service call
-        detailed.setActiveAssignments(0);
+        public String getDisplayName() { return displayName; }
+        public void setDisplayName(String displayName) { this.displayName = displayName; }
 
-        return detailed;
-    }
+        public String getColor() { return color; }
+        public void setColor(String color) { this.color = color; }
 
-    /**
-     * Convert list of Team entities to list of TeamDto Responses
-     */
-    public List<TeamDto.Response> toResponseList(List<Team> teams) {
-        if (teams == null) {
-            return List.of();
-        }
+        public String getIcon() { return icon; }
+        public void setIcon(String icon) { this.icon = icon; }
 
-        return teams.stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
-    }
+        public Boolean getActive() { return active; }
+        public void setActive(Boolean active) { this.active = active; }
 
-    /**
-     * Convert list of Team entities to list of TeamDto Summaries
-     */
-    public List<TeamDto.Summary> toSummaryList(List<Team> teams) {
-        if (teams == null) {
-            return List.of();
-        }
-
-        return teams.stream()
-                .map(this::toSummary)
-                .collect(Collectors.toList());
+        public Integer getEmployeeCount() { return employeeCount; }
+        public void setEmployeeCount(Integer employeeCount) { this.employeeCount = employeeCount; }
     }
 }

@@ -79,7 +79,6 @@ public class TeamDataInitializer implements ApplicationRunner {
         Team team = new Team();
         team.setName(name);
         team.setDescription(description);
-        team.setPermissionLevel(permissionLevel);
         team.setActive(true);
         return team;
     }
@@ -119,7 +118,9 @@ public class TeamDataInitializer implements ApplicationRunner {
         employee.setFirstName(firstName);
         employee.setLastName(lastName);
         employee.setEmail(email);
-        employee.setRoles(roles);
+        Team graderTeam = teamRepository.findByName("ROLE_GRADER")
+                .orElseThrow(() -> new RuntimeException("ROLE_GRADER team not found"));
+        employee.addTeam(graderTeam);
         employee.setTeams(teams != null ? teams : new HashSet<>());
         employee.setActive(true);
         employee.setDailyCapacityMinutes(480); // 8 hours

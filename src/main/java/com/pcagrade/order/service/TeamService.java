@@ -1,257 +1,156 @@
 package com.pcagrade.order.service;
 
-import com.pcagrade.order.dto.TeamDto;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;  // ADD THIS IMPORT
-import org.springframework.stereotype.Service;
-
-import com.pcagrade.order.entity.Team;
 import com.pcagrade.order.entity.Employee;
-import com.pcagrade.order.repository.TeamRepository;
+import com.pcagrade.order.entity.Team;
 import com.pcagrade.order.repository.EmployeeRepository;
+import com.pcagrade.order.repository.TeamRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.UUID;
 
 /**
- * Team Service - Business Logic Layer
- * Handles all business operations related to Teams and Roles
+ * Service for managing teams (roles)
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional
 public class TeamService {
 
     private final TeamRepository teamRepository;
     private final EmployeeRepository employeeRepository;
 
-    // ========== BASIC CRUD OPERATIONS ==========
-
     /**
      * Get all teams
      */
     public List<Team> getAllTeams() {
-        log.debug("Getting all teams");
         return teamRepository.findAll();
     }
 
     /**
-     * Get all active teams
+     * Get all active teams with pagination
      */
-    public List<Team> getAllActiveTeams() {
-        log.debug("Getting all active teams");
-        return teamRepository.findByActiveTrue();
-    }
-
-    /**
-     * Get all active teams (paginated)
-     */
-    public Page<Team> getAllActiveTeamsPaginated(Pageable pageable) {
-        log.debug("Getting all active teams (paginated)");
+    public Page<Team> getActiveTeams(Pageable pageable) {
         return teamRepository.findByActiveTrue(pageable);
     }
 
     /**
      * Get team by ID
      */
-    public Optional<Team> getTeamById(UUID id) {
-        log.debug("Getting team by ID: {}", id);
-        return teamRepository.findById(id);
+    public Team getTeamById(UUID teamId) {
+        return teamRepository.findById(teamId.toString())
+                .orElseThrow(() -> new RuntimeException("Team not found with id: " + teamId));
     }
 
     /**
      * Get team by name
      */
-    public Optional<Team> getTeamByName(String name) {
-        log.debug("Getting team by name: {}", name);
-        return teamRepository.findByName(name);
+    public Team getTeamByName(String name) {
+        return teamRepository.findByName(name)
+                .orElseThrow(() -> new RuntimeException("Team not found with name: " + name));
     }
 
     /**
-     * Search teams by name or description
+     * Search teams by keyword
      */
     public List<Team> searchTeams(String searchTerm) {
-        log.debug("Searching teams with term: {}", searchTerm);
+        if (searchTerm == null || searchTerm.trim().isEmpty()) {
+            return teamRepository.findAll();
+        }
         return teamRepository.searchByNameOrDescription(searchTerm);
     }
 
     /**
-     * Search teams by name or description (paginated)
+     * Create a new team
      */
-    public Page<Team> searchTeamsPaginated(String searchTerm, Pageable pageable) {
-        log.debug("Searching teams (paginated) with term: {}", searchTerm);
-        return teamRepository.searchByNameOrDescription(searchTerm, pageable);
-    }
-
-    /**
-     * Create new team
-     */
-    @Transactional
     public Team createTeam(Team team) {
-        log.info("Creating new team: {}", team.getName());
-
-        validateTeam(team);
-
-        if (teamNameExists(team.getName())) {
-            throw new IllegalArgumentException("Team with name '" + team.getName() + "' already exists");
+        if (teamRepository.existsByName(team.getName())) {
+            throw new RuntimeException("Team with name " + team.getName() + " already exists");
         }
-
-        team.setActive(true);
-        team.setCreationDate(LocalDateTime.now());
-        team.setModificationDate(LocalDateTime.now());
-
-        Team savedTeam = teamRepository.save(team);
-        log.info("Team created successfully: {} (ID: {})", savedTeam.getName(), savedTeam.getId());
-
-        return savedTeam;
+        return teamRepository.save(team);
     }
 
     /**
-     * Update existing team
+     * Update a team
      */
-    @Transactional
-    public Team updateTeam(UUID id, Team team) {
-        log.info("Updating team: {}", id);
+    public Team updateTeam(UUID teamId, Team updatedTeam) {
+        Team team = teamRepository.findById(teamId.toString())
+                .orElseThrow(() -> new RuntimeException("Team not found"));
 
-        Team existingTeam = teamRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Team not found: " + id));
+        team.setDescription(updatedTeam.getDescription());
+        team.setDisplayName(updatedTeam.getDisplayName());
+        team.setColor(updatedTeam.getColor());
+        team.setIcon(updatedTeam.getIcon());
+        team.setActive(updatedTeam.getActive());
 
-        validateTeam(team);
+        return teamRepository.save(team);
+    }
 
-        // Check if new name conflicts with another team
-        if (!existingTeam.getName().equals(team.getName()) && teamNameExists(team.getName())) {
-            throw new IllegalArgumentException("Team with name '" + team.getName() + "' already exists");
+    /**
+     * Delete a team
+     */
+    public void deleteTeam(UUID teamId) {
+        if (!teamRepository.existsById(teamId.toString())) {
+            throw new RuntimeException("Team not found");
         }
-
-        existingTeam.setName(team.getName());
-        existingTeam.setDescription(team.getDescription());
-        existingTeam.setPermissionLevel(team.getPermissionLevel());
-        existingTeam.setActive(team.getActive());
-        existingTeam.setModificationDate(LocalDateTime.now());
-
-        Team updatedTeam = teamRepository.save(existingTeam);
-        log.info("Team updated successfully: {}", updatedTeam.getName());
-
-        return updatedTeam;
+        teamRepository.deleteById(teamId.toString());
     }
 
     /**
-     * Delete team (soft delete)
+     * Add employee to team
      */
-    @Transactional
-    public void deleteTeam(UUID id) {
-        log.info("Deleting team: {}", id);
-
-        Team team = teamRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Team not found: " + id));
-
-        team.setActive(false);
-        team.setModificationDate(LocalDateTime.now());
-
-        teamRepository.save(team);
-        log.info("Team deleted successfully: {}", id);
-    }
-
-    // ========== EMPLOYEE-TEAM RELATIONSHIP MANAGEMENT ==========
-
-    /**
-     * Get teams for a specific employee
-     */
-    public List<Team> getTeamsForEmployee(UUID employeeId) {
-        log.debug("Getting teams for employee: {}", employeeId);
-
+    public void addEmployeeToTeam(UUID teamId, UUID employeeId) {
+        Team team = getTeamById(teamId);
         Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        return employee.getTeams().stream().toList();
+        employee.addTeam(team);
+        employeeRepository.save(employee);
     }
 
     /**
-     * Assign employee to team
+     * Add employee to team (String version)
      */
-    @Transactional
-    public void assignEmployeeToTeam(UUID employeeId, UUID teamId) {
-        log.info("Assigning employee {} to team {}", employeeId, teamId);
-
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new IllegalArgumentException("Team not found: " + teamId));
-
-        Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
-
-        if (team.getEmployees().contains(employee)) {
-            log.warn("Employee {} is already in team {}", employeeId, teamId);
-            return;
-        }
-
-        team.getEmployees().add(employee);
-        employee.getTeams().add(team);
-
-        // ✅ IMPORTANT: Ne sauvegarder qu'une seule entité pour éviter la récursion
-        teamRepository.save(team);
-
-        log.info("Employee {} assigned to team {} successfully", employeeId, teamId);
+    public void addEmployeeToTeam(String teamId, String employeeId) {
+        addEmployeeToTeam(UUID.fromString(teamId), UUID.fromString(employeeId));
     }
 
     /**
      * Remove employee from team
      */
-    @Transactional
-    public void removeEmployeeFromTeam(UUID employeeId, UUID teamId) {
-        log.info("Removing employee {} from team {}", employeeId, teamId);
-
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new IllegalArgumentException("Team not found: " + teamId));
-
+    public void removeEmployeeFromTeam(UUID teamId, UUID employeeId) {
+        Team team = getTeamById(teamId);
         Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        team.getEmployees().remove(employee);
-        employee.getTeams().remove(team);
-
-        teamRepository.save(team);
-        log.info("Employee {} removed from team {} successfully", employeeId, teamId);
+        employee.removeTeam(team);
+        employeeRepository.save(employee);
     }
 
-
-
     /**
-     * Get all employees in a team
+     * Remove employee from team (String version)
      */
-    public List<Employee> getTeamEmployees(UUID teamId) {
-        log.debug("Getting employees for team: {}", teamId);
-
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new IllegalArgumentException("Team not found: " + teamId));
-
-        return team.getEmployees().stream().toList();
+    public void removeEmployeeFromTeam(String teamId, String employeeId) {
+        removeEmployeeFromTeam(UUID.fromString(teamId), UUID.fromString(employeeId));
     }
 
     /**
-     * Count active employees in a team
+     * Get teams for a specific employee
      */
-    public long countActiveEmployeesInTeam(UUID teamId) {
-        log.debug("Counting active employees in team: {}", teamId);
-
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new IllegalArgumentException("Team not found: " + teamId));
-
-        return team.getEmployees().stream()
-                .filter(Employee::getActive)
-                .count();
+    public List<Team> getTeamsByEmployee(Employee employee) {
+        return teamRepository.findByEmployeesContaining(employee);
     }
 
-    // ========== STATISTICS AND UTILITY METHODS ==========
-
     /**
-     * Get team statistics (team name, member count, etc.)
+     * Get team statistics
      */
     public List<Object[]> getTeamStatistics() {
-        log.debug("Getting team statistics");
         return teamRepository.getTeamStatistics();
     }
 
@@ -259,158 +158,118 @@ public class TeamService {
      * Get teams with no members
      */
     public List<Team> getEmptyTeams() {
-        log.debug("Getting empty teams");
         return teamRepository.findTeamsWithNoMembers();
     }
 
     /**
-     * Initialize default teams/roles
+     * Get total capacity for a team
      */
-    @Transactional
+    public Integer getTeamCapacity(String teamName) {
+        return teamRepository.getTotalTeamCapacity(teamName);
+    }
+
+    /**
+     * Get all active teams (non-paginated)
+     */
+    public List<Team> getAllActiveTeams() {
+        return teamRepository.findByActiveTrue();
+    }
+
+    /**
+     * Get all active teams with pagination
+     */
+    public Page<Team> getAllActiveTeamsPaginated(Pageable pageable) {
+        return teamRepository.findByActiveTrue(pageable);
+    }
+
+    /**
+     * Search teams with pagination
+     */
+    public Page<Team> searchTeamsPaginated(String searchTerm, Pageable pageable) {
+        if (searchTerm == null || searchTerm.trim().isEmpty()) {
+            return teamRepository.findAll(pageable);
+        }
+        return teamRepository.searchByNameOrDescription(searchTerm, pageable);
+    }
+
+    /**
+     * Count active employees in a team
+     */
+    public long countActiveEmployeesInTeam(UUID teamId) {
+        Team team = getTeamById(teamId);
+        return team.getActiveEmployeeCount();
+    }
+
+    /**
+     * Assign employee to team (alias for addEmployeeToTeam)
+     */
+    public void assignEmployeeToTeam(UUID teamId, UUID employeeId) {
+        addEmployeeToTeam(teamId, employeeId);
+    }
+
+    /**
+     * Update employee teams - replace all teams for an employee
+     */
+    public void updateEmployeeTeams(UUID employeeId, List<String> teamNames) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        // Clear existing teams
+        employee.getTeams().clear();
+
+        // Add new teams
+        for (String teamName : teamNames) {
+            Team team = teamRepository.findByName(teamName)
+                    .orElseThrow(() -> new RuntimeException("Team not found: " + teamName));
+            employee.addTeam(team);
+        }
+
+        employeeRepository.save(employee);
+    }
+
+    /**
+     * Initialize default teams (roles)
+     */
     public void initializeDefaultTeams() {
-        log.info("Initializing default teams");
+        List<String> defaultTeams = List.of(
+                "ROLE_ADMIN",
+                "ROLE_MANAGER",
+                "ROLE_GRADER",
+                "ROLE_AUTHENTICATOR",
+                "ROLE_SCANNER",
+                "ROLE_PREPARER",
+                "ROLE_VIEWER"
+        );
 
-        String[][] defaultTeams = {
-                {"ROLE_ADMIN", "System administrators", "10"},
-                {"ROLE_MANAGER", "Team managers", "7"},
-                {"ROLE_NOTEUR", "Card graders", "5"},
-                {"ROLE_CERTIFICATEUR", "Card certifiers/encapsulators", "5"},
-                {"ROLE_SCANNER", "Card scanners", "4"},
-                {"ROLE_PREPARATEUR", "Order preparers", "4"},
-                {"ROLE_VIEWER", "Read-only viewers", "2"}
-        };
-
-        for (String[] teamData : defaultTeams) {
-            String name = teamData[0];
-
-            if (teamRepository.findByName(name).isEmpty()) {
-                Team team = new Team();
-                team.setName(name);
-                team.setDescription(teamData[1]);
-                team.setPermissionLevel(Integer.parseInt(teamData[2]));
-                team.setActive(true);
-                team.setCreationDate(LocalDateTime.now());
-                team.setModificationDate(LocalDateTime.now());
-
+        for (String teamName : defaultTeams) {
+            if (!teamRepository.existsByName(teamName)) {
+                Team team = Team.builder()
+                        .name(teamName)
+                        .displayName(teamName.replace("ROLE_", ""))
+                        .active(true)
+                        .build();
                 teamRepository.save(team);
-                log.info("Created default team: {}", name);
+                log.info("Created default team: {}", teamName);
             }
         }
-
-        log.info("Default teams initialization complete");
     }
 
     /**
-     * Get team member count
+     * Get all employees in a team
      */
-    public int getTeamMemberCount(UUID teamId) {
-        log.debug("Getting member count for team: {}", teamId);
-
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new IllegalArgumentException("Team not found: " + teamId));
-
-        return team.getEmployees() != null ? team.getEmployees().size() : 0;
+    public List<Employee> getTeamEmployees(UUID teamId) {
+        Team team = getTeamById(teamId);
+        return team.getEmployees().stream()
+                .filter(e -> Boolean.TRUE.equals(e.getActive()))
+                .toList();
     }
 
     /**
-     * Check if team exists
+     * Get teams by employee ID (convenience method)
      */
-    public boolean teamExists(UUID id) {
-        return teamRepository.existsById(id);
-    }
-
-    /**
-     * Check if team name exists
-     */
-    public boolean teamNameExists(String name) {
-        return teamRepository.findByName(name).isPresent();
-    }
-
-    /**
-     * Validate team data
-     */
-    public void validateTeam(Team team) {
-        if (team.getName() == null || team.getName().trim().isEmpty()) {
-            throw new IllegalArgumentException("Team name cannot be empty");
-        }
-
-        if (team.getName().length() > 50) {
-            throw new IllegalArgumentException("Team name cannot exceed 50 characters");
-        }
-
-        if (team.getPermissionLevel() == null || team.getPermissionLevel() < 0) {
-            throw new IllegalArgumentException("Permission level must be a positive number");
-        }
-    }
-
-    /**
-     * Get teams by employee (wrapper method)
-     */
-    public List<TeamDto> getTeamsByEmployee(UUID employeeId) {
-        return getTeamsByEmployee(employeeId.toString());
-    }
-
-    public List<TeamDto> getTeamsByEmployee(String employeeId) {
-        Employee employee = employeeRepository.findById(UUID.fromString(employeeId))
-                .orElseThrow(() -> new RuntimeException("Employee not found: " + employeeId));
-
-        List<Team> teams = teamRepository.findByEmployeesContaining(employee);
-
-        return teams.stream()
-                .map(this::convertToDto)
-                .collect(Collectors.toList());
-    }
-
-    private TeamDto convertToDto(Team team) {
-        TeamDto dto = new TeamDto();
-        // ✅ ID est String, pas UUID
-        dto.setId(String.valueOf(team.getId()));  // team.getId() retourne déjà un String
-        dto.setName(team.getName());
-        dto.setDescription(team.getDescription());
-        dto.setPermissionLevel(team.getPermissionLevel());
-        dto.setActive(team.getActive());
-        dto.setCreationDate(team.getCreationDate());
-        dto.setModificationDate(team.getModificationDate());
-        dto.setEmployeeCount(team.getEmployees().size());
-        return dto;
-    }
-
-
-    // Dans TeamService.java
-
-
-    /**
-     * Update employee teams - accepts UUID + List<String>
-     */
-    public void updateEmployeeTeams(UUID employeeId, List<String> teamIds) {
-        updateEmployeeTeams(employeeId.toString(), teamIds);
-    }
-
-    /**
-     * Update employee teams - main implementation
-     */
-    public void updateEmployeeTeams(String employeeId, List<String> teamIds) {
-        Employee employee = employeeRepository.findById(UUID.fromString(employeeId))
-                .orElseThrow(() -> new RuntimeException("Employee not found: " + employeeId));
-
-        // Retirer de toutes les teams actuelles
-        List<Team> currentTeams = teamRepository.findByEmployeesContaining(employee);
-        for (Team team : currentTeams) {
-            team.getEmployees().remove(employee);
-            teamRepository.save(team);
-        }
-
-        // Ajouter aux nouvelles teams
-        for (String teamId : teamIds) {
-            Team team = teamRepository.findById(UUID.fromString(teamId))
-                    .orElseThrow(() -> new RuntimeException("Team not found: " + teamId));
-
-            if (!team.getEmployees().contains(employee)) {
-                team.getEmployees().add(employee);
-                teamRepository.save(team);
-            }
-        }
-
-        log.info("Updated teams for employee {}: {} teams", employeeId, teamIds.size());
+    public List<Team> getTeamsByEmployeeId(UUID employeeId) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        return getTeamsByEmployee(employee);
     }
 }

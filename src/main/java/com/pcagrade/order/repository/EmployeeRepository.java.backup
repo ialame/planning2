@@ -24,16 +24,12 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
 
     List<Employee> findByActiveTrue();
 
-    @Query("SELECT DISTINCT e FROM Employee e " +
-            "JOIN e.teams t " +
-            "WHERE e.active = :active AND t.name = :teamName")
-    List<Employee> findByActiveAndRolesContaining(@Param("active") Boolean active,
-                                                  @Param("teamName") String teamName);
+    List<Employee> findByActiveAndRolesContaining(Boolean active, String role);
 
     @Query("SELECT e FROM Employee e JOIN e.teams t WHERE t.id = :teamId AND e.active = true")
     List<Employee> findActiveByTeamId(UUID teamId);
 
-    @Query("SELECT e FROM Employee e JOIN e.teams t WHERE e.active = true AND t.name = :roleName")
+    @Query("SELECT e FROM Employee e WHERE e.active = true AND :role MEMBER OF e.roles")
     List<Employee> findActiveEmployeesByRole(String role);
 
     // For synchronization - ULID advantage!

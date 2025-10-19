@@ -60,13 +60,7 @@ public class WorkPlanningService {
         List<Employee> allEmployees = employeeRepository.findByActiveTrue();
         log.info("   Total active employees: {}", allEmployees.size());
 
-        Map<String, Long> roleCount = allEmployees.stream()
-                .flatMap(e -> e.getRoles().stream())
-                .collect(Collectors.groupingBy(r -> r, Collectors.counting()));
-
-        roleCount.forEach((role, count) ->
-                log.info("   {}: {} employees", role, count)
-        );
+        Map<String, List<Employee>> roleCount = groupEmployeesByRole(allEmployees);
 
         // ✅ FIXED: Process orders by OrderStatus ENUM (not integer)
         allAssignments.addAll(processStage(OrderStatus.GRADING, "GRADING", "ROLE_GRADER"));
@@ -89,6 +83,25 @@ public class WorkPlanningService {
         );
 
         return savedAssignments;
+    }
+
+    /**
+     *
+     * @param employees List of employees to group
+     * @return Map with role name as key and list of employees as value
+     */
+    private Map<String, List<Employee>> groupEmployeesByRole(List<Employee> employees) {
+        if (employees == null || employees.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        return employees.stream()
+                .flatMap(employee -> employee.getRoleNames().stream()
+                        .map(roleName -> new AbstractMap.SimpleEntry<>(roleName, employee)))
+                .collect(Collectors.groupingBy(
+                        Map.Entry::getKey,
+                        Collectors.mapping(Map.Entry::getValue, Collectors.toList())
+                ));
     }
 
     /**

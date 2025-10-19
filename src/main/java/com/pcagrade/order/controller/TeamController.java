@@ -1,7 +1,10 @@
 package com.pcagrade.order.controller;
 
 import com.pcagrade.order.dto.TeamDto;
+import com.pcagrade.order.entity.Employee;
 import com.pcagrade.order.entity.Team;
+import com.pcagrade.order.repository.EmployeeRepository;
+import com.pcagrade.order.service.EmployeeService;
 import com.pcagrade.order.service.TeamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -36,6 +39,9 @@ public class TeamController {
 
     @Autowired
     private TeamService teamService;
+
+    @Autowired
+    private EmployeeRepository employeeRepository;
 
     // ========== CRUD OPERATIONS ==========
 
@@ -117,7 +123,7 @@ public class TeamController {
             log.info("🔍 Getting team by ID: {}", id);
 
             UUID teamId = UUID.fromString(id);
-            Optional<Team> teamOpt = teamService.getTeamById(teamId);
+            Optional<Team> teamOpt = Optional.ofNullable(teamService.getTeamById(teamId));
 
             if (teamOpt.isPresent()) {
                 Team team = teamOpt.get();
@@ -229,9 +235,9 @@ public class TeamController {
             log.info("🗑️ Deleting team: {}", id);
 
             UUID teamId = UUID.fromString(id);
-            Optional<Team> teamOpt = teamService.getTeamById(teamId);
+            Team teamOpt = teamService.getTeamById(teamId);
 
-            if (teamOpt.isEmpty()) {
+            if (teamOpt==null) {
                 log.warn("⚠️ Team not found for deletion: {}", id);
                 return ResponseEntity.notFound().build();
             }
@@ -531,7 +537,9 @@ public class TeamController {
     @GetMapping("/employee/{employeeId}")
     public ResponseEntity<?> getEmployeeTeams(@PathVariable String employeeId) {
         try {
-            List<TeamDto> teams = teamService.getTeamsByEmployee(UUID.fromString(employeeId));
+            UUID employeeUuid = UUID.fromString(employeeId);
+            List<Team> teams = teamService.getTeamsByEmployeeId(employeeUuid);
+
             return ResponseEntity.ok(Map.of("teams", teams));
         } catch (Exception e) {
             return ResponseEntity.badRequest()

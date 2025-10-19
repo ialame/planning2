@@ -228,7 +228,7 @@ public class PlanningController {
         EmployeeWorkloadDTO dto = new EmployeeWorkloadDTO();
         dto.setEmployeeId(employee.getId());
         dto.setEmployeeName(employee.getFirstName() + " " + employee.getLastName());
-        dto.setRoles(employee.getRoles());
+        dto.setRoles(employee.getRoleNames());
         dto.setScheduledMinutes(scheduledMinutes);
         dto.setDailyCapacityMinutes(employee.getDailyCapacityMinutes());
         dto.setUtilizationPercentage(utilization);

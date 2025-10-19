@@ -1,0 +1,102 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-team-table
+      author: pokemon-card-planning
+      context: development,docker,production
+      comment: Create team table for roles/groups
+
+      # Check if table doesn't exist
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: team
+
+      changes:
+        # Create main table
+        - createTable:
+            tableName: team
+            columns:
+              # Primary key (UUID stored as BINARY(16))
+              - column:
+                  name: id
+                  type: BINARY(16)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              # Team/Role name (unique identifier)
+              - column:
+                  name: name
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+                    unique: true
+
+              # Human-readable description
+              - column:
+                  name: description
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+
+              # Display name for UI
+              - column:
+                  name: display_name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: true
+
+              # Color code for UI (hex)
+              - column:
+                  name: color
+                  type: VARCHAR(7)
+                  constraints:
+                    nullable: true
+
+              # Icon/emoji for UI
+              - column:
+                  name: icon
+                  type: VARCHAR(10)
+                  constraints:
+                    nullable: true
+
+              # Is team active?
+              - column:
+                  name: active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+
+              # Audit fields
+              - column:
+                  name: creation_date
+                  type: DATETIME
+                  defaultValueComputed: CURRENT_TIMESTAMP
+
+              - column:
+                  name: modification_date
+                  type: DATETIME
+                  defaultValueComputed: CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
+        # Create indexes for performance
+        - createIndex:
+            tableName: team
+            indexName: idx_team_name
+            unique: true
+            columns:
+              - column:
+                  name: name
+
+        - createIndex:
+            tableName: team
+            indexName: idx_team_active
+            columns:
+              - column:
+                  name: active
+
+      # Rollback instructions
+      rollback:
+        - dropTable:
+            tableName: team

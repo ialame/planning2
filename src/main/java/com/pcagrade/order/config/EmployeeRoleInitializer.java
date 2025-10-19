@@ -1,189 +1,200 @@
 package com.pcagrade.order.config;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.pcagrade.order.entity.Employee;
+import com.pcagrade.order.entity.Team;
+import com.pcagrade.order.repository.EmployeeRepository;
+import com.pcagrade.order.repository.TeamRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
- * Employee Role Initializer
- *
- * Automatically assigns 2-3 roles to each test employee to cover all 7 roles.
- * This ensures that the planning system has employees with the necessary
- * permissions to handle all types of tasks.
- *
- * Runs AFTER TeamDataInitializer (Order 1) and EmployeeDataInitializer (Order 2)
+ * Initializes teams (roles) and employees with photos on application startup
  */
 @Component
-@Order(3) // Execute after employees are created
+@RequiredArgsConstructor
+@Slf4j
 public class EmployeeRoleInitializer implements ApplicationRunner {
 
-    private static final Logger log = LoggerFactory.getLogger(EmployeeRoleInitializer.class);
-
-    @PersistenceContext
-    private EntityManager entityManager;
+    private final EmployeeRepository employeeRepository;
+    private final TeamRepository teamRepository;
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) throws Exception {
-        try {
-            log.info("🔍 Checking if employee roles need initialization...");
+        log.info("Starting initialization of teams and employees...");
 
-            // Check if any employee-team assignments exist
-            Long count = (Long) entityManager.createNativeQuery(
-                    "SELECT COUNT(*) FROM employee_team"
-            ).getSingleResult();
+        // Step 1: Initialize Teams (Roles)
+        initializeTeams();
+
+        // Step 2: Initialize Employees with photos
+        initializeEmployees();
+
+        log.info("✅ Initialization complete!");
+    }
+
+    /**
+     * Initialize all teams (roles) with metadata
+     */
+    private void initializeTeams() {
+        if (teamRepository.count() > 0) {
+            log.info("Teams already initialized, skipping...");
+            return;
+        }
+
+        log.info("Creating teams (roles)...");
+
+        List<Team> teams = List.of(
+                createTeam("ROLE_ADMIN", "System Administrator", "Administrator", "#DC2626", "👑"),
+                createTeam("ROLE_MANAGER", "Team Manager", "Manager", "#7C3AED", "📊"),
+                createTeam("ROLE_GRADER", "Card Grader", "Grader", "#2563EB", "⭐"),
+                createTeam("ROLE_AUTHENTICATOR", "Card Authenticator", "Authenticator", "#16A34A", "✓"),
+                createTeam("ROLE_SCANNER", "Card Scanner", "Scanner", "#EA580C", "📷"),
+                createTeam("ROLE_PREPARER", "Order Preparer", "Preparer", "#CA8A04", "📦"),
+                createTeam("ROLE_VIEWER", "Read-Only Viewer", "Viewer", "#6B7280", "👁")
+        );
+
+        teamRepository.saveAll(teams);
+        log.info("✅ Created {} teams", teams.size());
+    }
+
+    /**
+     * Initialize employees with roles and photos
+     */
+    private void initializeEmployees() {
+        if (employeeRepository.count() > 0) {
+            log.info("Employees already initialized, skipping...");
+            return;
+        }
+
+        log.info("Creating employees with roles and photos...");
+
+        // Get all teams as a map for easy lookup
+        Map<String, Team> teamMap = teamRepository.findAll().stream()
+                .collect(Collectors.toMap(Team::getName, Function.identity()));
+
+        // Create employees with different role combinations
+        List<Employee> employees = List.of(
+                createEmployee(
+                        "John", "Doe", "john.doe@pcagrade.com",
+                        List.of(teamMap.get("ROLE_GRADER"), teamMap.get("ROLE_SCANNER")),
+                        480, 1.0
+                ),
+
+                createEmployee(
+                        "Jane", "Smith", "jane.smith@pcagrade.com",
+                        List.of(teamMap.get("ROLE_AUTHENTICATOR")),
+                        480, 1.1
+                ),
+
+                createEmployee(
+                        "Bob", "Johnson", "bob.johnson@pcagrade.com",
+                        List.of(teamMap.get("ROLE_SCANNER"), teamMap.get("ROLE_PREPARER")),
+                        420, 0.9
+                ),
+
+                createEmployee(
+                        "Alice", "Williams", "alice.williams@pcagrade.com",
+                        List.of(teamMap.get("ROLE_GRADER"), teamMap.get("ROLE_AUTHENTICATOR")),
+                        480, 1.05
+                ),
+
+                createEmployee(
+                        "Charlie", "Brown", "charlie.brown@pcagrade.com",
+                        List.of(teamMap.get("ROLE_PREPARER")),
+                        360, 1.0
+                ),
+
+                createEmployee(
+                        "Diana", "Martinez", "diana.martinez@pcagrade.com",
+                        List.of(teamMap.get("ROLE_ADMIN"), teamMap.get("ROLE_MANAGER")),
+                        480, 1.0
+                ),
+
+                createEmployee(
+                        "Eve", "Taylor", "eve.taylor@pcagrade.com",
+                        List.of(teamMap.get("ROLE_VIEWER")),
+                        480, 1.0
+                )
+        );
+
+        employeeRepository.saveAll(employees);
+
+        log.info("✅ Successfully initialized {} employees with roles and photos", employees.size());
+
+        // Log role distribution
+        logRoleDistribution();
+    }
+
+    /**
+     * Helper method to create a team
+     */
+    private Team createTeam(String name, String description, String displayName, String color, String icon) {
+        return Team.builder()
+                .name(name)
+                .description(description)
+                .displayName(displayName)
+                .color(color)
+                .icon(icon)
+                .active(true)
+                .build();
+    }
+
+    /**
+     * Helper method to create an employee with teams and auto-generated photo
+     */
+    private Employee createEmployee(
+            String firstName,
+            String lastName,
+            String email,
+            List<Team> teams,
+            int dailyCapacityMinutes,
+            double efficiencyRating
+    ) {
+        Employee employee = new Employee();
+        employee.setFirstName(firstName);
+        employee.setLastName(lastName);
+        employee.setEmail(email);
+
+        // Auto-generate photo URL with UI Avatars
+        String photoUrl = String.format(
+                "https://ui-avatars.com/api/?name=%s+%s&size=150&background=random&color=fff&bold=true",
+                firstName, lastName
+        );
+        employee.setPhotoUrl(photoUrl);
+
+        employee.setTeams(teams != null ? teams.stream().collect(Collectors.toSet()) : null);
+        employee.setActive(true);
+        employee.setDailyCapacityMinutes(dailyCapacityMinutes);
+        employee.setEfficiencyRating(efficiencyRating);
+
+        return employee;
+    }
+
+    /**
+     * Log role distribution for verification
+     */
+    private void logRoleDistribution() {
+        log.info("Team/Role distribution:");
+
+        List<Team> teams = teamRepository.findAll();
+        for (Team team : teams) {
+            long count = employeeRepository.findAll().stream()
+                    .filter(emp -> emp.hasRole(team.getName()))
+                    .count();
 
             if (count > 0) {
-                log.info("✅ employee_team table already contains {} assignments - skipping initialization", count);
-                return;
+                log.info("  {} {} - {} employees",
+                        team.getIcon(), team.getDisplayName(), count);
             }
-
-            log.info("📝 Assigning roles to test employees...");
-            assignRolesToEmployees();
-            log.info("✅ Successfully assigned roles to all test employees");
-
-        } catch (Exception e) {
-            log.error("❌ Error assigning roles to employees: {}", e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Assign roles to employees to cover all 7 roles
-     *
-     * Distribution:
-     * - Sophie Martin: NOTEUR (grader), SCANNER, VIEWER
-     * - Thomas Dubois: CERTIFICATEUR (certifier), PREPARATEUR (preparer)
-     * - Marie Bernard: SCANNER, PREPARATEUR, VIEWER
-     * - Pierre Petit: MANAGER, ADMIN
-     * - Julie Moreau: NOTEUR, CERTIFICATEUR, VIEWER
-     *
-     * This ensures all 7 roles are covered across the 5 employees
-     */
-    private void assignRolesToEmployees() {
-        // Get employees by email (predictable)
-        Map<String, String> employees = getEmployeeIds();
-
-        // Get teams by name
-        Map<String, String> teams = getTeamIds();
-
-        if (employees.isEmpty() || teams.isEmpty()) {
-            log.warn("⚠️ No employees or teams found - skipping role assignment");
-            return;
-        }
-
-        // Employee 1: Sophie Martin - Card grader with basic access
-        assignRoles(employees.get("sophie.martin@pcagrade.com"), List.of(
-                teams.get("ROLE_NOTEUR"),       // Main role: grading cards
-                teams.get("ROLE_SCANNER"),      // Can also scan
-                teams.get("ROLE_VIEWER")        // Read-only access
-        ), "Sophie Martin");
-
-        // Employee 2: Thomas Dubois - Certifier and preparer
-        assignRoles(employees.get("thomas.dubois@pcagrade.com"), List.of(
-                teams.get("ROLE_CERTIFICATEUR"), // Main role: certifying/encapsulating
-                teams.get("ROLE_PREPARATEUR")    // Can prepare orders
-        ), "Thomas Dubois");
-
-        // Employee 3: Marie Bernard - Multi-skilled scanner and preparer
-        assignRoles(employees.get("marie.bernard@pcagrade.com"), List.of(
-                teams.get("ROLE_SCANNER"),      // Main role: scanning
-                teams.get("ROLE_PREPARATEUR"),  // Can prepare orders
-                teams.get("ROLE_VIEWER")        // Read-only access
-        ), "Marie Bernard");
-
-        // Employee 4: Pierre Petit - Senior manager with admin rights
-        assignRoles(employees.get("pierre.petit@pcagrade.com"), List.of(
-                teams.get("ROLE_MANAGER"),      // Team management
-                teams.get("ROLE_ADMIN")         // Full system access
-        ), "Pierre Petit");
-
-        // Employee 5: Julie Moreau - Trainee learning multiple roles
-        assignRoles(employees.get("julie.moreau@pcagrade.com"), List.of(
-                teams.get("ROLE_NOTEUR"),       // Learning to grade
-                teams.get("ROLE_CERTIFICATEUR"), // Learning to certify
-                teams.get("ROLE_VIEWER")        // Read-only monitoring
-        ), "Julie Moreau");
-
-        log.info("✅ All 7 roles covered across 5 employees");
-    }
-
-    /**
-     * Get employee IDs by email
-     */
-    private Map<String, String> getEmployeeIds() {
-        String sql = "SELECT email, HEX(id) FROM employee";
-
-        @SuppressWarnings("unchecked")
-        List<Object[]> results = entityManager.createNativeQuery(sql).getResultList();
-
-        return results.stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        row -> (String) row[0],  // email
-                        row -> (String) row[1]   // id (hex)
-                ));
-    }
-
-    /**
-     * Get team IDs by name
-     */
-    private Map<String, String> getTeamIds() {
-        String sql = "SELECT name, HEX(id) FROM team";
-
-        @SuppressWarnings("unchecked")
-        List<Object[]> results = entityManager.createNativeQuery(sql).getResultList();
-
-        return results.stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        row -> (String) row[0],  // name
-                        row -> (String) row[1]   // id (hex)
-                ));
-    }
-
-    /**
-     * Assign multiple roles to an employee
-     */
-    private void assignRoles(String employeeId, List<String> teamIds, String employeeName) {
-        if (employeeId == null || teamIds == null || teamIds.isEmpty()) {
-            log.warn("⚠️ Cannot assign roles to {} - missing IDs", employeeName);
-            return;
-        }
-
-        int successCount = 0;
-
-        for (String teamId : teamIds) {
-            if (teamId == null) continue;
-
-            try {
-                String sql = """
-                    INSERT INTO employee_team (employee_id, team_id)
-                    VALUES (UNHEX(?), UNHEX(?))
-                    """;
-
-                int result = entityManager.createNativeQuery(sql)
-                        .setParameter(1, employeeId)
-                        .setParameter(2, teamId)
-                        .executeUpdate();
-
-                if (result > 0) {
-                    successCount++;
-                }
-
-            } catch (Exception e) {
-                log.error("  ✗ Failed to assign role to {}: {}", employeeName, e.getMessage());
-            }
-        }
-
-        if (successCount > 0) {
-            log.info("  ✓ Assigned {} roles to {}", successCount, employeeName);
         }
     }
 }

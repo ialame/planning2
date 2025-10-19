@@ -1,0 +1,77 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-create-employee-team-table
+      author: pokemon-card-planning
+      context: development,docker,production
+      comment: Create employee_team junction table (many-to-many relationship)
+
+      # Check if table doesn't exist
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: employee_team
+
+      changes:
+        # Create junction table
+        - createTable:
+            tableName: employee_team
+            columns:
+              # Employee foreign key
+              - column:
+                  name: employee_id
+                  type: BINARY(16)
+                  constraints:
+                    nullable: false
+
+              # Team foreign key
+              - column:
+                  name: team_id
+                  type: BINARY(16)
+                  constraints:
+                    nullable: false
+
+        # Add foreign key constraints
+        - addForeignKeyConstraint:
+            baseTableName: employee_team
+            baseColumnNames: employee_id
+            constraintName: fk_employee_team_employee
+            referencedTableName: employee
+            referencedColumnNames: id
+            onDelete: CASCADE
+            onUpdate: CASCADE
+
+        - addForeignKeyConstraint:
+            baseTableName: employee_team
+            baseColumnNames: team_id
+            constraintName: fk_employee_team_team
+            referencedTableName: team
+            referencedColumnNames: id
+            onDelete: CASCADE
+            onUpdate: CASCADE
+
+        # Add composite primary key
+        - addPrimaryKey:
+            tableName: employee_team
+            columnNames: employee_id, team_id
+            constraintName: pk_employee_team
+
+        # Create indexes for performance
+        - createIndex:
+            tableName: employee_team
+            indexName: idx_employee_team_employee
+            columns:
+              - column:
+                  name: employee_id
+
+        - createIndex:
+            tableName: employee_team
+            indexName: idx_employee_team_team
+            columns:
+              - column:
+                  name: team_id
+
+      # Rollback instructions
+      rollback:
+        - dropTable:
+            tableName: employee_team

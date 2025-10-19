@@ -1,58 +1,88 @@
 package com.pcagrade.order.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;  // ✅ AJOUTER si pas déjà présent
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.pcagrade.order.entity.ulid.AbstractUlidEntity;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.ToString;  // ✅ AJOUTER
+import lombok.*;
 
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * Team entity representing a role/group in the organization
+ * Examples: ROLE_GRADER, ROLE_AUTHENTICATOR, ROLE_SCANNER, ROLE_PREPARER
+ */
 @Entity
 @Table(name = "team")
 @Data
-@EqualsAndHashCode(callSuper = false, exclude = {"employees"})  // ✅ MODIFIER - Exclure employees
-@ToString(exclude = {"employees"})  // ✅ AJOUTER - Exclure employees du toString
+@EqualsAndHashCode(callSuper = true, exclude = {"employees"})
+@ToString(exclude = {"employees"})
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Team extends AbstractUlidEntity {
 
-    @Column(nullable = false, length = 50, unique = true)
+    /**
+     * Unique role name (e.g., "ROLE_GRADER", "ROLE_AUTHENTICATOR")
+     */
+    @Column(nullable = false, unique = true, length = 50)
     private String name;
 
-    @Column(length = 50)
-    private String nameUpper;
-
+    /**
+     * Human-readable description
+     */
     @Column(length = 255)
     private String description;
 
-    @Column(name = "permission_level")
-    private Integer permissionLevel;
+    /**
+     * Display name for UI (e.g., "Card Grader", "Authenticator")
+     */
+    @Column(length = 100)
+    private String displayName;
 
-    @Column(name = "active")
+    /**
+     * Team color for UI visualization (hex code)
+     */
+    @Column(length = 7)
+    private String color;
+
+    /**
+     * Team icon/emoji for UI
+     */
+    @Column(length = 10)
+    private String icon;
+
+    /**
+     * Is this team currently active?
+     */
+    @Column(nullable = false)
     private Boolean active = true;
 
+    /**
+     * Employees belonging to this team
+     */
     @ManyToMany(mappedBy = "teams")
-    @JsonIgnore  // ✅ AJOUTER aussi ici par sécurité
+    @JsonIgnore
     private Set<Employee> employees = new HashSet<>();
 
-    @PrePersist
-    protected void onTeamCreate() {
-        super.onCreate();
-        if (name != null) {
-            nameUpper = name.toUpperCase();
-        }
+    /**
+     * Get total number of active employees in this team
+     */
+    public int getActiveEmployeeCount() {
+        if (employees == null) return 0;
+        return (int) employees.stream()
+                .filter(emp -> Boolean.TRUE.equals(emp.getActive()))
+                .count();
     }
 
-    @PreUpdate
-    protected void onTeamUpdate() {
-        super.onUpdate();
-        if (name != null) {
-            nameUpper = name.toUpperCase();
-        }
+    /**
+     * Get total daily capacity of this team in minutes
+     */
+    public int getTotalDailyCapacityMinutes() {
+        if (employees == null) return 0;
+        return employees.stream()
+                .filter(emp -> Boolean.TRUE.equals(emp.getActive()))
+                .mapToInt(Employee::getEffectiveDailyCapacityMinutes)
+                .sum();
     }
 }
