@@ -70,9 +70,16 @@ public class EmployeeController {
         }
     }
 
+
     /**
-     * ✅ CREATE EMPLOYEE - FIXED POST ENDPOINT
+     * ✅ CREATE EMPLOYEE - COMPLETE FIXED VERSION
      * Endpoint: POST /api/employees
+     *
+     * FIXES:
+     * - Added missing efficiency_rating column (required)
+     * - Added missing photo_url column (optional)
+     * - Fixed active column (bit(1) type requires special handling)
+     * - Proper NULL handling for optional fields
      */
     @PostMapping
     @Transactional
@@ -108,15 +115,31 @@ public class EmployeeController {
                 active = (Boolean) employeeData.get("active");
             }
 
-            // 3. Generate UUID for employee ID
+            // 3. Efficiency rating (default 1.0)
+            Double efficiencyRating = 1.0;
+            if (employeeData.containsKey("efficiencyRating")) {
+                Object efficiencyObj = employeeData.get("efficiencyRating");
+                if (efficiencyObj instanceof Number) {
+                    efficiencyRating = ((Number) efficiencyObj).doubleValue();
+                }
+            }
+
+            // 4. Photo URL (optional)
+            String photoUrl = null;
+            if (employeeData.containsKey("photoUrl")) {
+                photoUrl = (String) employeeData.get("photoUrl");
+            }
+
+            // 5. Generate UUID for employee ID
             String employeeId = UUID.randomUUID().toString().replace("-", "");
 
-            // 4. Insert into employee table
+            // 6. FIXED: Insert with ALL required columns including efficiency_rating and photo_url
             String insertSql = """
-                INSERT INTO employee 
-                (id, first_name, last_name, email, work_hours_per_day, active, creation_date, modification_date)
-                VALUES (UNHEX(?), ?, ?, ?, ?, ?, NOW(), NOW())
-            """;
+            INSERT INTO employee 
+            (id, first_name, last_name, email, work_hours_per_day, active, 
+             efficiency_rating, photo_url, creation_date, modification_date)
+            VALUES (UNHEX(?), ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        """;
 
             Query insertQuery = entityManager.createNativeQuery(insertSql);
             insertQuery.setParameter(1, employeeId);
@@ -124,7 +147,9 @@ public class EmployeeController {
             insertQuery.setParameter(3, lastName.trim());
             insertQuery.setParameter(4, email != null ? email.trim() : null);
             insertQuery.setParameter(5, workHours);
-            insertQuery.setParameter(6, active ? 1 : 0); // Convert Boolean to Integer
+            insertQuery.setParameter(6, active);  // JPA will convert boolean to bit(1)
+            insertQuery.setParameter(7, efficiencyRating);  // FIXED: Added missing column
+            insertQuery.setParameter(8, photoUrl);  // FIXED: Added missing column
 
             int rowsAffected = insertQuery.executeUpdate();
 
@@ -138,6 +163,7 @@ public class EmployeeController {
                 response.put("email", email);
                 response.put("workHoursPerDay", workHours);
                 response.put("active", active);
+                response.put("efficiencyRating", efficiencyRating);
 
                 return ResponseEntity.ok(response);
             } else {

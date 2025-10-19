@@ -400,7 +400,7 @@ import { ref, computed, onMounted } from 'vue'
 import EmployeeDetailPage from '../components/EmployeeDetailPage.vue'
 import EmployeeAvatar from '@/components/EmployeeAvatar.vue'
 import EmployeePhotoUploader from '@/components/EmployeePhotoUploader.vue'
-import { API_BASE_URL } from '@/config/api'
+import { API_BASE_URL, API_ENDPOINTS } from '@/config/api.ts'
 
 // ========== INTERFACES ==========
 interface Employee {
@@ -500,26 +500,37 @@ const loadEmployees = async () => {
 /**
  * Add new employee
  */
+/**
+ * Add new employee
+ * FIXED: Use API_ENDPOINTS.EMPLOYEES constant for correct URL
+ */
 const addEmployee = async () => {
   try {
     console.log('➕ Adding employee:', newEmployee.value)
 
-    const response = await fetch(`${API_BASE_URL}/api/employees`, {
+    // FIXED: Use the predefined API_ENDPOINTS constant
+    // This ensures consistency across the application
+    const response = await fetch(API_ENDPOINTS.EMPLOYEES, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newEmployee.value)
     })
 
     if (response.ok) {
-      console.log('✅ Employee added successfully')
+      const data = await response.json()
+      console.log('✅ Employee added successfully:', data)
+
       newEmployee.value = { firstName: '', lastName: '', email: '' }
       showAddForm.value = false
       await loadEmployees()
     } else {
-      console.error('❌ Failed to add employee')
+      const errorData = await response.json()
+      console.error('❌ Failed to add employee:', errorData)
+      alert(`Error: ${errorData.message || 'Failed to add employee'}`)
     }
   } catch (error) {
     console.error('❌ Error adding employee:', error)
+    alert('Network error: Could not connect to server')
   }
 }
 
