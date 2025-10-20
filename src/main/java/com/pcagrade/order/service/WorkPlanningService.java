@@ -64,8 +64,8 @@ public class WorkPlanningService {
 
         // ✅ FIXED: Process orders by OrderStatus ENUM (not integer)
         allAssignments.addAll(processStage(OrderStatus.GRADING, "GRADING", "ROLE_GRADER"));
-        allAssignments.addAll(processStage(OrderStatus.CERTIFYING, "CERTIFYING", "ROLE_CERTIFIER"));
-        allAssignments.addAll(processStage(OrderStatus.PACKAGING, "PACKAGING", "ROLE_PACKAGER"));
+        allAssignments.addAll(processStage(OrderStatus.CERTIFYING, "CERTIFYING", "ROLE_AUTHENTICATOR"));
+        allAssignments.addAll(processStage(OrderStatus.PACKAGING, "PACKAGING", "ROLE_PREPARER"));
         allAssignments.addAll(processStage(OrderStatus.SCANNING, "SCANNING", "ROLE_SCANNER"));
 
         // Save all assignments

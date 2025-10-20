@@ -30,10 +30,6 @@ databaseChangeLog:
       file: db/changelog/changes/001-create-employee-table.yml
       context: development,docker,production
 
-  # Planning table - order-employee assignments
-  - include:
-      file: db/changelog/changes/002-create-planning-table.yml
-      context: development,docker,production
 
   # ========================================
   # SCHEMA CHANGES - User Management
