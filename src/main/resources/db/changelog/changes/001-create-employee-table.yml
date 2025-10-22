@@ -45,6 +45,22 @@ databaseChangeLog:
                     nullable: true
                     unique: true
 
+              # Authentication
+              - column:
+                  name: password
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+                  defaultValue: "$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5TD8KzY8qCqYS"
+                  remarks: "BCrypt hashed password. Default is 'password123'"
+
+              # Photo URL
+              - column:
+                  name: photo_url
+                  type: MEDIUMTEXT
+                  constraints:
+                    nullable: true
+
               # Work configuration
               - column:
                   name: work_hours_per_day

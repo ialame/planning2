@@ -20,7 +20,11 @@ import java.util.UUID;
 @Repository
 public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
 
+    /**
+     * Find employee by email (used for authentication)
+     */
     Optional<Employee> findByEmail(String email);
+
 
     List<Employee> findByActiveTrue();
 

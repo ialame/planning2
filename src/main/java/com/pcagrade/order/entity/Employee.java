@@ -26,6 +26,9 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class Employee extends AbstractUlidEntity {
 
+    @Column(nullable = false)
+    private String password;
+
     @Column(nullable = false, length = 100)
     private String firstName;
 
