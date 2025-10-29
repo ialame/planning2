@@ -6,7 +6,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,13 +17,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-/**
- * JWT Authentication Filter
- * Intercepts all requests to validate JWT tokens and set authentication
- */
 @Component
 @RequiredArgsConstructor
-@Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
@@ -37,53 +31,53 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
 
-        // Skip authentication for public endpoints
-        String requestPath = request.getServletPath();
-        if (requestPath.startsWith("/api/auth/") ||
-                requestPath.startsWith("/api/public/") ||
-                requestPath.startsWith("/swagger-ui") ||
-                requestPath.startsWith("/v3/api-docs") ||
-                requestPath.equals("/actuator/health") ||
-                requestPath.equals("/actuator/info")) {
+        // Skip JWT validation for auth endpoints
+        if (request.getServletPath().startsWith("/api/auth/")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // Extract JWT token from Authorization header
         final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-        final String userEmail;
 
+        // If no Authorization header or doesn't start with Bearer
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            log.debug("No JWT token found in request to {}", requestPath);
             filterChain.doFilter(request, response);
             return;
         }
-
-        jwt = authHeader.substring(7);
 
         try {
-            userEmail = jwtService.extractUsername(jwt);
+            // Extract JWT token
+            final String jwt = authHeader.substring(7);
+            final String userEmail = jwtService.extractUsername(jwt);
 
-            // If token is valid and user is not already authenticated
+            // If email extracted and no authentication in context yet
             if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                // Load user details
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
 
+                // Validate token
                 if (jwtService.isTokenValid(jwt, userDetails)) {
+
+                    // Create authentication token
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                             userDetails,
                             null,
                             userDetails.getAuthorities()
                     );
-                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    authToken.setDetails(
+                            new WebAuthenticationDetailsSource().buildDetails(request)
+                    );
+
+                    // ✅ CRITIQUE: Set authentication in SecurityContext
                     SecurityContextHolder.getContext().setAuthentication(authToken);
-                    log.debug("Successfully authenticated user: {} for request to {}", userEmail, requestPath);
-                } else {
-                    log.warn("Invalid JWT token for user: {}", userEmail);
+
+                    System.out.println("✅ Authenticated user: " + userEmail + " with roles: " + userDetails.getAuthorities());
                 }
             }
         } catch (Exception e) {
-            log.error("Error processing JWT token: {}", e.getMessage());
+            System.err.println("❌ JWT Authentication failed: " + e.getMessage());
         }
 
         filterChain.doFilter(request, response);

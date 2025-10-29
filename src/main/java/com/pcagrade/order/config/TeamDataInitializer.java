@@ -1,22 +1,28 @@
 package com.pcagrade.order.config;
 
-import com.pcagrade.order.entity.*;
-import com.pcagrade.order.repository.*;
+import com.pcagrade.order.entity.Employee;
+import com.pcagrade.order.entity.Team;
+import com.pcagrade.order.repository.EmployeeRepository;
+import com.pcagrade.order.repository.TeamRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
- * Initialize default teams and sample data
- * Fixed version using "Team" instead of "Group"
+ * Initializes default teams and sample employees in the database.
+ * Creates teams for each role type and assigns employees to teams.
+ *
+ * CORRECTED: Uses String IDs (ULID as String) as per your architecture
+ * CORRECTED: Uses findByName() which already exists in your TeamRepository
+ * CORRECTED: Uses Set<Team> for employee.teams (many-to-many relationship)
  */
 @Component
 @RequiredArgsConstructor
@@ -25,134 +31,127 @@ public class TeamDataInitializer implements ApplicationRunner {
 
     private final TeamRepository teamRepository;
     private final EmployeeRepository employeeRepository;
-    private final OrderRepository orderRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        log.info("🔍 Checking if team table needs initialization...");
-
         try {
-            long teamCount = teamRepository.count();
+            log.info("🔍 Checking if team table needs initialization...");
 
-            if (teamCount == 0) {
-                log.info("📝 Initializing default teams...");
+            // Initialize teams if needed
+            if (teamRepository.count() == 0) {
                 initializeDefaultTeams();
-                log.info("✅ Default teams initialized successfully");
             } else {
-                log.info("✓ Teams already exist ({}), skipping initialization", teamCount);
+                log.info("✅ Teams already initialized (count: {})", teamRepository.count());
             }
 
-            long employeeCount = employeeRepository.count();
-            if (employeeCount == 0) {
-                log.info("📝 Initializing sample employees...");
+            // Initialize sample employees if needed
+            log.info("📝 Checking sample employees...");
+            if (employeeRepository.count() == 0) {
                 initializeSampleEmployees();
-                log.info("✅ Sample employees initialized successfully");
+            } else {
+                log.info("✅ Employees already initialized (count: {})", employeeRepository.count());
             }
 
-            long orderCount = orderRepository.count();
-            if (orderCount == 0) {
-                log.info("📝 Initializing sample orders...");
-                initializeSampleOrders();
-                log.info("✅ Sample orders initialized successfully");
-            }
-
+            log.info("✅ Data initialization completed successfully");
         } catch (Exception e) {
             log.error("❌ Error initializing data", e);
             throw new RuntimeException("Failed to initialize data", e);
         }
     }
 
+    /**
+     * Creates default teams for each role type
+     *
+     * Note: Team.name is used as the role identifier (e.g., "ROLE_GRADER")
+     */
     private void initializeDefaultTeams() {
-        List<Team> defaultTeams = List.of(
-                createTeam("Grading Team", "Team responsible for grading Pokemon cards", 1),
-                createTeam("Certification Team", "Team responsible for certifying graded cards", 2),
-                createTeam("Scanning Team", "Team responsible for scanning certified cards", 3),
-                createTeam("Packaging Team", "Team responsible for packaging and shipping", 4)
+        log.info("📝 Initializing default teams...");
+
+        List<Team> teams = Arrays.asList(
+                createTeam("ROLE_GRADER", "Team responsible for grading Pokemon cards", "Grading Team", "#3B82F6", "⭐"),
+                createTeam("ROLE_CERTIFIER", "Team responsible for certifying graded cards", "Certification Team", "#10B981", "✓"),
+                createTeam("ROLE_SCANNER", "Team responsible for scanning cards", "Scanning Team", "#F59E0B", "📷"),
+                createTeam("ROLE_PREPARER", "Team responsible for preparing orders for shipment", "Preparation Team", "#8B5CF6", "📦")
         );
 
-        teamRepository.saveAll(defaultTeams);
-        log.info("Created {} default teams", defaultTeams.size());
+        teamRepository.saveAll(teams);
+        log.info("Created {} default teams", teams.size());
+        log.info("✅ Default teams initialized successfully");
     }
 
-    private Team createTeam(String name, String description, int permissionLevel) {
+    /**
+     * Creates sample employees for testing
+     */
+    private void initializeSampleEmployees() {
+        log.info("📝 Initializing sample employees...");
+
+        List<Employee> employees = Arrays.asList(
+                // Graders
+                createEmployee("john.grader", "John", "Smith", "john.grader@pcagrade.com", "ROLE_GRADER"),
+                createEmployee("alice.grader", "Alice", "Johnson", "alice.grader@pcagrade.com", "ROLE_GRADER"),
+
+                // Certifiers
+                createEmployee("bob.certifier", "Bob", "Williams", "bob.certifier@pcagrade.com", "ROLE_CERTIFIER"),
+                createEmployee("emma.certifier", "Emma", "Brown", "emma.certifier@pcagrade.com", "ROLE_CERTIFIER"),
+
+                // Scanners
+                createEmployee("charlie.scanner", "Charlie", "Davis", "charlie.scanner@pcagrade.com", "ROLE_SCANNER"),
+                createEmployee("sophie.scanner", "Sophie", "Miller", "sophie.scanner@pcagrade.com", "ROLE_SCANNER"),
+
+                // Preparers
+                createEmployee("david.preparer", "David", "Wilson", "david.preparer@pcagrade.com", "ROLE_PREPARER"),
+                createEmployee("lisa.preparer", "Lisa", "Moore", "lisa.preparer@pcagrade.com", "ROLE_PREPARER")
+        );
+
+        employeeRepository.saveAll(employees);
+        log.info("✅ Created {} sample employees", employees.size());
+    }
+
+    /**
+     * Creates a team with specified details
+     */
+    private Team createTeam(String name, String description, String displayName, String color, String icon) {
         Team team = new Team();
         team.setName(name);
         team.setDescription(description);
+        team.setDisplayName(displayName);
+        team.setColor(color);
+        team.setIcon(icon);
         team.setActive(true);
         return team;
     }
 
-    private void initializeSampleEmployees() {
-        Team gradingTeam = teamRepository.findByName("Grading Team").orElse(null);
-        Team certificationTeam = teamRepository.findByName("Certification Team").orElse(null);
-        Team scanningTeam = teamRepository.findByName("Scanning Team").orElse(null);
-        Team packagingTeam = teamRepository.findByName("Packaging Team").orElse(null);
+    /**
+     * Creates an employee and assigns them to the appropriate team based on role name
+     *
+     * CORRECTED: Uses findByName() which searches by team.name (the role identifier)
+     * CORRECTED: Uses Set<Team> for many-to-many relationship
+     */
+    private Employee createEmployee(String username, String firstName, String lastName,
+                                    String email, String roleName) {
+        // Find team by name (which is the role identifier like "ROLE_GRADER")
+        Team team = teamRepository.findByName(roleName)
+                .orElseThrow(() -> new RuntimeException(roleName + " team not found. Available teams: " +
+                        teamRepository.findAll().stream()
+                                .map(Team::getName)
+                                .reduce((a, b) -> a + ", " + b)
+                                .orElse("none")));
 
-        List<Employee> employees = List.of(
-                createEmployee("John", "Smith", "john.smith@pcagrade.com",
-                        Set.of("ROLE_GRADER"), Set.of(gradingTeam)),
-                createEmployee("Sarah", "Johnson", "sarah.johnson@pcagrade.com",
-                        Set.of("ROLE_GRADER"), Set.of(gradingTeam)),
-                createEmployee("Michael", "Brown", "michael.brown@pcagrade.com",
-                        Set.of("ROLE_CERTIFIER"), Set.of(certificationTeam)),
-                createEmployee("Emily", "Davis", "emily.davis@pcagrade.com",
-                        Set.of("ROLE_CERTIFIER"), Set.of(certificationTeam)),
-                createEmployee("David", "Wilson", "david.wilson@pcagrade.com",
-                        Set.of("ROLE_SCANNER"), Set.of(scanningTeam)),
-                createEmployee("Jessica", "Martinez", "jessica.martinez@pcagrade.com",
-                        Set.of("ROLE_SCANNER"), Set.of(scanningTeam)),
-                createEmployee("James", "Garcia", "james.garcia@pcagrade.com",
-                        Set.of("ROLE_PACKAGER"), Set.of(packagingTeam)),
-                createEmployee("Lisa", "Rodriguez", "lisa.rodriguez@pcagrade.com",
-                        Set.of("ROLE_PACKAGER"), Set.of(packagingTeam))
-        );
-
-        employeeRepository.saveAll(employees);
-        log.info("Created {} sample employees", employees.size());
-    }
-
-    private Employee createEmployee(String firstName, String lastName, String email,
-                                    Set<String> roles, Set<Team> teams) {
         Employee employee = new Employee();
+        employee.setPassword(passwordEncoder.encode("password123")); // Default password
         employee.setFirstName(firstName);
         employee.setLastName(lastName);
         employee.setEmail(email);
-        Team graderTeam = teamRepository.findByName("ROLE_GRADER")
-                .orElseThrow(() -> new RuntimeException("ROLE_GRADER team not found"));
-        employee.addTeam(graderTeam);
-        employee.setTeams(teams != null ? teams : new HashSet<>());
         employee.setActive(true);
-        employee.setDailyCapacityMinutes(480); // 8 hours
+        employee.setWorkHoursPerDay(8); // 8 hours per day
+        employee.setEfficiencyRating(1.0); // Normal efficiency
+
+        // Set teams (many-to-many relationship)
+        employee.setTeams(new HashSet<>());
+        employee.getTeams().add(team);
+
         return employee;
-    }
-
-    private void initializeSampleOrders() {
-
-    }
-
-    private Order createOrder(String orderNumber, String customerName, String customerEmail,
-                              LocalDateTime deadline, int cardCount) {
-        Order order = new Order();
-        order.setOrderNumber(orderNumber);
-        order.setCustomerName(customerName);
-        order.setStatus(OrderStatus.PENDING);
-
-        // Create sample cards
-        List<Card> cards = new java.util.ArrayList<>();
-        for (int i = 1; i <= cardCount; i++) {
-            Card card = new Card();
-            card.setOrder(order);
-            card.setCardName("Pikachu " + i);
-            card.setCardSet("Base Set");
-            card.setCardNumber(String.valueOf(25 + i));
-            card.setStatus(CardStatus.PENDING);
-            cards.add(card);
-        }
-        order.setCards(cards);
-
-        // Calculate estimated processing time
-
-        return order;
     }
 }

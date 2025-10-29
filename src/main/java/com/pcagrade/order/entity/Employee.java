@@ -16,6 +16,8 @@ import java.util.stream.Collectors;
 /**
  * Employee entity with team-based role management
  * Uses employee_team table for role assignments via Team entities
+ *
+ * CORRECTED: Uses String ID (ULID as VARCHAR/CHAR) as per your architecture
  */
 @Entity
 @Table(name = "employee")
@@ -40,26 +42,11 @@ public class Employee extends AbstractUlidEntity {
 
     /**
      * Photo URL or base64 data URL
-     *
-     * Options for column type:
-     *
-     * 1. MEDIUMTEXT (RECOMMENDED) - Up to 16MB
-     *    Supports large base64 images (up to ~12MB original image)
+     * Supports large base64 images (up to ~12MB original image)
      */
     @Lob
     @Column(name = "photo_url", columnDefinition = "MEDIUMTEXT")
     private String photoUrl;
-
-    /**
-     * Alternative option if you want smaller limit:
-     *
-     * 2. TEXT - Up to 64KB
-     *    Supports smaller base64 images (up to ~48KB original image)
-     *
-     * @Lob
-     * @Column(name = "photo_url", columnDefinition = "TEXT")
-     * private String photoUrl;
-     */
 
     /**
      * Work hours per day (e.g., 8 hours)
@@ -84,86 +71,57 @@ public class Employee extends AbstractUlidEntity {
 
     /**
      * Teams (roles) this employee belongs to
-     * Each team represents a role (ROLE_GRADER, ROLE_AUTHENTICATOR, etc.)
+     * Each team represents a role (ROLE_GRADER, ROLE_CERTIFIER, etc.)
+     * Many-to-many relationship
      */
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "employee_team",
             joinColumns = @JoinColumn(name = "employee_id"),
             inverseJoinColumns = @JoinColumn(name = "team_id")
     )
-    @JsonIgnore
     private Set<Team> teams = new HashSet<>();
 
-    // ========== BUSINESS LOGIC METHODS ==========
-
     /**
-     * Get employee's full name
-     */
-    public String getFullName() {
-        return firstName + " " + lastName;
-    }
-
-    /**
-     * Get daily capacity in minutes (without efficiency consideration)
-     * Used for backward compatibility
-     * Returns Integer (nullable) instead of int for null safety
+     * Get daily capacity in minutes (workHoursPerDay * 60 * efficiencyRating)
+     * Returns null if workHoursPerDay or efficiencyRating is null
      */
     public Integer getDailyCapacityMinutes() {
-        if (workHoursPerDay == null) {
+        if (workHoursPerDay == null || efficiencyRating == null) {
             return null;
         }
-        return workHoursPerDay * 60;
+        return (int) (workHoursPerDay * 60 * efficiencyRating);
     }
 
     /**
      * Set daily capacity in minutes
-     * Converts back to work hours (backward compatibility)
+     * Converts back to workHoursPerDay based on current efficiency rating
      */
     public void setDailyCapacityMinutes(Integer minutes) {
         if (minutes == null) {
-            this.workHoursPerDay = 8; // default value
+            this.workHoursPerDay = null;
+            return;
+        }
+        if (efficiencyRating != null && efficiencyRating > 0) {
+            this.workHoursPerDay = (int) Math.round(minutes / (60.0 * efficiencyRating));
         } else {
             this.workHoursPerDay = minutes / 60;
         }
     }
 
     /**
-     * Get effective daily capacity in minutes considering efficiency
-     * Formula: work_hours_per_day * 60 * efficiency_rating
+     * Get effective daily capacity considering efficiency
+     * Returns null if calculation is not possible
      */
-    public int getEffectiveDailyCapacityMinutes() {
-        return (int) (workHoursPerDay * 60 * efficiencyRating);
+    public Integer getEffectiveDailyCapacityMinutes() {
+        return getDailyCapacityMinutes();
     }
 
     /**
-     * Add a team to this employee
-     */
-    public void addTeam(Team team) {
-        if (teams == null) {
-            teams = new HashSet<>();
-        }
-        teams.add(team);
-        team.getEmployees().add(this);
-    }
-
-    /**
-     * Remove a team from this employee
-     */
-    public void removeTeam(Team team) {
-        if (teams != null) {
-            teams.remove(team);
-            team.getEmployees().remove(this);
-        }
-    }
-
-    /**
-     * Get role names from teams
+     * Get all role names this employee has
      */
     public Set<String> getRoleNames() {
-        if (teams == null) {
-            return new HashSet<>();
-        }
+        if (teams == null) return new HashSet<>();
         return teams.stream()
                 .map(Team::getName)
                 .collect(Collectors.toSet());
@@ -173,22 +131,40 @@ public class Employee extends AbstractUlidEntity {
      * Check if employee has a specific role
      */
     public boolean hasRole(String roleName) {
-        if (teams == null) {
-            return false;
-        }
+        if (teams == null) return false;
         return teams.stream()
                 .anyMatch(team -> team.getName().equals(roleName));
     }
 
     /**
-     * Get number of active teams
+     * Add a team (role) to this employee
      */
-    public int getActiveTeamCount() {
+    public void addTeam(Team team) {
         if (teams == null) {
-            return 0;
+            teams = new HashSet<>();
         }
-        return (int) teams.stream()
-                .filter(team -> Boolean.TRUE.equals(team.getActive()))
-                .count();
+        teams.add(team);
+        if (team.getEmployees() != null && !team.getEmployees().contains(this)) {
+            team.getEmployees().add(this);
+        }
+    }
+
+    /**
+     * Remove a team (role) from this employee
+     */
+    public void removeTeam(Team team) {
+        if (teams != null) {
+            teams.remove(team);
+        }
+        if (team.getEmployees() != null) {
+            team.getEmployees().remove(this);
+        }
+    }
+
+    /**
+     * Get full name
+     */
+    public String getFullName() {
+        return firstName + " " + lastName;
     }
 }

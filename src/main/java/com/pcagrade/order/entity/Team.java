@@ -10,7 +10,9 @@ import java.util.Set;
 
 /**
  * Team entity representing a role/group in the organization
- * Examples: ROLE_GRADER, ROLE_AUTHENTICATOR, ROLE_SCANNER, ROLE_PREPARER
+ * Examples: ROLE_GRADER, ROLE_CERTIFIER, ROLE_SCANNER, ROLE_PREPARER
+ *
+ * CORRECTED: Uses String ID (ULID as VARCHAR/CHAR) as per your architecture
  */
 @Entity
 @Table(name = "team")
@@ -23,7 +25,7 @@ import java.util.Set;
 public class Team extends AbstractUlidEntity {
 
     /**
-     * Unique role name (e.g., "ROLE_GRADER", "ROLE_AUTHENTICATOR")
+     * Unique role name (e.g., "ROLE_GRADER", "ROLE_CERTIFIER")
      */
     @Column(nullable = false, unique = true, length = 50)
     private String name;
@@ -35,7 +37,7 @@ public class Team extends AbstractUlidEntity {
     private String description;
 
     /**
-     * Display name for UI (e.g., "Card Grader", "Authenticator")
+     * Display name for UI (e.g., "Card Grader", "Certifier")
      */
     @Column(length = 100)
     private String displayName;
@@ -56,13 +58,15 @@ public class Team extends AbstractUlidEntity {
      * Is this team currently active?
      */
     @Column(nullable = false)
+    @Builder.Default
     private Boolean active = true;
 
     /**
-     * Employees belonging to this team
+     * Employees belonging to this team (many-to-many relationship)
      */
     @ManyToMany(mappedBy = "teams")
     @JsonIgnore
+    @Builder.Default
     private Set<Employee> employees = new HashSet<>();
 
     /**
@@ -77,12 +81,13 @@ public class Team extends AbstractUlidEntity {
 
     /**
      * Get total daily capacity of this team in minutes
+     * Uses workHoursPerDay * 60 * efficiencyRating formula
      */
     public int getTotalDailyCapacityMinutes() {
         if (employees == null) return 0;
         return employees.stream()
                 .filter(emp -> Boolean.TRUE.equals(emp.getActive()))
-                .mapToInt(Employee::getEffectiveDailyCapacityMinutes)
+                .mapToInt(emp -> (int) (emp.getWorkHoursPerDay() * 60 * emp.getEfficiencyRating()))
                 .sum();
     }
 }

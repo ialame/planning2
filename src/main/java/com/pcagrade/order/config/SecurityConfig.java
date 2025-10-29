@@ -46,46 +46,11 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints - no authentication required
+                        // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/public/**").permitAll()
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
 
-                        // Admin-only endpoints
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyRole("ADMIN", "MANAGER")
-
-                        // Manager endpoints
-                        .requestMatchers("/api/planning/generate").hasAnyRole("ADMIN", "MANAGER")
-                        .requestMatchers("/api/sync/**").hasAnyRole("ADMIN", "MANAGER")
-                        .requestMatchers("/api/employees/*/activate", "/api/employees/*/deactivate").hasAnyRole("ADMIN", "MANAGER")
-
-                        // Role-specific work assignment access
-                        .requestMatchers(HttpMethod.GET, "/api/planning/assignments").authenticated()
-                        .requestMatchers(HttpMethod.PUT, "/api/planning/assignments/*/status").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/planning/assignments/employee/*").authenticated()
-
-                        // Grader-specific endpoints
-                        .requestMatchers("/api/grading/**").hasAnyRole("ADMIN", "MANAGER", "GRADER")
-
-                        // Authenticator-specific endpoints
-                        .requestMatchers("/api/certification/**").hasAnyRole("ADMIN", "MANAGER", "AUTHENTICATOR")
-
-                        // Scanner-specific endpoints
-                        .requestMatchers("/api/scanning/**").hasAnyRole("ADMIN", "MANAGER", "SCANNER")
-
-                        // Preparer-specific endpoints
-                        .requestMatchers("/api/preparation/**").hasAnyRole("ADMIN", "MANAGER", "PREPARER")
-
-                        // Read-only access for viewers
-                        .requestMatchers(HttpMethod.GET, "/api/orders/**").hasAnyRole("ADMIN", "MANAGER", "VIEWER", "GRADER", "AUTHENTICATOR", "SCANNER", "PREPARER")
-                        .requestMatchers(HttpMethod.GET, "/api/cards/**").hasAnyRole("ADMIN", "MANAGER", "VIEWER", "GRADER", "AUTHENTICATOR", "SCANNER", "PREPARER")
-                        .requestMatchers(HttpMethod.GET, "/api/employees/**").hasAnyRole("ADMIN", "MANAGER", "VIEWER")
-                        .requestMatchers(HttpMethod.GET, "/api/teams/**").hasAnyRole("ADMIN", "MANAGER", "VIEWER")
-
-                        // All other endpoints require authentication
-                        .anyRequest().authenticated()
+                        // ✅ TOUT LE RESTE - MODE TEST
+                        .anyRequest().authenticated()  // ← Juste authentifié, pas de rôle spécifique
                 )
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
