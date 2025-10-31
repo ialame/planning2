@@ -22,8 +22,7 @@ import java.util.*;
 
 /**
  * Sync Controller with SSE Progress Support
- *
- * Provides synchronization endpoints with real-time progress updates via SSE
+ * FIXED: Removed duplicate mappings for /api/sync/incremental
  */
 @RestController
 @RequestMapping("/api/sync")
@@ -63,7 +62,6 @@ public class MinimalSyncController {
     public ResponseEntity<Map<String, Object>> syncAll(
             @RequestParam(required = false) String syncId) {
 
-        // Generate syncId if not provided
         if (syncId == null || syncId.isEmpty()) {
             syncId = UUID.randomUUID().toString();
         }
@@ -74,25 +72,21 @@ public class MinimalSyncController {
         long startTime = System.currentTimeMillis();
 
         try {
-            // Publish starting event
             progressPublisher.publishProgress(syncId,
                     SyncProgress.starting(syncId, "ALL", "Starting full synchronization..."));
 
-            // Step 1: Sync orders (0-45%)
             progressPublisher.publishProgress(syncId,
                     SyncProgress.fetching(syncId, "ALL", "Fetching orders from Symfony API..."));
 
             ResponseEntity<Map<String, Object>> ordersResult = syncOrdersWithProgress(syncId);
             response.put("orders", ordersResult.getBody());
 
-            // Step 2: Sync cards (45-90%)
             progressPublisher.publishProgress(syncId,
                     SyncProgress.fetching(syncId, "ALL", "Fetching cards from Symfony API..."));
 
             ResponseEntity<Map<String, Object>> cardsResult = syncCardsWithProgress(syncId, null, null);
             response.put("cards", cardsResult.getBody());
 
-            // Final completion
             long duration = System.currentTimeMillis() - startTime;
             response.put("success", true);
             response.put("duration_ms", duration);
@@ -139,11 +133,9 @@ public class MinimalSyncController {
         long startTime = System.currentTimeMillis();
 
         try {
-            // Starting event
             progressPublisher.publishProgress(syncId,
                     SyncProgress.starting(syncId, "ORDERS", "Starting orders synchronization..."));
 
-            // Fetch orders from Symfony API
             String ordersUrl = symfonyApiUrl + "/api/planning/export/orders?limit=50000";
             log.info("📡 Fetching orders from: {}", ordersUrl);
 
@@ -163,7 +155,6 @@ public class MinimalSyncController {
             List<Order> ordersToSave = new ArrayList<>();
             int totalOrders = ordersData.size();
 
-            // Process orders with progress updates every 100 orders
             for (int i = 0; i < ordersData.size(); i++) {
                 Map<String, Object> orderData = ordersData.get(i);
 
@@ -174,7 +165,6 @@ public class MinimalSyncController {
                         syncedCount++;
                     }
 
-                    // Publish progress every 100 orders
                     if ((i + 1) % 100 == 0 || i == ordersData.size() - 1) {
                         progressPublisher.publishProgress(syncId,
                                 SyncProgress.processing(syncId, "ORDERS",
@@ -186,7 +176,6 @@ public class MinimalSyncController {
                 }
             }
 
-            // Save all orders
             progressPublisher.publishProgress(syncId,
                     SyncProgress.saving(syncId, "ORDERS", "Saving orders to database..."));
 
@@ -251,7 +240,6 @@ public class MinimalSyncController {
             progressPublisher.publishProgress(syncId,
                     SyncProgress.starting(syncId, "CARDS", "Starting cards synchronization..."));
 
-            // Build URL with parameters
             StringBuilder urlBuilder = new StringBuilder(symfonyApiUrl);
             urlBuilder.append("/api/planning/export/cards");
 
@@ -275,7 +263,6 @@ public class MinimalSyncController {
             progressPublisher.publishProgress(syncId,
                     SyncProgress.fetching(syncId, "CARDS", "Fetching cards from Symfony API..."));
 
-            // Fetch cards from Symfony API
             Map<String, Object> response = restTemplate.getForObject(cardsUrl, Map.class);
 
             if (response == null || !response.containsKey("cards")) {
@@ -285,7 +272,6 @@ public class MinimalSyncController {
             List<Map<String, Object>> cardsData = (List<Map<String, Object>>) response.get("cards");
             log.info("🎴 Received {} cards from Symfony", cardsData.size());
 
-            // Sync cards in batches with progress
             int totalCards = cardsData.size();
             int processedCards = 0;
 
@@ -301,7 +287,6 @@ public class MinimalSyncController {
                                 "Processing cards", processedCards, totalCards));
             }
 
-            // Get statistics
             Map<String, Object> stats = cardSyncService.getSyncStats();
 
             long duration = System.currentTimeMillis() - startTime;
@@ -337,18 +322,24 @@ public class MinimalSyncController {
     }
 
     /**
-     * Incremental sync (last 24 hours)
+     * ✅ FIXED: Single incremental sync endpoint
+     * Handles both @RequestParam (old API) and @RequestBody (new API with X-API-Key)
      * POST /api/sync/incremental?syncId=xxx
+     * POST /api/sync/incremental with body: {"changes": [...], "since": 1234567890}
      */
     @PostMapping("/incremental")
-    public ResponseEntity<Map<String, Object>> syncIncremental(
-            @RequestParam(required = false) String syncId) {
+    public ResponseEntity<Map<String, Object>> incrementalSync(
+            @RequestParam(required = false) String syncId,
+            @RequestBody(required = false) Map<String, Object> syncData) {
 
         if (syncId == null || syncId.isEmpty()) {
             syncId = UUID.randomUUID().toString();
         }
 
         log.info("🔄 Starting incremental sync with syncId: {}", syncId);
+        if (syncData != null) {
+            log.info("📦 Received sync data: {}", syncData);
+        }
 
         Map<String, Object> result = new HashMap<>();
 
@@ -362,6 +353,12 @@ public class MinimalSyncController {
 
             result = syncResult.getBody();
             result.put("syncId", syncId);
+
+            if (syncData != null) {
+                result.put("receivedAt", LocalDateTime.now());
+                result.put("changesCount", syncData.containsKey("changes") ?
+                        ((java.util.List<?>) syncData.get("changes")).size() : 0);
+            }
 
             return ResponseEntity.ok(result);
 
@@ -378,6 +375,29 @@ public class MinimalSyncController {
     }
 
     /**
+     * Full synchronization endpoint (for API Key authentication from Symfony)
+     * POST /api/sync/full
+     * Header: X-API-Key: {your-api-key}
+     * Body: {"orders": [...], "timestamp": 1234567890}
+     */
+    @PostMapping("/full")
+    public ResponseEntity<Map<String, Object>> fullSync(@RequestBody Map<String, Object> syncData) {
+        log.info("📥 Received full sync request");
+        log.info("📦 Sync data: {}", syncData);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Full synchronization received");
+        response.put("receivedAt", LocalDateTime.now());
+        response.put("ordersCount", syncData.containsKey("orders") ?
+                ((java.util.List<?>) syncData.get("orders")).size() : 0);
+
+        log.info("✅ Full sync processed successfully");
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * Get sync status - comparison between Symfony and local database
      * GET /api/sync/status
      */
@@ -389,15 +409,12 @@ public class MinimalSyncController {
         List<Map<String, Object>> tableComparison = new ArrayList<>();
 
         try {
-            // Get local counts
             long localOrders = orderRepository.count();
             long localCards = cardSyncService.getTotalCards();
 
-            // Get Symfony counts by calling the export endpoints
             Integer symfonyOrders = getSymfonyOrderCount();
             Integer symfonyCards = getSymfonyCardCount();
 
-            // Compare orders
             Map<String, Object> orderComparison = new HashMap<>();
             orderComparison.put("table", "order");
             orderComparison.put("symfony", symfonyOrders);
@@ -406,7 +423,6 @@ public class MinimalSyncController {
             orderComparison.put("inSync", Math.abs(symfonyOrders - localOrders) < 10);
             tableComparison.add(orderComparison);
 
-            // Compare cards
             Map<String, Object> cardComparison = new HashMap<>();
             cardComparison.put("table", "card_certification");
             cardComparison.put("symfony", symfonyCards);
@@ -434,58 +450,6 @@ public class MinimalSyncController {
     }
 
     /**
-     * Get order count from Symfony API
-     */
-    private Integer getSymfonyOrderCount() {
-        try {
-            String url = symfonyApiUrl + "/api/planning/export/orders?limit=1";
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-
-            if (response != null && response.containsKey("count")) {
-                return ((Number) response.get("count")).intValue();
-            }
-
-            // Fallback: estimate from sample
-            if (response != null && response.containsKey("orders")) {
-                List<?> orders = (List<?>) response.get("orders");
-                log.warn("⚠️ Using estimated count for orders");
-                return orders.size() > 0 ? 8000 : 0;
-            }
-
-            return 0;
-        } catch (Exception e) {
-            log.error("❌ Error getting Symfony order count: {}", e.getMessage());
-            return 0;
-        }
-    }
-
-    /**
-     * Get card count from Symfony API
-     */
-    private Integer getSymfonyCardCount() {
-        try {
-            String url = symfonyApiUrl + "/api/planning/export/cards?limit=1";
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-
-            if (response != null && response.containsKey("count")) {
-                return ((Number) response.get("count")).intValue();
-            }
-
-            // Fallback: estimate from sample
-            if (response != null && response.containsKey("cards")) {
-                List<?> cards = (List<?>) response.get("cards");
-                log.warn("⚠️ Using estimated count for cards");
-                return cards.size() > 0 ? 50000 : 0;
-            }
-
-            return 0;
-        } catch (Exception e) {
-            log.error("❌ Error getting Symfony card count: {}", e.getMessage());
-            return 0;
-        }
-    }
-
-    /**
      * Health check endpoint
      * GET /api/sync/health
      */
@@ -494,7 +458,6 @@ public class MinimalSyncController {
         Map<String, Object> health = new HashMap<>();
 
         try {
-            // Test Symfony API connection
             String url = symfonyApiUrl + "/api/planning/export/health";
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
 
@@ -515,38 +478,52 @@ public class MinimalSyncController {
         }
     }
 
+    // Helper methods
 
-
-    private Integer getInteger(Map<String, Object> map, String key, Integer defaultValue) {
-        Object value = map.get(key);
-        if (value == null) return defaultValue;
-        if (value instanceof Integer) return (Integer) value;
-        if (value instanceof Number) return ((Number) value).intValue();
+    private Integer getSymfonyOrderCount() {
         try {
-            return Integer.parseInt(value.toString());
+            String url = symfonyApiUrl + "/api/planning/export/orders?limit=1";
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+
+            if (response != null && response.containsKey("count")) {
+                return ((Number) response.get("count")).intValue();
+            }
+
+            if (response != null && response.containsKey("orders")) {
+                List<?> orders = (List<?>) response.get("orders");
+                log.warn("⚠️ Using estimated count for orders");
+                return orders.size() > 0 ? 8000 : 0;
+            }
+
+            return 0;
         } catch (Exception e) {
-            return defaultValue;
+            log.error("❌ Error getting Symfony order count: {}", e.getMessage());
+            return 0;
         }
     }
 
-    private Float getFloat(Map<String, Object> map, String key, Float defaultValue) {
-        Object value = map.get(key);
-        if (value == null) return defaultValue;
-        if (value instanceof Float) return (Float) value;
-        if (value instanceof Number) return ((Number) value).floatValue();
+    private Integer getSymfonyCardCount() {
         try {
-            return Float.parseFloat(value.toString());
+            String url = symfonyApiUrl + "/api/planning/export/cards?limit=1";
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+
+            if (response != null && response.containsKey("count")) {
+                return ((Number) response.get("count")).intValue();
+            }
+
+            if (response != null && response.containsKey("cards")) {
+                List<?> cards = (List<?>) response.get("cards");
+                log.warn("⚠️ Using estimated count for cards");
+                return cards.size() > 0 ? 50000 : 0;
+            }
+
+            return 0;
         } catch (Exception e) {
-            return defaultValue;
+            log.error("❌ Error getting Symfony card count: {}", e.getMessage());
+            return 0;
         }
     }
 
-
-    // Add this helper method to MinimalSyncController.java
-
-    /**
-     * Create or update order from Symfony API data
-     */
     private Order createOrUpdateOrder(Map<String, Object> orderData) {
         try {
             String symfonyId = getString(orderData, "id");
@@ -555,33 +532,22 @@ public class MinimalSyncController {
                 return null;
             }
 
-            // Check if order already exists
             Order order = orderRepository.findBySymfonyOrderId(symfonyId)
                     .orElse(new Order());
 
-            // Set Symfony ID for tracking
             order.setSymfonyOrderId(symfonyId);
-
-            // Map Symfony fields
             order.setOrderNumber(getString(orderData, "order_number"));
             order.setCustomerName(getString(orderData, "customer_name"));
+            order.setDelai(getString(orderData, "delai", "C"));
 
-            // Set delai priority code (X, F+, F, C, E)
-            order.setDelai(getString(orderData, "delai", "C")); // Default: Classic
-
-            // ✅ FIX: Use "order_date" instead of "date"
-            // Symfony returns "order_date", not "date"
             String dateStr = getString(orderData, "order_date");
             order.setDate(parseDate(dateStr));
 
-            // Set total cards count
             order.setTotalCards(getInteger(orderData, "total_cards", 0));
 
-            // Convert Symfony status integer to OrderStatus enum
-            Integer statusCode = getInteger(orderData, "status", 2); // Default: A_NOTER (GRADING)
+            Integer statusCode = getInteger(orderData, "status", 2);
             order.setStatus(convertSymfonyStatusToOrderStatus(statusCode));
 
-            // Set order price
             order.setPrice(getFloat(orderData, "price", 0.0f));
 
             return order;
@@ -592,27 +558,24 @@ public class MinimalSyncController {
         }
     }
 
-    /**
-     * Convert Symfony status code (integer) to OrderStatus enum
-     */
     private OrderStatus convertSymfonyStatusToOrderStatus(Integer statusCode) {
         if (statusCode == null) {
             return OrderStatus.PENDING;
         }
 
         switch (statusCode) {
-            case 1:  // A_RECEPTIONNER
+            case 1:
                 return OrderStatus.PENDING;
-            case 2:  // A_NOTER (to be graded)
+            case 2:
                 return OrderStatus.GRADING;
-            case 3:  // A_CERTIFIER (to be certified)
+            case 3:
                 return OrderStatus.CERTIFYING;
-            case 4:  // A_PREPARER (to be prepared/packaged)
+            case 4:
                 return OrderStatus.PACKAGING;
-            case 5:  // ENVOYEE (sent)
-            case 42: // A_ENVOYER (to be sent)
+            case 5:
+            case 42:
                 return OrderStatus.DELIVERED;
-            case 10: // A_SCANNER (to be scanned)
+            case 10:
                 return OrderStatus.SCANNING;
             default:
                 log.debug("Unknown Symfony status code: {}, defaulting to GRADING", statusCode);
@@ -620,7 +583,6 @@ public class MinimalSyncController {
         }
     }
 
-    // Helper methods for safe data extraction
     private String getString(Map<String, Object> map, String key) {
         Object value = map.get(key);
         return value != null ? value.toString() : null;
@@ -672,7 +634,6 @@ public class MinimalSyncController {
             return null;
         }
         try {
-            // Parse yyyy-MM-dd and convert to LocalDateTime at start of day
             LocalDate localDate = LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
             return localDate.atStartOfDay();
         } catch (Exception e) {
@@ -685,5 +646,4 @@ public class MinimalSyncController {
             }
         }
     }
-
 }

@@ -62,9 +62,9 @@ public class WorkPlanningService {
 
         Map<String, List<Employee>> roleCount = groupEmployeesByRole(allEmployees);
 
-        // ✅ FIXED: Process orders by OrderStatus ENUM (not integer)
+        // ✅ FIXED: Use correct role names
         allAssignments.addAll(processStage(OrderStatus.GRADING, "GRADING", "ROLE_GRADER"));
-        allAssignments.addAll(processStage(OrderStatus.CERTIFYING, "CERTIFYING", "ROLE_AUTHENTICATOR"));
+        allAssignments.addAll(processStage(OrderStatus.CERTIFYING, "CERTIFYING", "ROLE_CERTIFIER"));  // ✅ FIXED
         allAssignments.addAll(processStage(OrderStatus.PACKAGING, "PACKAGING", "ROLE_PREPARER"));
         allAssignments.addAll(processStage(OrderStatus.SCANNING, "SCANNING", "ROLE_SCANNER"));
 
