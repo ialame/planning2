@@ -51,10 +51,9 @@
 
     <!-- ✅ STATUS STATISTICS -->
     <div class="bg-gray-50 rounded-lg p-6 mb-6" v-if="statusStatistics">
-<!--      <h3 class="text-lg font-semibold text-gray-900 mb-4">📊 Status Distribution</h3>-->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div v-for="(stat, status) in statusStatistics" :key="status" class="bg-white p-4 rounded-lg shadow-sm">
-          <p class="text-sm font-medium text-gray-600">{{ getStatusText(status) }}</p>
+          <p class="text-sm font-medium text-gray-600">{{ getStatusText(status as string) }}</p>
           <p class="text-xl font-bold text-blue-600">{{ formatNumber(stat.count || 0) }}</p>
           <p class="text-xs text-gray-500 mt-1">{{ formatNumber(stat.cards || 0) }} cards</p>
         </div>
@@ -63,7 +62,6 @@
 
     <!-- Filters -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
-<!--      <h3 class="text-lg font-semibold text-gray-900 mb-4">🔍 Filters</h3>-->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">Search by Customer</label>
@@ -264,17 +262,60 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import authService from '@/services/authService'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
+// TypeScript Interfaces
+interface Order {
+  id: string
+  orderNumber: string
+  clientOrderNumber?: string
+  customerName: string
+  status: string
+  delai: string
+  cardCount: number
+  totalPrice: number
+  date: string
+}
+
+interface Pagination {
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  pageCardTotal?: number
+  totalCards?: number
+}
+
+interface DelaiStat {
+  count: number
+  cards: number
+}
+
+interface StatusStat {
+  count: number
+  cards: number
+}
+
+interface OrdersResponse {
+  success?: boolean
+  orders?: Order[]        // ✅ Backend uses 'orders'
+  content?: Order[]       // Support for 'content' too
+  pagination: Pagination
+  delaiStatistics: Record<string, DelaiStat>
+  statusStatistics: Record<string, StatusStat>
+}
+
 // Reactive state
-const orders = ref([])
-const loading = ref(false)
-const pagination = ref(null)
-const statistics = ref({})
-const statusStatistics = ref({})
+const orders = ref<Order[]>([])
+const loading = ref<boolean>(false)
+const error = ref<string | null>(null)
+const pagination = ref<Pagination | null>(null)
+const statistics = ref<Record<string, DelaiStat>>({})
+const statusStatistics = ref<Record<string, StatusStat>>({})
 
 const filters = ref({
   search: '',
@@ -283,28 +324,30 @@ const filters = ref({
 })
 
 // Helper functions
-const getDelaiLabel = (delai) => {
-  const labels = {
+const getDelaiLabel = (delai: string): string => {
+  const labels: Record<string, string> = {
     'X': '🔴 Excelsior',
     'F+': '🟠 Fast+',
     'F': '🟡 Fast',
-    'C': '🟢 Classic'
+    'C': '🟢 Classic',
+    'E': '🔵 Economy'
   }
   return labels[delai] || delai
 }
 
-const getDelaiColor = (delai) => {
-  const colors = {
+const getDelaiColor = (delai: string): string => {
+  const colors: Record<string, string> = {
     'X': 'bg-red-100 text-red-800',
     'F+': 'bg-orange-100 text-orange-800',
     'F': 'bg-yellow-100 text-yellow-800',
-    'C': 'bg-green-100 text-green-800'
+    'C': 'bg-green-100 text-green-800',
+    'E': 'bg-blue-100 text-blue-800'
   }
   return colors[delai] || 'bg-gray-100 text-gray-800'
 }
 
-const getStatusText = (status) => {
-  const statusMap = {
+const getStatusText = (status: string): string => {
+  const statusMap: Record<string, string> = {
     'PENDING': 'Pending',
     'GRADING': 'Grading',
     'CERTIFYING': 'Certifying',
@@ -315,27 +358,46 @@ const getStatusText = (status) => {
   return statusMap[status] || status
 }
 
-const formatPrice = (price) => {
+const formatPrice = (price: number): string => {
   return price ? price.toFixed(2) : '0.00'
 }
 
-const formatNumber = (num) => {
+const formatNumber = (num: number): string => {
   return num ? num.toLocaleString() : '0'
 }
 
 // Debounced search
-let searchTimeout
-const debouncedSearch = () => {
-  clearTimeout(searchTimeout)
+let searchTimeout: ReturnType<typeof setTimeout> | null = null
+const debouncedSearch = (): void => {
+  if (searchTimeout) clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => {
     loadOrders(0)
   }, 300)
 }
 
+// Flag to prevent concurrent loads
+let isLoadingOrders = false
+
 // Load orders with pagination
-const loadOrders = async (page = 0) => {
+const loadOrders = async (page: number = 0): Promise<void> => {
+  if (isLoadingOrders) {
+    console.log('⏭️ Already loading orders, skipping...')
+    return
+  }
+
+  if (!authService.isAuthenticated()) {
+    console.log('⚠️ Not authenticated, cannot load orders')
+    return
+  }
+
+  isLoadingOrders = true
   loading.value = true
+  error.value = null
+
   try {
+    console.log('📦 Loading orders - page:', page, 'filters:', filters.value)
+
+    // Build query parameters
     const params = new URLSearchParams({
       page: page.toString(),
       size: '20'
@@ -345,29 +407,56 @@ const loadOrders = async (page = 0) => {
     if (filters.value.status !== 'all') params.append('status', filters.value.status)
     if (filters.value.delai !== 'all') params.append('delai', filters.value.delai)
 
-    const response = await fetch(`${API_BASE_URL}/api/orders?${params}`)
-    const data = await response.json()
+    console.log('🔗 Request URL:', `/api/orders?${params}`)
 
-    // Backend sorts by date DESC before pagination
-    orders.value = data.orders || []
-    pagination.value = data.pagination || null
-    statistics.value = data.delaiStatistics || {}
-    statusStatistics.value = data.statusStatistics || {}
+    // Use authService for authenticated request
+    const ordersData = await authService.get<OrdersResponse>(`/api/orders?${params}`)
 
-    console.log('📦 Loaded orders:', orders.value.length)
+    console.log('📥 Full Response:', ordersData)
+
+    // ✅ Extract orders (support both 'orders' and 'content' fields)
+    const ordersArray = ordersData.orders || ordersData.content || []
+
+    console.log('✅ Extracted orders:', ordersArray.length)
+
+    // Update state
+    orders.value = ordersArray
+    pagination.value = ordersData.pagination || null
+    statistics.value = ordersData.delaiStatistics || {}
+    statusStatistics.value = ordersData.statusStatistics || {}
+
+    console.log('✅ State updated:')
+    console.log('   - Orders:', orders.value.length)
+    console.log('   - Pagination:', pagination.value)
+
     if (orders.value.length > 0) {
-      console.log('   First order:', orders.value[0].orderNumber, 'date:', orders.value[0].date, 'delai:', orders.value[0].delai)
-      console.log('   Last order:', orders.value[orders.value.length-1].orderNumber, 'date:', orders.value[orders.value.length-1].date, 'delai:', orders.value[orders.value.length-1].delai)
+      console.log('   - First order:', orders.value[0].orderNumber)
     }
-  } catch (error) {
-    console.error('Error loading orders:', error)
+
+  } catch (err) {
+    console.error('❌ Error loading orders:', err)
+    error.value = err instanceof Error ? err.message : 'Failed to load orders'
+
+    if (err instanceof Error && err.message.includes('Authentication required')) {
+      console.log('🔐 Authentication required - please login')
+    }
   } finally {
     loading.value = false
+    isLoadingOrders = false
   }
 }
 
+// Load once on mount
 onMounted(() => {
-  loadOrders()
+  console.log('🔧 Orders component mounted')
+  console.log('🔐 Authenticated:', authService.isAuthenticated())
+  console.log('👤 User:', authService.getUser())
+
+  if (authService.isAuthenticated()) {
+    loadOrders()
+  } else {
+    console.log('⚠️ Not authenticated - waiting for login')
+  }
 })
 </script>
 

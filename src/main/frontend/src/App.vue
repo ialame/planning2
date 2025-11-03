@@ -1,8 +1,24 @@
 <template>
   <div id="app" class="min-h-screen bg-gray-100">
+
+
     <!-- Navigation -->
     <nav class="bg-blue-600 text-white shadow-lg">
       <div class="max-w-7xl mx-auto px-4">
+        <!-- Login Modal -->
+        <LoginModal v-if="!isAuthenticated" @login-success="onLoginSuccess" />
+        <!-- Main App (only if authenticated) -->
+        <div v-if="isAuthenticated">
+          <nav class="bg-gray-800 text-white p-4 flex justify-between">
+            <span>Welcome, {{ user?.email }}</span>
+            <button
+              @click="logout"
+              class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded"
+            >
+              Logout
+            </button>
+          </nav>
+
         <div class="flex justify-between items-center h-16">
           <div class="flex items-center">
             <h1 class="text-xl font-bold">🃏 Pokemon Card Planning</h1>
@@ -23,6 +39,7 @@
             </button>
           </div>
         </div>
+      </div>
       </div>
     </nav>
 
@@ -62,13 +79,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref, provide } from 'vue'
+import { ref, provide, computed } from 'vue'
 import DashboardView from './views/Dashboard.vue'
 import OrdersView from './views/Orders.vue'
 import EmployeesView from './views/Employees.vue'
 import PlanningView from './views/Planning.vue'
 import TeamsView from "./views/Teams.vue";
 import SyncView from "./views/DataSync.vue";
+import authService, { type User } from '@/services/authService'
+import { useAuth } from '@/composables/useAuth'
+import LoginModal from '@/components/LoginModal.vue'
+
+//const user = ref<User | null>(authService.getUser())
+//const isAuthenticated = computed(() => authService.isAuthenticated())
+
+
+const { isAuthenticated, user } = useAuth()
+
+function onLoginSuccess(userData: any) {
+  console.log('✅ Login successful:', userData)
+  // Le computed isAuthenticated se met à jour automatiquement !
+}
+
+function logout(): void {
+  authService.logout()
+  user.value = null
+  location.reload()
+}
 
 // État global
 const activeTab = ref('dashboard')

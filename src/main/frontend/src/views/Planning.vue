@@ -333,12 +333,18 @@
 
 <script setup lang="ts">
 import { ref, onMounted, inject } from 'vue'
+import authService from '@/services/authService'
 
+interface GeneratePlanningResponse {
+  success: boolean
+  message: string
+  assignmentsCreated: number
+}
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 const showNotification = inject('showNotification', (msg: string, type: string) => console.log(msg))
 
 // State
-const generating = ref(false)
+const generating = ref<boolean>(false)
 const loadingGrading = ref(false)
 const loadingCertification = ref(false)
 const loadingPreparation = ref(false)
@@ -362,7 +368,11 @@ const generatePlanning = async () => {
   generating.value = true
 
   try {
-    console.log('🚀 Generating planning...')
+    const result = await authService.post<GeneratePlanningResponse>('/api/planning/generate')
+
+    console.log('✅ Planning generated:', result.assignmentsCreated, 'assignments')
+
+    //console.log('🚀 Generating planning...')
 
     const response = await fetch(`${API_BASE_URL}/api/planning/generate`, {
       method: 'POST',

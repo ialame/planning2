@@ -1,0 +1,687 @@
+<?php
+// src/Controller/Api/PlanningExportController.php
+
+namespace App\Controller\Api;
+
+use Doctrine\DBAL\Connection;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Annotation\Route;
+
+/**
+ * Planning Export API - Exports minimal order/card data for Spring Boot planning service
+ * Uses native SQL queries for performance (avoids Doctrine memory issues)
+ *
+ * FIXED: Cards now use the same filters as orders to ensure coherence
+ *
+ * @Route("/planning/export", name="api_planning_export_")
+ */
+class PlanningExportController extends AbstractController
+{
+    private $connection;
+
+    public function __construct(Connection $connection)
+    {
+        $this->connection = $connection;
+    }
+
+    /**
+     * Health check endpoint
+     *
+     * @Route("/health", name="health", methods={"GET"})
+     */
+    public function health(): JsonResponse
+    {
+        return $this->json([
+            'status' => 'ok',
+            'service' => 'Planning Export API',
+            'version' => '1.1.0',
+            'timestamp' => date('Y-m-d H:i:s'),
+            'database' => 'connected',
+            'endpoints' => [
+                'GET /api/planning/export/health',
+                'GET /api/planning/export/orders',
+                'GET /api/planning/export/orders?limit={n}',
+                'GET /api/planning/export/orders?exclude_completed=false',
+                'GET /api/planning/export/orders?since_year=2024',
+                'GET /api/planning/export/cards',
+                'GET /api/planning/export/cards?order_id={hex_id}',
+                'GET /api/planning/export/cards?limit={n}',
+                'GET /api/planning/export/cards?exclude_completed=true',
+                'GET /api/planning/export/stats',
+                'GET /api/planning/export/debug/columns?table={name}',
+                'GET /api/planning/export/debug/tables'
+            ]
+        ]);
+    }
+
+    /**
+     * Export all orders with minimal fields using native SQL
+     *
+     * @Route("/orders", name="orders", methods={"GET"})
+     */
+    /**
+     * Export all orders with minimal fields using native SQL
+     *
+     * @Route("/orders", name="orders", methods={"GET"})
+     */
+    public function exportOrders(Request $request): JsonResponse
+    {
+        try {
+            $limit = $request->query->get('limit', 1000);
+            $excludeCompleted = $request->query->get('exclude_completed', 'true');
+            $sinceYear = $request->query->get('since_year', null);
+
+            // ========== NOUVEAU: Récupérer le COUNT TOTAL d'abord ==========
+            $countSql = "
+            SELECT COUNT(DISTINCT o.id) as total
+            FROM `order` o
+            WHERE o.annulee = 0
+        ";
+
+            $countParams = [];
+            $countTypes = [];
+
+            if ($excludeCompleted === 'true') {
+                $countSql .= " AND o.status NOT IN (5, 6, 8)";
+            }
+
+            if ($sinceYear !== null) {
+                $countSql .= " AND YEAR(o.date) >= :since_year";
+                $countParams['since_year'] = (int)$sinceYear;
+                $countTypes['since_year'] = \PDO::PARAM_INT;
+            }
+
+            $countStmt = $this->connection->prepare($countSql);
+            foreach ($countParams as $key => $value) {
+                $countStmt->bindValue($key, $value, $countTypes[$key]);
+            }
+            $totalCount = (int)$countStmt->executeQuery()->fetchOne();
+            // ================================================================
+
+            // Requête principale (inchangée)
+            $sql = "
+            SELECT
+                LOWER(HEX(o.id)) as id,
+                o.num_commande as order_number,
+                CONCAT(COALESCE(c.prenom, ''), ' ', COALESCE(c.nom, '')) as customer_name,
+                o.delai as delivery_date,
+                o.date as order_date,
+                COUNT(cco.card_certification_id) as total_cards,
+                o.status,
+                COALESCE(i.total_ttc, 0.0) as price,
+                o.delai as delai
+            FROM `order` o
+            LEFT JOIN customer c ON o.customer_id = c.id
+            LEFT JOIN card_certification_order cco ON cco.order_id = o.id
+            LEFT JOIN invoice i ON i.order_id = o.id
+            WHERE o.annulee = 0
+        ";
+
+            if ($excludeCompleted === 'true') {
+                $sql .= " AND o.status NOT IN (5, 6, 8)";
+            }
+
+            if ($sinceYear !== null) {
+                $sql .= " AND YEAR(o.date) >= :since_year";
+            }
+
+            $sql .= "
+            GROUP BY o.id, i.total_ttc
+            ORDER BY
+                CASE o.delai
+                    WHEN 'X' THEN 1
+                    WHEN 'F+' THEN 2
+                    WHEN 'F' THEN 3
+                    WHEN 'C' THEN 4
+                    WHEN 'E' THEN 5
+                    ELSE 6
+                END ASC,
+                o.date DESC
+            LIMIT :limit
+        ";
+
+            $stmt = $this->connection->prepare($sql);
+            $stmt->bindValue('limit', (int)$limit, \PDO::PARAM_INT);
+            if ($sinceYear !== null) {
+                $stmt->bindValue('since_year', (int)$sinceYear, \PDO::PARAM_INT);
+            }
+
+            $result = $stmt->executeQuery();
+            $orders = $result->fetchAllAssociative();
+
+            // Format dates and types (inchangé)
+            foreach ($orders as &$order) {
+                if (isset($order['delivery_date'])) {
+                    if ($order['delivery_date'] instanceof \DateTime) {
+                        $order['delivery_date'] = $order['delivery_date']->format('Y-m-d');
+                    }
+                }
+
+                if (isset($order['order_date'])) {
+                    if ($order['order_date'] instanceof \DateTime) {
+                        $order['order_date'] = $order['order_date']->format('Y-m-d');
+                    } elseif (is_string($order['order_date'])) {
+                        $order['order_date'] = substr($order['order_date'], 0, 10);
+                    }
+                }
+
+                $order['total_cards'] = (int)($order['total_cards'] ?? 0);
+                $order['price'] = (float)($order['price'] ?? 0.0);
+                $order['status'] = $order['status'] ?? 'PENDING';
+            }
+
+            // ========== MODIFIÉ: Retourner le count TOTAL et le returned ==========
+            return $this->json([
+                'orders' => $orders,
+                'count' => $totalCount,           // ⬅️ TOTAL dans la DB
+                'returned' => count($orders),     // ⬅️ Retourné dans cette réponse
+                'limit' => $limit,
+                'filters' => [
+                    'exclude_completed' => $excludeCompleted === 'true',
+                    'since_year' => $sinceYear ? (int)$sinceYear : null,
+                    'excluded_statuses' => $excludeCompleted === 'true' ? [5, 6, 8] : []
+                ],
+                'fields' => [
+                    'id' => 'hex string (ULID)',
+                    'order_number' => 'string',
+                    'customer_name' => 'string (from customer table)',
+                    'delivery_date' => 'string (delai code: X, F+, F, C, E)',
+                    'order_date' => 'string (YYYY-MM-DD)',
+                    'total_cards' => 'integer',
+                    'status' => 'integer',
+                    'price' => 'float (from invoice.total_ttc)',
+                    'delai' => 'string (X=1day, F+=1week, F=2weeks, C=1month, E=3months)'
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'error' => 'Failed to export orders',
+                'message' => $e->getMessage(),
+                'suggestion' => 'Check if column names match your database schema'
+            ], 500);
+        }
+    }
+
+    /**
+     * Export all cards - FIXED for simplified card_certification table
+     *
+     * @Route("/cards", name="cards", methods={"GET"})
+     */
+    public function exportCards(Request $request): JsonResponse
+    {
+        try {
+            $orderId = $request->query->get('order_id');
+            $limit = $request->query->get('limit', 5000);
+            $excludeCompleted = $request->query->get('exclude_completed', 'true');
+            $sinceYear = $request->query->get('since_year', null);
+
+            // Count query - FIXED: removed cc.deleted
+            $countSql = "
+            SELECT COUNT(*) as total
+            FROM card_certification cc
+            JOIN card_certification_order cco ON cco.card_certification_id = cc.id
+            INNER JOIN `order` o ON cco.order_id = o.id
+            WHERE o.annulee = 0
+        ";
+
+            $countParams = [];
+            $countTypes = [];
+
+            if ($excludeCompleted === 'true') {
+                $countSql .= " AND o.status NOT IN (5, 6, 8)";
+            }
+
+            if ($sinceYear !== null) {
+                $countSql .= " AND YEAR(o.date) >= :since_year";
+                $countParams['since_year'] = (int)$sinceYear;
+                $countTypes['since_year'] = \PDO::PARAM_INT;
+            }
+
+            if ($orderId) {
+                $countSql .= " AND cco.order_id = UNHEX(REPLACE(:order_id, '-', ''))";
+                $countParams['order_id'] = $orderId;
+                $countTypes['order_id'] = \PDO::PARAM_STR;
+            }
+
+            $countStmt = $this->connection->prepare($countSql);
+            foreach ($countParams as $key => $value) {
+                $countStmt->bindValue($key, $value, $countTypes[$key]);
+            }
+            $totalCount = (int)$countStmt->executeQuery()->fetchOne();
+
+            // Main query - Simple: return what exists in Symfony DB
+            $sql = "
+            SELECT
+                LOWER(HEX(cc.id)) as id,
+                LOWER(HEX(cco.order_id)) as order_id,
+                COALESCE(ct.name, card.num, 'Unknown') as card_name,
+                card.num as card_number,
+                cc.code_barre,
+                cc.status as processing_status,
+                0 as grading_completed,
+                1 as certification_completed,
+                0 as scanning_completed,
+                0 as packaging_completed
+            FROM card_certification cc
+            JOIN card_certification_order cco ON cco.card_certification_id = cc.id
+            INNER JOIN `order` o ON cco.order_id = o.id
+            JOIN card ON cc.card_id = card.id
+            LEFT JOIN card_translation ct ON ct.translatable_id = card.id AND ct.locale = 'us'
+            WHERE o.annulee = 0
+        ";
+
+            $params = [];
+            $types = [];
+
+            if ($excludeCompleted === 'true') {
+                $sql .= " AND o.status NOT IN (5, 6, 8)";
+            }
+
+            if ($sinceYear !== null) {
+                $sql .= " AND YEAR(o.date) >= :since_year";
+                $params['since_year'] = (int)$sinceYear;
+                $types['since_year'] = \PDO::PARAM_INT;
+            }
+
+            if ($orderId) {
+                $sql .= " AND cco.order_id = UNHEX(REPLACE(:order_id, '-', ''))";
+                $params['order_id'] = $orderId;
+                $types['order_id'] = \PDO::PARAM_STR;
+            }
+
+            $sql .= " ORDER BY cc.id ASC LIMIT :limit";
+            $params['limit'] = (int)$limit;
+            $types['limit'] = \PDO::PARAM_INT;
+
+            $stmt = $this->connection->prepare($sql);
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value, $types[$key]);
+            }
+
+            $result = $stmt->executeQuery();
+            $cards = $result->fetchAllAssociative();
+
+            // Format
+            foreach ($cards as &$card) {
+                $card['processing_status'] = (int)($card['processing_status'] ?? 0);
+                $card['grading_completed'] = (bool)($card['grading_completed'] ?? false);
+                $card['certification_completed'] = (bool)($card['certification_completed'] ?? true);
+                $card['scanning_completed'] = (bool)($card['scanning_completed'] ?? false);
+                $card['packaging_completed'] = (bool)($card['packaging_completed'] ?? false);
+
+                // Format date
+                if (isset($card['date']) && $card['date'] instanceof \DateTime) {
+                    $card['date'] = $card['date']->format('Y-m-d H:i:s');
+                }
+            }
+
+            return $this->json([
+                'cards' => $cards,
+                'count' => $totalCount,
+                'returned' => count($cards),
+                'filtered_by_order' => $orderId,
+                'limit' => $limit,
+                'filters' => [
+                    'exclude_completed' => $excludeCompleted === 'true',
+                    'since_year' => $sinceYear ? (int)$sinceYear : null
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'error' => 'Failed to export cards',
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
+    }
+
+
+    /**
+     * NEW: Get statistics about exportable data
+     * Shows data coherence between orders and cards
+     *
+     * @Route("/stats", name="stats", methods={"GET"})
+     */
+    public function exportStats(Request $request): JsonResponse
+    {
+        try {
+            $excludeCompleted = $request->query->get('exclude_completed', 'true');
+            $sinceYear = $request->query->get('since_year', null);
+
+            // Build WHERE clause for filters
+            $whereClause = "WHERE o.annulee = 0";
+            $params = [];
+            $types = [];
+
+            if ($excludeCompleted === 'true') {
+                $whereClause .= " AND o.status NOT IN (5, 6, 8)";
+            }
+
+            if ($sinceYear !== null) {
+                $whereClause .= " AND YEAR(o.date) >= :since_year";
+                $params['since_year'] = (int)$sinceYear;
+                $types['since_year'] = \PDO::PARAM_INT;
+            }
+
+            // Count total orders
+            $sql = "SELECT COUNT(*) as total FROM `order` WHERE annulee = 0";
+            $totalOrders = $this->connection->executeQuery($sql)->fetchOne();
+
+            // Count exportable orders (with filters)
+            $sql = "SELECT COUNT(*) as exportable FROM `order` o " . $whereClause;
+            $stmt = $this->connection->prepare($sql);
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value, $types[$key]);
+            }
+            $exportableOrders = $stmt->executeQuery()->fetchOne();
+
+            // Count total certifications
+            $sql = "SELECT COUNT(*) as total FROM card_certification WHERE deleted = 0";
+            $totalCertifications = $this->connection->executeQuery($sql)->fetchOne();
+
+            // Count exportable cards (with same filters as exportCards)
+            $sql = "
+                SELECT COUNT(*) as exportable
+                FROM card_certification cc
+                JOIN card_certification_order cco ON cco.card_certification_id = cc.id
+                INNER JOIN `order` o ON cco.order_id = o.id
+                WHERE cc.deleted = 0
+            ";
+
+            if ($excludeCompleted === 'true') {
+                $sql .= " AND o.status NOT IN (5, 6, 8)";
+            }
+
+            if ($sinceYear !== null) {
+                $sql .= " AND YEAR(o.date) >= :since_year";
+            }
+
+            $stmt = $this->connection->prepare($sql);
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value, $types[$key]);
+            }
+            $exportableCards = $stmt->executeQuery()->fetchOne();
+
+            // Count orphaned cards (cards without valid orders)
+            $sql = "
+                SELECT COUNT(*) as orphaned
+                FROM card_certification cc
+                LEFT JOIN card_certification_order cco ON cco.card_certification_id = cc.id
+                WHERE cc.deleted = 0
+                AND (cco.order_id IS NULL OR cco.order_id NOT IN (
+                    SELECT id FROM `order` WHERE annulee = 0
+                ))
+            ";
+            $orphanedCards = $this->connection->executeQuery($sql)->fetchOne();
+
+            return $this->json([
+                'total_orders' => (int)$totalOrders,
+                'exportable_orders' => (int)$exportableOrders,
+                'filtered_orders' => (int)$totalOrders - (int)$exportableOrders,
+                'total_certifications' => (int)$totalCertifications,
+                'exportable_cards' => (int)$exportableCards,
+                'orphaned_cards' => (int)$orphanedCards,
+                'filtered_cards' => (int)$totalCertifications - (int)$exportableCards - (int)$orphanedCards,
+                'filters' => [
+                    'exclude_completed' => $excludeCompleted === 'true',
+                    'since_year' => $sinceYear ? (int)$sinceYear : null
+                ],
+                'data_quality' => [
+                    'has_orphaned_cards' => (int)$orphanedCards > 0,
+                    'coherence_ok' => true, // With INNER JOIN, coherence is guaranteed
+                    'orphaned_percentage' => (int)$totalCertifications > 0
+                        ? round(((int)$orphanedCards / (int)$totalCertifications) * 100, 2)
+                        : 0
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'error' => 'Failed to get stats',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get database column names for debugging
+     *
+     * @Route("/debug/columns", name="debug_columns", methods={"GET"})
+     */
+    public function debugColumns(Request $request): JsonResponse
+    {
+        try {
+            $table = $request->query->get('table', 'order');
+
+            $sql = "SHOW COLUMNS FROM `{$table}`";
+            $stmt = $this->connection->prepare($sql);
+            $result = $stmt->executeQuery();
+            $columns = $result->fetchAllAssociative();
+
+            return $this->json([
+                'table' => $table,
+                'columns' => array_map(function($col) {
+                    return [
+                        'name' => $col['Field'],
+                        'type' => $col['Type'],
+                        'null' => $col['Null'],
+                        'key' => $col['Key']
+                    ];
+                }, $columns)
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'error' => 'Failed to fetch columns',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * List all tables in database for debugging
+     *
+     * @Route("/debug/tables", name="debug_tables", methods={"GET"})
+     */
+    public function debugTables(): JsonResponse
+    {
+        try {
+            $sql = "SHOW TABLES";
+            $stmt = $this->connection->prepare($sql);
+            $result = $stmt->executeQuery();
+            $tables = $result->fetchAllNumeric();
+
+            return $this->json([
+                'tables' => array_map(function($row) {
+                    return $row[0];
+                }, $tables),
+                'count' => count($tables)
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'error' => 'Failed to list tables',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Export English card translations for cards in current certifications
+     *
+     * @Route("/translations", name="translations", methods={"GET"})
+     */
+    public function exportTranslations(Request $request): JsonResponse
+    {
+        try {
+            $limit = $request->query->get('limit', 10000);
+
+            // Only English translations for cards currently being certified
+            $sql = "
+            SELECT DISTINCT
+                LOWER(HEX(ct.id)) as id,
+                LOWER(HEX(ct.translatable_id)) as card_id,
+                ct.name,
+                ct.label_name,
+                ct.locale,
+                ct.discriminator,
+                ct.available
+            FROM card_translation ct
+            INNER JOIN card c ON ct.translatable_id = c.id
+            INNER JOIN card_certification cc ON cc.card_id = c.id
+            WHERE ct.locale = 'EN'
+            AND ct.available = 1
+            LIMIT :limit
+        ";
+
+            $stmt = $this->connection->prepare($sql);
+            $stmt->bindValue('limit', (int)$limit, \PDO::PARAM_INT);
+
+            $result = $stmt->executeQuery();
+            $translations = $result->fetchAllAssociative();
+
+            foreach ($translations as &$translation) {
+                $translation['available'] = (bool)$translation['available'];
+            }
+
+            return $this->json([
+                'translations' => $translations,
+                'count' => count($translations),
+                'locale' => 'EN'
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'error' => 'Failed to export translations',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get total count of orders
+     *
+     * @Route("/orders/count", name="orders_count", methods={"GET"})
+     */
+    public function getOrdersCount(Request $request): JsonResponse
+    {
+        try {
+            $excludeCompleted = $request->query->get('exclude_completed', 'true');
+            $sinceYear = $request->query->get('since_year', null);
+
+            $sql = "
+            SELECT COUNT(DISTINCT o.id) as total
+            FROM `order` o
+            WHERE o.annulee = 0
+        ";
+
+            $params = [];
+            $types = [];
+
+            if ($excludeCompleted === 'true') {
+                $sql .= " AND o.status NOT IN (5, 6, 8)";
+            }
+
+            if ($sinceYear !== null) {
+                $sql .= " AND YEAR(o.date) >= :since_year";
+                $params['since_year'] = (int)$sinceYear;
+                $types['since_year'] = \PDO::PARAM_INT;
+            }
+
+            $stmt = $this->connection->prepare($sql);
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value, $types[$key]);
+            }
+
+            $count = (int)$stmt->executeQuery()->fetchOne();
+
+            return $this->json([
+                'success' => true,
+                'count' => $count,
+                'filters' => [
+                    'exclude_completed' => $excludeCompleted === 'true',
+                    'since_year' => $sinceYear ? (int)$sinceYear : null
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'count' => 0
+            ], 500);
+        }
+    }
+
+    /**
+     * Get total count of cards
+     *
+     * @Route("/cards/count", name="cards_count", methods={"GET"})
+     */
+    public function getCardsCount(Request $request): JsonResponse
+    {
+        try {
+            $orderId = $request->query->get('order_id');
+            $excludeCompleted = $request->query->get('exclude_completed', 'true');
+            $sinceYear = $request->query->get('since_year', null);
+
+            $sql = "
+            SELECT COUNT(*) as total
+            FROM card_certification cc
+            JOIN card_certification_order cco ON cco.card_certification_id = cc.id
+            INNER JOIN `order` o ON cco.order_id = o.id
+            WHERE cc.deleted = 0
+            AND o.annulee = 0
+        ";
+
+            $params = [];
+            $types = [];
+
+            if ($excludeCompleted === 'true') {
+                $sql .= " AND o.status NOT IN (5, 6, 8)";
+            }
+
+            if ($sinceYear !== null) {
+                $sql .= " AND YEAR(o.date) >= :since_year";
+                $params['since_year'] = (int)$sinceYear;
+                $types['since_year'] = \PDO::PARAM_INT;
+            }
+
+            if ($orderId) {
+                $sql .= " AND cco.order_id = UNHEX(REPLACE(:order_id, '-', ''))";
+                $params['order_id'] = $orderId;
+                $types['order_id'] = \PDO::PARAM_STR;
+            }
+
+            $stmt = $this->connection->prepare($sql);
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value, $types[$key]);
+            }
+
+            $count = (int)$stmt->executeQuery()->fetchOne();
+
+            return $this->json([
+                'success' => true,
+                'count' => $count,
+                'filters' => [
+                    'exclude_completed' => $excludeCompleted === 'true',
+                    'since_year' => $sinceYear ? (int)$sinceYear : null,
+                    'order_id' => $orderId
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'count' => 0
+            ], 500);
+        }
+    }
+
+
+}
