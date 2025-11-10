@@ -71,34 +71,34 @@
         <div class="space-y-3 text-sm">
           <div class="bg-white p-3 rounded border border-blue-100">
             <div class="flex items-center mb-1">
-              <span class="text-gray-600 w-16">Email:</span>
+              <span class="text-gray-600 w-20">👤 Grader:</span>
               <code class="text-blue-600 font-mono text-xs">john.grader@pcagrade.com</code>
             </div>
             <div class="flex items-center">
-              <span class="text-gray-600 w-16">Pass:</span>
+              <span class="text-gray-600 w-20">🔑 Pass:</span>
               <code class="text-gray-800 font-mono text-xs">password123</code>
             </div>
           </div>
 
-          <div class="bg-white p-3 rounded border border-blue-100">
+          <div class="bg-white p-3 rounded border border-orange-100">
             <div class="flex items-center mb-1">
-              <span class="text-gray-600 w-16">Email:</span>
-              <code class="text-blue-600 font-mono text-xs">jane.certifier@pcagrade.com</code>
+              <span class="text-gray-600 w-20">👔 Manager:</span>
+              <code class="text-orange-600 font-mono text-xs">manager@pcagrade.com</code>
             </div>
             <div class="flex items-center">
-              <span class="text-gray-600 w-16">Pass:</span>
+              <span class="text-gray-600 w-20">🔑 Pass:</span>
               <code class="text-gray-800 font-mono text-xs">password123</code>
             </div>
           </div>
 
-          <div class="bg-white p-3 rounded border border-blue-100">
+          <div class="bg-white p-3 rounded border border-red-100">
             <div class="flex items-center mb-1">
-              <span class="text-gray-600 w-16">Email:</span>
-              <code class="text-blue-600 font-mono text-xs">admin@pcagrade.com</code>
+              <span class="text-gray-600 w-20">🔐 Admin:</span>
+              <code class="text-red-600 font-mono text-xs">admin@pcagrade.com</code>
             </div>
             <div class="flex items-center">
-              <span class="text-gray-600 w-16">Pass:</span>
-              <code class="text-gray-800 font-mono text-xs">admin123</code>
+              <span class="text-gray-600 w-20">🔑 Pass:</span>
+              <code class="text-gray-800 font-mono text-xs">password123</code>
             </div>
           </div>
         </div>

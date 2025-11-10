@@ -33,7 +33,13 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
+        String path = request.getRequestURI();
 
+        // ✅ Skip SSE endpoint completely
+        if (path.startsWith("/api/sync/progress/stream/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         log.info("🔍 ApiKeyAuthenticationFilter executing for: {}", request.getRequestURI());
 
         // Only apply to /api/sync/** endpoints

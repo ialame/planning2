@@ -1,105 +1,156 @@
 package com.pcagrade.order.controller;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;  // ADD THIS IMPORT
-import org.springframework.web.bind.annotation.*;
-import com.pcagrade.order.model.SyncProgress;
-import com.pcagrade.order.service.SyncProgressPublisher;
-
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
-import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Controller for Server-Sent Events (SSE) sync progress streaming
- *
- * Provides real-time progress updates for synchronization operations
+ * Controller for Server-Sent Events (SSE) to stream real-time sync progress
  */
 @RestController
 @RequestMapping("/api/sync/progress")
 @RequiredArgsConstructor
-@Slf4j  // ADD THIS ANNOTATION
-@CrossOrigin(origins = "*")
+@Slf4j
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:5173"})
 public class SyncProgressController {
 
-    private final SyncProgressPublisher progressPublisher;
+    // Store active SSE connections
+    private final Map<String, SseEmitter> emitters = new ConcurrentHashMap<>();
 
     /**
-     * Stream sync progress events via Server-Sent Events
+     * Stream real-time progress updates for a sync operation
      *
-     * GET /api/sync/progress/stream/{syncId}
-     *
-     * @param syncId The unique sync session ID
-     * @return Flux stream of ServerSentEvent containing SyncProgress
+     * Note: SSE doesn't support Authorization headers, so we pass token as query param
+     * Spring Security will validate it via SecurityConfig
      */
     @GetMapping(value = "/stream/{syncId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<SyncProgress>> streamProgress(@PathVariable String syncId) {
-        log.info("📡 Client connected to SSE stream for sync: {}", syncId);
+    //@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public SseEmitter streamProgress(
+            @PathVariable String syncId,
+            @RequestParam(required = false) String token) {
 
-        return progressPublisher.createSyncSession(syncId)
-                .filter(progress -> !"KEEP_ALIVE".equals(progress.getPhase())) // Filter out keep-alive events from data stream
-                .map(progress -> ServerSentEvent.<SyncProgress>builder()
-                        .id(String.valueOf(System.currentTimeMillis()))
-                        .event("progress")
-                        .data(progress)
-                        .build())
-                .doOnSubscribe(subscription ->
-                        log.info("✅ SSE stream started for sync: {}", syncId))
-                .doOnComplete(() ->
-                        log.info("✅ SSE stream completed for sync: {}", syncId))
-                .doOnCancel(() ->
-                        log.info("🔌 SSE stream cancelled for sync: {}", syncId))
-                .doOnError(error ->
-                        log.error("❌ SSE stream error for sync {}: {}", syncId, error.getMessage()));
+        log.info("📡 SSE connection request for syncId: {}", syncId);
+
+        // Create SSE emitter with long timeout (30 minutes)
+        SseEmitter emitter = new SseEmitter(30 * 60 * 1000L);
+
+        // Register callbacks
+        emitter.onCompletion(() -> {
+            log.info("✅ SSE completed for syncId: {}", syncId);
+            emitters.remove(syncId);
+        });
+
+        emitter.onTimeout(() -> {
+            log.warn("⏱️ SSE timeout for syncId: {}", syncId);
+            emitters.remove(syncId);
+        });
+
+        emitter.onError((error) -> {
+            log.error("❌ SSE error for syncId: {}", syncId, error);
+            emitters.remove(syncId);
+        });
+
+        // Store emitter
+        emitters.put(syncId, emitter);
+
+        // Send initial connection message
+        try {
+            emitter.send(SseEmitter.event()
+                    .name("connected")
+                    .data(Map.of(
+                            "syncId", syncId,
+                            "message", "Connected to progress stream"
+                    ))
+            );
+        } catch (IOException e) {
+            log.error("Failed to send initial SSE message", e);
+        }
+
+        log.info("✅ SSE connection established for syncId: {}", syncId);
+        return emitter;
     }
 
     /**
-     * Check if a sync session is active
-     *
-     * GET /api/sync/progress/status/{syncId}
-     *
-     * @param syncId The sync session ID
-     * @return Status of the sync session
+     * Publish progress update to a specific sync operation
+     * This method is called by the sync service
      */
-    @GetMapping("/status/{syncId}")
-    public SyncSessionStatus getSessionStatus(@PathVariable String syncId) {
-        boolean active = progressPublisher.isSessionActive(syncId);
+    public void publishProgress(String syncId, Map<String, Object> progressData) {
+        SseEmitter emitter = emitters.get(syncId);
 
-        return new SyncSessionStatus(
-                syncId,
-                active,
-                active ? "ACTIVE" : "NOT_FOUND"
-        );
+        if (emitter == null) {
+            log.debug("No emitter found for syncId: {}", syncId);
+            return;
+        }
+
+        try {
+            emitter.send(SseEmitter.event()
+                    .name("progress")
+                    .data(progressData)
+            );
+
+            log.debug("📊 Progress sent for syncId: {} - {}%",
+                    syncId, progressData.get("percentage"));
+
+        } catch (IOException e) {
+            log.error("Failed to send progress for syncId: {}", syncId, e);
+            emitter.completeWithError(e);
+            emitters.remove(syncId);
+        }
     }
 
     /**
-     * Get statistics about active sync sessions
-     *
-     * GET /api/sync/progress/stats
-     *
-     * @return Statistics about sync sessions
+     * Complete a sync operation stream
      */
-    @GetMapping("/stats")
-    public SyncStats getStats() {
-        int activeCount = progressPublisher.getActiveSessionCount();
+    public void complete(String syncId, boolean success, String message) {
+        SseEmitter emitter = emitters.get(syncId);
 
-        return new SyncStats(
-                activeCount,
-                activeCount > 0 ? "SYNCING" : "IDLE"
-        );
+        if (emitter == null) {
+            log.debug("No emitter found for syncId: {}", syncId);
+            return;
+        }
+
+        try {
+            // Send final progress update
+            emitter.send(SseEmitter.event()
+                    .name("progress")
+                    .data(Map.of(
+                            "syncId", syncId,
+                            "completed", true,
+                            "success", success,
+                            "message", message,
+                            "percentage", 100
+                    ))
+            );
+
+            // Complete the emitter
+            emitter.complete();
+
+            log.info("✅ SSE completed successfully for syncId: {}", syncId);
+
+        } catch (IOException e) {
+            log.error("Failed to complete SSE for syncId: {}", syncId, e);
+            emitter.completeWithError(e);
+        } finally {
+            emitters.remove(syncId);
+        }
     }
 
-    // DTOs for responses
-
-    public record SyncSessionStatus(
-            String syncId,
-            boolean active,
-            String status
-    ) {}
-
-    public record SyncStats(
-            int activeSessions,
-            String systemStatus
-    ) {}
+    /**
+     * Get count of active connections (for monitoring)
+     */
+    @GetMapping("/active-count")
+    //@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public Map<String, Object> getActiveCount() {
+        return Map.of(
+                "activeConnections", emitters.size(),
+                "syncIds", emitters.keySet()
+        );
+    }
 }

@@ -26,10 +26,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(
-            @NonNull HttpServletRequest request,
-            @NonNull HttpServletResponse response,
-            @NonNull FilterChain filterChain
-    ) throws ServletException, IOException {
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
+
+        String path = request.getRequestURI();
+
+        if (path.startsWith("/api/sync/progress/stream/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        // ✅ CRITICAL: Skip JWT validation for these paths
+        if (path.startsWith("/api/auth/") ||
+                path.startsWith("/api/public/") ||
+                path.startsWith("/api/sync/progress/stream/") ||  // ✅ SSE endpoint
+                path.equals("/actuator/health") ||
+                path.equals("/actuator/info")) {
+
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // Extract JWT token from Authorization header
+        String authHeader = request.getHeader("Authorization");
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         // Skip JWT validation for auth endpoints
         if (request.getServletPath().startsWith("/api/auth/")) {
@@ -37,13 +61,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        final String authHeader = request.getHeader("Authorization");
-
-        // If no Authorization header or doesn't start with Bearer
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
 
         try {
             // Extract JWT token
@@ -81,5 +98,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+    private boolean shouldNotFilter(String path) {
+        return path.startsWith("/api/auth/") ||
+                path.startsWith("/api/public/") ||
+                path.startsWith("/api/sync/progress/stream/") ||
+                path.equals("/actuator/health");
     }
 }

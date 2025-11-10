@@ -156,6 +156,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import authService from '@/services/authService'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
@@ -166,7 +167,7 @@ const syncStatus = ref<any>(null)
 const syncHistory = ref<any[]>([])
 const notification = ref<any>(null)
 
-// Real-time progress state from SSE
+// Real-time progress state
 const progress = ref(0)
 const currentOperation = ref('')
 const progressMessage = ref('')
@@ -179,7 +180,7 @@ const currentSyncId = ref('')
 // SSE connection
 let eventSource: EventSource | null = null
 
-// Computed phase class for styling
+// Computed
 const phaseClass = computed(() => {
   const phaseMap: Record<string, string> = {
     'STARTING': 'phase-starting',
@@ -240,24 +241,23 @@ const closeSSEConnection = () => {
 
 // Connect to SSE for real-time progress
 const connectSSE = (syncId: string) => {
-  // ✅ CRITICAL: Close any existing connection first
   closeSSEConnection()
 
   currentSyncId.value = syncId
-  const url = `${API_BASE_URL}/api/sync/progress/stream/${syncId}`
+
+  // ✅ Add JWT token to URL (SSE doesn't support headers)
+  const token = localStorage.getItem('jwt_token')
+  const url = `${API_BASE_URL}/api/sync/progress/stream/${syncId}?token=${token}`
 
   console.log('🔌 Connecting to SSE:', url)
 
   eventSource = new EventSource(url)
 
-  // ✅ CRITICAL: Listen to 'progress' event (not 'message')
   eventSource.addEventListener('progress', (event: MessageEvent) => {
     try {
       const data = JSON.parse(event.data)
+      console.log('📊 Progress update:', data)
 
-      console.log('📊 Progress update received:', data)
-
-      // Update progress state
       progress.value = data.percentage || 0
       currentOperation.value = data.currentOperation || ''
       progressMessage.value = data.message || ''
@@ -266,49 +266,44 @@ const connectSSE = (syncId: string) => {
       totalItems.value = data.totalItems || 0
       estimatedSecondsRemaining.value = data.estimatedSecondsRemaining || 0
 
-      // Handle completion
       if (data.completed) {
         if (data.error) {
-          console.error('❌ Sync error:', data.errorMessage)
           showNotification(`❌ ${data.errorMessage || 'Sync failed'}`, 'error')
         } else {
-          console.log('✅ Sync completed')
-          showNotification('✅ Synchronization completed successfully', 'success')
+          showNotification('✅ Synchronization completed', 'success')
         }
 
         setTimeout(() => {
           closeSSEConnection()
           syncing.value = false
+          progress.value = 100
           checkSyncStatus()
         }, 2000)
       }
     } catch (error) {
-      console.error('Error parsing SSE message:', error)
+      console.error('Error parsing SSE:', error)
     }
   })
 
   eventSource.onerror = (error) => {
-    console.error('❌ SSE connection error:', error)
-
+    console.error('❌ SSE error:', error)
     if (eventSource?.readyState === EventSource.CLOSED) {
-      console.log('SSE connection closed by server')
       if (syncing.value && progress.value < 100) {
-        showNotification('Connection lost. Please try again.', 'error')
+        showNotification('Connection lost', 'error')
         syncing.value = false
       }
     }
   }
 
   eventSource.onopen = () => {
-    console.log('✅ SSE connection established')
+    console.log('✅ SSE connected')
   }
 }
 
-// Generic sync function with SSE
+// Generic sync function
 const performSync = async (endpoint: string, operationName: string) => {
-  // ✅ CRITICAL: Ensure no existing sync is running
   if (syncing.value) {
-    console.warn('⚠️ Sync already in progress, ignoring request')
+    console.warn('⚠️ Sync already in progress')
     return
   }
 
@@ -322,35 +317,32 @@ const performSync = async (endpoint: string, operationName: string) => {
   estimatedSecondsRemaining.value = 0
 
   const syncId = `sync-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-
-  // Connect to SSE BEFORE starting sync
   connectSSE(syncId)
-
   const startTime = Date.now()
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/sync/${endpoint}?syncId=${syncId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    })
+    // ✅ Use authService for authenticated requests
+    const result = await authService.post(`/api/sync/${endpoint}?syncId=${syncId}`)
 
-    const result = await response.json()
+    const duration = Math.floor((Date.now() - startTime) / 1000)
+    addToHistory(`${operationName} completed`, true, duration)
+    showNotification(`✅ ${operationName} completed`, 'success')
 
-    if (response.ok) {
-      const duration = Math.floor((Date.now() - startTime) / 1000)
-      const message = `${operationName} completed`
-      addToHistory(message, true, duration)
-    } else {
-      throw new Error(result.error || `HTTP ${response.status}`)
-    }
+    progress.value = 100
+    progressMessage.value = 'Completed!'
+
+    setTimeout(() => {
+      closeSSEConnection()
+      syncing.value = false
+      checkSyncStatus()
+    }, 2000)
+
   } catch (error: any) {
     console.error('Sync error:', error)
     showNotification(`❌ ${operationName} failed: ${error.message}`, 'error')
     addToHistory(`${operationName} failed`, false)
-
     closeSSEConnection()
     syncing.value = false
-    progress.value = 0
   }
 }
 
@@ -359,17 +351,15 @@ const checkSyncStatus = async () => {
   loadingStatus.value = true
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/sync/status`)
+    // ✅ Use authService for authenticated requests
+    const data = await authService.get('/api/sync/status')
 
-    if (response.ok) {
-      syncStatus.value = await response.json()
-      showNotification('Status checked successfully', 'success')
-    } else {
-      throw new Error(`HTTP ${response.status}`)
-    }
-  } catch (error) {
+    syncStatus.value = data
+    showNotification('Status checked successfully', 'success')
+
+  } catch (error: any) {
     console.error('Error checking sync status:', error)
-    showNotification('Failed to check sync status', 'error')
+    showNotification(`Failed to check sync status: ${error.message}`, 'error')
   } finally {
     loadingStatus.value = false
   }
@@ -377,23 +367,17 @@ const checkSyncStatus = async () => {
 
 // Sync operations
 const syncAll = async () => {
-  if (!confirm('⚠️ This will replace ALL data in dev-planning with data from dev. Continue?')) {
-    return
-  }
+  if (!confirm('⚠️ This will replace ALL data. Continue?')) return
   await performSync('all', 'Full Synchronization')
 }
 
 const syncOrders = async () => {
-  if (!confirm('⚠️ This will replace order data in dev-planning. Continue?')) {
-    return
-  }
+  if (!confirm('⚠️ This will replace order data. Continue?')) return
   await performSync('orders', 'Orders Sync')
 }
 
 const syncCards = async () => {
-  if (!confirm('⚠️ This will replace card data in dev-planning. Continue?')) {
-    return
-  }
+  if (!confirm('⚠️ This will replace card data. Continue?')) return
   await performSync('cards', 'Cards Sync')
 }
 
@@ -401,17 +385,16 @@ const syncIncremental = async () => {
   await performSync('incremental', 'Incremental Sync')
 }
 
-// ✅ LIFECYCLE - Auto check status on mount
+// Lifecycle
 onMounted(async () => {
-  console.log('📊 DataSync page mounted - checking status automatically')
-  // Use setTimeout to ensure DOM is ready and avoid race conditions
+  console.log('📊 DataSync mounted')
   setTimeout(async () => {
     await checkSyncStatus()
   }, 100)
 })
 
 onUnmounted(() => {
-  console.log('🔌 DataSync unmounting - cleaning up SSE connections')
+  console.log('🔌 DataSync unmounting')
   closeSSEConnection()
 })
 </script>
