@@ -7,9 +7,12 @@ import com.pcagrade.order.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -50,6 +53,7 @@ public class PlanningController {
      * POST /api/planning/generate
      */
     @PostMapping("/generate")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")  // ✅ Vérifier cette ligne
     public ResponseEntity<PlanningResponse> generateWorkPlan() {
         log.info("Received request to generate work plan");
 
@@ -85,13 +89,18 @@ public class PlanningController {
      */
     @GetMapping("/assignments")
     public ResponseEntity<List<WorkAssignmentDTO>> getAllAssignments() {
+        log.info("🔍 GET /api/planning/assignments called");
+        log.info("   Principal: {}", SecurityContextHolder.getContext().getAuthentication());
+
         List<WorkAssignment> assignments = workAssignmentRepository.findAll();
+        log.info("   Found {} assignments", assignments.size());
+
         List<WorkAssignmentDTO> dtos = assignments.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
+
         return ResponseEntity.ok(dtos);
     }
-
     /**
      * Get assignments for specific employee
      * GET /api/planning/assignments/employee/{employeeId}
@@ -302,6 +311,11 @@ public class PlanningController {
      * GET /api/planning/employee/{employeeId}
      * Can optionally filter by date
      */
+    /**
+     * Get assignments for specific employee
+     * GET /api/planning/employee/{employeeId}
+     * Can optionally filter by date
+     */
     @GetMapping("/employee/{employeeId}")
     public ResponseEntity<?> getEmployeePlanningAssignments(
             @PathVariable String employeeId,
@@ -310,23 +324,29 @@ public class PlanningController {
         log.info("📋 Getting assignments for employee: {} on date: {}", employeeId, date);
 
         try {
-            // Parse employee ID (handle both with and without dashes)
+            // Parse employee ID
             UUID uuid = parseUUID(employeeId);
 
-            // Get all assignments for this employee
-            List<WorkAssignment> assignments = workAssignmentRepository
-                    .findByEmployeeIdOrderByScheduledStartAsc(uuid);
-
-            log.info("   Found {} total assignments for employee", assignments.size());
+            List<WorkAssignment> assignments;
 
             // Filter by date if provided
             if (date != null && !date.isEmpty()) {
                 LocalDate filterDate = LocalDate.parse(date);
-                assignments = assignments.stream()
-                        .filter(a -> a.getScheduledStart() != null &&
-                                a.getScheduledStart().toLocalDate().equals(filterDate))
-                        .collect(Collectors.toList());
-                log.info("   Filtered to {} assignments for date: {}", assignments.size(), date);
+                LocalDateTime startOfDay = filterDate.atStartOfDay();
+                LocalDateTime endOfDay = filterDate.plusDays(1).atStartOfDay();
+
+                // ✅ Use the new repository method with date filtering
+                assignments = workAssignmentRepository
+                        .findByEmployeeIdAndScheduledStartBetweenOrderByScheduledStartAsc(
+                                uuid, startOfDay, endOfDay);
+
+                log.info("   Found {} assignments for date: {}", assignments.size(), date);
+            } else {
+                // Get all assignments for this employee
+                assignments = workAssignmentRepository
+                        .findByEmployeeIdOrderByScheduledStartAsc(uuid);
+
+                log.info("   Found {} total assignments for employee", assignments.size());
             }
 
             if (assignments.isEmpty()) {
@@ -335,11 +355,12 @@ public class PlanningController {
                         "success", true,
                         "assignments", List.of(),
                         "total", 0,
-                        "message", "No assignments found for this employee" + (date != null ? " on " + date : "")
+                        "message", "No assignments found for this employee" +
+                                (date != null ? " on " + date : "")
                 ));
             }
 
-            // Convert to detailed DTOs with order information
+            // Convert to detailed DTOs
             List<Map<String, Object>> detailedAssignments = assignments.stream()
                     .map(this::convertToDetailedDTO)
                     .collect(Collectors.toList());

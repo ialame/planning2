@@ -8,6 +8,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.util.Locale;
+
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
@@ -24,7 +26,6 @@ public class WebConfig implements WebMvcConfigurer {
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
-
         return new CorsFilter(source);
     }
 }

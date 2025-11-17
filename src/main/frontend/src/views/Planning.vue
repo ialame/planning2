@@ -6,18 +6,15 @@
     </h1>
 
     <div class="controls-section">
-      <div class="control-team">
-        <label class="control-label">
-          <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-          </svg>
-          Start Date:
-        </label>
-        <input
-          type="date"
-          v-model="config.startDate"
-          class="control-input"
-        />
+      <div class="date-inputs">
+        <div>
+          <label>Start Date:</label>
+          <input v-model="startDate" type="date" class="input-field">
+        </div>
+        <div>
+          <label>End Date:</label>
+          <input v-model="endDate" type="date" class="input-field">
+        </div>
       </div>
 
       <div class="control-team">
@@ -36,7 +33,11 @@
         />
       </div>
 
-      <button @click="generatePlanning" class="generate-btn" :disabled="generating">
+      <button
+        @click="generatePlanning"
+        :disabled="generating"
+        class="btn-primary"
+      >
         <div v-if="generating" class="spinner"></div>
         <svg v-else class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
@@ -343,6 +344,24 @@ interface GeneratePlanningResponse {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 const showNotification = inject('showNotification', (msg: string, type: string) => console.log(msg))
 
+
+// ========== STATE ==========
+
+const error = ref<string | null>(null)
+
+const loading = ref(false)
+
+
+// ✅ AJOUTER CES VARIABLES
+const allAssignments = ref<any[]>([])
+const gradingAssignments = ref<any[]>([])
+const certificationAssignments = ref<any[]>([])
+const scanningAssignments = ref<any[]>([])
+const preparationAssignments = ref<any[]>([])
+
+// ✅ AJOUTER CES LIGNES
+const startDate = ref(new Date().toISOString().split('T')[0])  // Aujourd'hui
+const endDate = ref(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])  // +7 jours
 // State
 const generating = ref<boolean>(false)
 const loadingGrading = ref(false)
@@ -363,60 +382,77 @@ const scanningData = ref<any>({ plannings: [], summary: null })
 // Methods
 
 const generatePlanning = async () => {
-  if (generating.value) return
+  if (!authService.isAuthenticated()) {
+    error.value = 'You must be logged in'
+    return
+  }
 
   generating.value = true
+  error.value = null
 
   try {
-    const result = await authService.post<GeneratePlanningResponse>('/api/planning/generate')
+    console.log('🚀 Generating planning...')
 
-    console.log('✅ Planning generated:', result.assignmentsCreated, 'assignments')
+    const response = await authService.post('/api/planning/generate', {})
 
-    //console.log('🚀 Generating planning...')
+    console.log('✅ Success:', response)
+    console.log('📊 Assignments created:', response.assignmentsCreated)
 
-    const response = await fetch(`${API_BASE_URL}/api/planning/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-      // ✅ L'endpoint ne prend pas de body selon le code Java
-    })
+    // ✅ RELOAD après génération
+    await loadPlanningData()
 
-    if (response.ok) {
-      const result = await response.json()
-      console.log('✅ Planning generated:', result)
-      console.log('📊 Response structure:', {
-        success: result.success,
-        message: result.message,
-        assignmentsCreated: result.assignmentsCreated,
-        assignments: result.assignments?.length
-      })
+    alert(`✅ Planning generated!\n${response.assignmentsCreated} assignments created.`)
 
-      if (result.success) {
-        const tasksCount = result.assignmentsCreated || result.assignments?.length || 0
-        showNotification(
-          `✅ Planning generated: ${tasksCount} assignments created!`,
-          'success'
-        )
-
-        // Reload all panels to show the new data
-        await refreshAllPanels()
-      } else {
-        showNotification(`⚠️ ${result.message || 'Planning generation failed'}`, 'error')
-      }
-    } else {
-      const errorText = await response.text()
-      console.error('❌ HTTP error:', response.status, errorText)
-      throw new Error(`HTTP ${response.status}: ${errorText}`)
-    }
-  } catch (error) {
-    console.error('❌ Generation error:', error)
-    showNotification(
-      `❌ Failed to generate planning: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      'error'
-    )
+  } catch (err: any) {
+    console.error('❌ Error:', err)
+    error.value = err.message || 'Failed to generate planning'
+    alert(`❌ Error: ${error.value}`)
   } finally {
     generating.value = false
   }
 }
+/**
+ * Load planning data for display
+ */
+const planningData = ref<any[]>([])
+const loadingPlanning = ref(false)
+
+const loadPlanningData = async () => {
+  loading.value = true
+
+  try {
+    console.log('📦 Loading planning data...')
+
+    const data = await authService.get('/api/planning/assignments')
+
+    console.log('✅ Loaded', data.length, 'assignments')
+
+    // Store all
+    allAssignments.value = data
+
+    // Filter by processing stage
+    gradingAssignments.value = data.filter(a => a.processingStage === 'GRADING')
+    certificationAssignments.value = data.filter(a => a.processingStage === 'CERTIFYING')
+    scanningAssignments.value = data.filter(a => a.processingStage === 'SCANNING')
+    preparationAssignments.value = data.filter(a =>
+      a.processingStage === 'PACKAGING' ||
+      a.processingStage === 'PREPARING'
+    )
+
+    console.log('📊 Filtered:')
+    console.log('   Grading:', gradingAssignments.value.length)
+    console.log('   Certification:', certificationAssignments.value.length)
+    console.log('   Scanning:', scanningAssignments.value.length)
+    console.log('   Preparation:', preparationAssignments.value.length)
+
+  } catch (err: any) {
+    console.error('❌ Error loading planning:', err)
+    error.value = err.message || 'Failed to load planning'
+  } finally {
+    loading.value = false
+  }
+}
+
 
 // Replace these methods in Planning.vue
 
@@ -428,42 +464,40 @@ const loadGradingPlannings = async () => {
   loadingGrading.value = true
   try {
     console.log('📥 Loading grading assignments...')
-    const response = await fetch(`${API_BASE_URL}/api/planning/assignments`)
 
-    if (response.ok) {
-      const assignments = await response.json()
-      console.log(`✅ Total assignments: ${assignments.length}`)
+    // ✅ USE authService instead of fetch
+    const assignments = await authService.get('/api/planning/assignments')
 
-      // Filter by processingStage = "GRADING"
-      const gradingAssignments = assignments.filter((a: any) =>
-        a.processingStage === 'GRADING'
-      )
+    console.log(`✅ Total assignments: ${assignments.length}`)
 
-      // Transform to match the expected format for display
-      const plannings = gradingAssignments.map((a: any) => ({
-        id: a.id,
-        orderNumber: a.orderNumber,
-        employeeName: a.employeeName,
-        cardCount: a.cardCount || 0,
-        delai: 'F', // Default - you might want to fetch this from order
-        planningDate: a.scheduledStart ? new Date(a.scheduledStart).toISOString().split('T')[0] : null,
-        startTime: a.scheduledStart,
-        endTime: a.scheduledEnd,
-        formattedDuration: a.estimatedDurationMinutes ? `${Math.round(a.estimatedDurationMinutes / 60)}h` : '0h',
-        status: a.status
-      }))
+    const gradingAssignments = assignments.filter((a: any) =>
+      a.processingStage === 'GRADING'
+    )
 
-      gradingData.value = {
-        plannings: plannings,
-        summary: {
-          totalCards: plannings.reduce((sum: number, p: any) => sum + p.cardCount, 0),
-          totalHours: Math.round(plannings.reduce((sum: number, p: any) =>
-            sum + (p.formattedDuration ? parseInt(p.formattedDuration) : 0), 0))
-        }
+    const plannings = gradingAssignments.map((a: any) => ({
+      id: a.id,
+      orderNumber: a.orderNumber,
+      employeeName: a.employeeName,
+      cardCount: a.cardCount || 0,
+      delai: a.delai || 'C',
+      planningDate: a.scheduledStart ? new Date(a.scheduledStart).toISOString().split('T')[0] : null,
+      startTime: a.scheduledStart,
+      endTime: a.scheduledEnd,
+      formattedDuration: a.estimatedDurationMinutes ? `${Math.round(a.estimatedDurationMinutes / 60)}h` : '0h',
+      status: a.status
+    }))
+
+    gradingData.value = {
+      plannings: plannings,
+      summary: {
+        totalCards: plannings.reduce((sum: number, p: any) => sum + p.cardCount, 0),
+        totalHours: Math.round(plannings.reduce((sum: number, p: any) =>
+          sum + (parseInt(p.formattedDuration) || 0), 0))
       }
-
-      console.log(`✅ Grading: ${gradingData.value.plannings.length} tasks`)
     }
+
+    console.log(`✅ Grading: ${gradingData.value.plannings.length} tasks`)
+
   } catch (error) {
     console.error('❌ Error loading grading plannings:', error)
   } finally {
@@ -475,40 +509,37 @@ const loadCertificationPlannings = async () => {
   loadingCertification.value = true
   try {
     console.log('📥 Loading certification assignments...')
-    const response = await fetch(`${API_BASE_URL}/api/planning/assignments`)
 
-    if (response.ok) {
-      const assignments = await response.json()
+    const assignments = await authService.get('/api/planning/assignments')
 
-      // ✅ FIXED: Use "CERTIFYING" instead of "CERTIFICATION"
-      const certificationAssignments = assignments.filter((a: any) =>
-        a.processingStage === 'CERTIFYING'
-      )
+    const certificationAssignments = assignments.filter((a: any) =>
+      a.processingStage === 'CERTIFYING'
+    )
 
-      const plannings = certificationAssignments.map((a: any) => ({
-        id: a.id,
-        orderNumber: a.orderNumber,
-        employeeName: a.employeeName,
-        cardCount: a.cardCount || 0,
-        delai: 'F',
-        planningDate: a.scheduledStart ? new Date(a.scheduledStart).toISOString().split('T')[0] : null,
-        startTime: a.scheduledStart,
-        endTime: a.scheduledEnd,
-        formattedDuration: a.estimatedDurationMinutes ? `${Math.round(a.estimatedDurationMinutes / 60)}h` : '0h',
-        status: a.status
-      }))
+    const plannings = certificationAssignments.map((a: any) => ({
+      id: a.id,
+      orderNumber: a.orderNumber,
+      employeeName: a.employeeName,
+      cardCount: a.cardCount || 0,
+      delai: a.delai || 'C',
+      planningDate: a.scheduledStart ? new Date(a.scheduledStart).toISOString().split('T')[0] : null,
+      startTime: a.scheduledStart,
+      endTime: a.scheduledEnd,
+      formattedDuration: a.estimatedDurationMinutes ? `${Math.round(a.estimatedDurationMinutes / 60)}h` : '0h',
+      status: a.status
+    }))
 
-      certificationData.value = {
-        plannings: plannings,
-        summary: {
-          totalCards: plannings.reduce((sum: number, p: any) => sum + p.cardCount, 0),
-          totalHours: Math.round(plannings.reduce((sum: number, p: any) =>
-            sum + (p.formattedDuration ? parseInt(p.formattedDuration) : 0), 0))
-        }
+    certificationData.value = {
+      plannings: plannings,
+      summary: {
+        totalCards: plannings.reduce((sum: number, p: any) => sum + p.cardCount, 0),
+        totalHours: Math.round(plannings.reduce((sum: number, p: any) =>
+          sum + (parseInt(p.formattedDuration) || 0), 0))
       }
-
-      console.log(`✅ Certification: ${certificationData.value.plannings.length} tasks`)
     }
+
+    console.log(`✅ Certification: ${certificationData.value.plannings.length} tasks`)
+
   } catch (error) {
     console.error('❌ Error loading certification plannings:', error)
   } finally {
@@ -516,44 +547,42 @@ const loadCertificationPlannings = async () => {
   }
 }
 
+
 const loadPreparationPlannings = async () => {
   loadingPreparation.value = true
   try {
     console.log('📥 Loading preparation assignments...')
-    const response = await fetch(`${API_BASE_URL}/api/planning/assignments`)
 
-    if (response.ok) {
-      const assignments = await response.json()
+    const assignments = await authService.get('/api/planning/assignments')
 
-      // ✅ FIXED: Use "PACKAGING" instead of "PREPARATION"
-      const preparationAssignments = assignments.filter((a: any) =>
-        a.processingStage === 'PACKAGING'
-      )
+    const preparationAssignments = assignments.filter((a: any) =>
+      a.processingStage === 'PACKAGING'
+    )
 
-      const plannings = preparationAssignments.map((a: any) => ({
-        id: a.id,
-        orderNumber: a.orderNumber,
-        employeeName: a.employeeName,
-        cardCount: a.cardCount || 0,
-        delai: 'F',
-        planningDate: a.scheduledStart ? new Date(a.scheduledStart).toISOString().split('T')[0] : null,
-        startTime: a.scheduledStart,
-        endTime: a.scheduledEnd,
-        formattedDuration: a.estimatedDurationMinutes ? `${Math.round(a.estimatedDurationMinutes / 60)}h` : '0h',
-        status: a.status
-      }))
+    const plannings = preparationAssignments.map((a: any) => ({
+      id: a.id,
+      orderNumber: a.orderNumber,
+      employeeName: a.employeeName,
+      cardCount: a.cardCount || 0,
+      delai: a.delai || 'C',
+      planningDate: a.scheduledStart ? new Date(a.scheduledStart).toISOString().split('T')[0] : null,
+      startTime: a.scheduledStart,
+      endTime: a.scheduledEnd,
+      formattedDuration: a.estimatedDurationMinutes ? `${Math.round(a.estimatedDurationMinutes / 60)}h` : '0h',
+      status: a.status
+    }))
 
-      preparationData.value = {
-        plannings: plannings,
-        summary: {
-          totalCards: plannings.reduce((sum: number, p: any) => sum + p.cardCount, 0),
-          totalHours: Math.round(plannings.reduce((sum: number, p: any) =>
-            sum + (p.formattedDuration ? parseInt(p.formattedDuration) : 0), 0))
-        }
+    preparationData.value = {
+      plannings: plannings,
+      summary: {
+        totalCards: plannings.reduce((sum: number, p: any) => sum + p.cardCount, 0),
+        totalHours: Math.round(plannings.reduce((sum: number, p: any) =>
+          sum + (parseInt(p.formattedDuration) || 0), 0))
       }
-
-      console.log(`✅ Preparation: ${preparationData.value.plannings.length} tasks`)
     }
+
+    console.log(`✅ Preparation: ${preparationData.value.plannings.length} tasks`)
+
   } catch (error) {
     console.error('❌ Error loading preparation plannings:', error)
   } finally {
@@ -565,39 +594,37 @@ const loadScanningPlannings = async () => {
   loadingScanning.value = true
   try {
     console.log('📥 Loading scanning assignments...')
-    const response = await fetch(`${API_BASE_URL}/api/planning/assignments`)
 
-    if (response.ok) {
-      const assignments = await response.json()
+    const assignments = await authService.get('/api/planning/assignments')
 
-      const scanningAssignments = assignments.filter((a: any) =>
-        a.processingStage === 'SCANNING'
-      )
+    const scanningAssignments = assignments.filter((a: any) =>
+      a.processingStage === 'SCANNING'
+    )
 
-      const plannings = scanningAssignments.map((a: any) => ({
-        id: a.id,
-        orderNumber: a.orderNumber,
-        employeeName: a.employeeName,
-        cardCount: a.cardCount || 0,
-        delai: 'F',
-        planningDate: a.scheduledStart ? new Date(a.scheduledStart).toISOString().split('T')[0] : null,
-        startTime: a.scheduledStart,
-        endTime: a.scheduledEnd,
-        formattedDuration: a.estimatedDurationMinutes ? `${Math.round(a.estimatedDurationMinutes / 60)}h` : '0h',
-        status: a.status
-      }))
+    const plannings = scanningAssignments.map((a: any) => ({
+      id: a.id,
+      orderNumber: a.orderNumber,
+      employeeName: a.employeeName,
+      cardCount: a.cardCount || 0,
+      delai: a.delai || 'C',
+      planningDate: a.scheduledStart ? new Date(a.scheduledStart).toISOString().split('T')[0] : null,
+      startTime: a.scheduledStart,
+      endTime: a.scheduledEnd,
+      formattedDuration: a.estimatedDurationMinutes ? `${Math.round(a.estimatedDurationMinutes / 60)}h` : '0h',
+      status: a.status
+    }))
 
-      scanningData.value = {
-        plannings: plannings,
-        summary: {
-          totalCards: plannings.reduce((sum: number, p: any) => sum + p.cardCount, 0),
-          totalHours: Math.round(plannings.reduce((sum: number, p: any) =>
-            sum + (p.formattedDuration ? parseInt(p.formattedDuration) : 0), 0))
-        }
+    scanningData.value = {
+      plannings: plannings,
+      summary: {
+        totalCards: plannings.reduce((sum: number, p: any) => sum + p.cardCount, 0),
+        totalHours: Math.round(plannings.reduce((sum: number, p: any) =>
+          sum + (parseInt(p.formattedDuration) || 0), 0))
       }
-
-      console.log(`✅ Scanning: ${scanningData.value.plannings.length} tasks`)
     }
+
+    console.log(`✅ Scanning: ${scanningData.value.plannings.length} tasks`)
+
   } catch (error) {
     console.error('❌ Error loading scanning plannings:', error)
   } finally {
@@ -606,16 +633,16 @@ const loadScanningPlannings = async () => {
 }
 
 // Keep this method as is
-const refreshAllPanels = async () => {
-  console.log('🔄 Refreshing all panels...')
-  await Promise.all([
-    loadGradingPlannings(),
-    loadCertificationPlannings(),
-    loadPreparationPlannings(),
-    loadScanningPlannings()
-  ])
-  console.log('✅ All panels refreshed')
-}
+// const refreshAllPanels = async () => {
+//   console.log('🔄 Refreshing all panels...')
+//   await Promise.all([
+//     loadGradingPlannings(),
+//     loadCertificationPlannings(),
+//     loadPreparationPlannings(),
+//     loadScanningPlannings()
+//   ])
+//   console.log('✅ All panels refreshed')
+// }
 
 const formatDate = (date: any) => {
   if (!date) return 'N/A'
@@ -659,9 +686,38 @@ const getDelaiLabel = (delai: string) => {
   return map[delai] || delai
 }
 
+const refreshAllPanels = async () => {
+  console.log('🔄 Refreshing all panels...')
+
+  // ✅ DEBUG : Voir tous les processingStage
+  try {
+    const allData = await authService.get('/api/planning/assignments')
+    const stages = [...new Set(allData.map((a: any) => a.processingStage))]
+    console.log('📊 Processing stages in data:', stages)
+    console.log('📊 Stage counts:')
+    stages.forEach(stage => {
+      const count = allData.filter((a: any) => a.processingStage === stage).length
+      console.log(`   ${stage}: ${count}`)
+    })
+  } catch (err) {
+    console.error('Error loading stages:', err)
+  }
+
+  await Promise.all([
+    loadGradingPlannings(),
+    loadCertificationPlannings(),
+    loadPreparationPlannings(),
+    loadScanningPlannings()
+  ])
+  console.log('✅ All panels refreshed')
+}
+
+
 // Lifecycle
 onMounted(() => {
-  refreshAllPanels()
+  refreshAllPanels();
+  console.log('🔧 Planning page mounted');
+  loadPlanningData()
 })
 </script>
 
@@ -980,5 +1036,64 @@ onMounted(() => {
   .panels-container {
     grid-template-columns: 1fr;
   }
+}
+.planning-page {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.generate-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: 2rem;
+}
+
+.date-inputs {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.date-inputs > div {
+  flex: 1;
+}
+
+.input-field {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.75rem 2rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error-message {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #fee;
+  color: #c00;
+  border-radius: 4px;
 }
 </style>

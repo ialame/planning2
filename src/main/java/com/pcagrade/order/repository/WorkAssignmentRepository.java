@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,4 +45,14 @@ public interface WorkAssignmentRepository extends JpaRepository<WorkAssignment, 
     // Get assignments created in last N hours (using ULID timestamp)
     @Query(value = "SELECT * FROM work_assignment WHERE id > :sinceId", nativeQuery = true)
     List<WorkAssignment> findCreatedSince(UUID sinceId);
+
+    /**
+     * Find work assignments by employee and date range, ordered by scheduled start
+     */
+    List<WorkAssignment> findByEmployeeIdAndScheduledStartBetweenOrderByScheduledStartAsc(
+            UUID employeeId,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime
+    );
+
 }

@@ -309,14 +309,33 @@ class AuthService {
   /**
    * POST request
    */
-  async post<T = any>(endpoint: string, data?: any): Promise<T> {
-    const response = await this.apiCall(endpoint, {
+  // Dans authService.ts
+  async post(url: string, data?: any) {
+    const token = this.getToken()
+
+    console.log('🌐 POST Request:', url)
+    console.log('🔑 Token present:', !!token)
+    console.log('📦 Data:', data)
+
+    const response = await fetch(`${API_BASE_URL}${url}`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
       body: data ? JSON.stringify(data) : undefined
     })
-    return response.json()
-  }
 
+    console.log('📊 Response status:', response.status)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('❌ Error response:', errorText)
+      throw new Error(`HTTP ${response.status}: ${errorText}`)
+    }
+
+    return await response.json()
+  }
   /**
    * PUT request
    */

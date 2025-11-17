@@ -1,14 +1,23 @@
 package com.pcagrade.order.controller;
 
+import com.pcagrade.order.dto.EmployeeDTO;
+import com.pcagrade.order.entity.Employee;
+import com.pcagrade.order.entity.Team;
+import com.pcagrade.order.repository.EmployeeRepository;
 import com.pcagrade.order.service.EmployeeService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
+import org.antlr.v4.runtime.tree.pattern.ParseTreePattern;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * REST Controller for Employee Management - English Version
@@ -25,6 +34,9 @@ public class EmployeeController {
     @Autowired
     private EmployeeService employeeService;
 
+    @Autowired
+    private EmployeeRepository employeeRepository;
+
     private static final org.slf4j.Logger log
             = org.slf4j.LoggerFactory.getLogger(EmployeeController.class);
     /**
@@ -32,23 +44,21 @@ public class EmployeeController {
      * Endpoint: GET /api/employees
      */
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> getAllEmployees() {
-        try {
-            System.out.println("👥 Frontend: Retrieving employees list...");
+    public ResponseEntity<List<EmployeeDTO>> getAllEmployees(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
 
-            // Get real employees from database
-            List<Map<String, Object>> employees = employeeService.getAllActiveEmployees();
 
-            System.out.println("✅ " + employees.size() + " employees returned from database");
-            return ResponseEntity.ok(employees);
+        Page<Employee> employeesPage = employeeRepository.findAll(
+                PageRequest.of(page, size, Sort.by("lastName", "firstName"))
+        );
 
-        } catch (Exception e) {
-            System.err.println("❌ Error retrieving employees: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(500).body(new ArrayList<>());
-        }
+        List<EmployeeDTO> employeeDTOs = employeesPage.getContent().stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(employeeDTOs);
     }
-
     /**
      * 👥 GET ACTIVE EMPLOYEES ONLY
      * Endpoint: GET /api/employees/active
@@ -479,6 +489,28 @@ public class EmployeeController {
             result.put("error", e.getMessage());
             return ResponseEntity.status(500).body(result);
         }
+    }
+
+    private EmployeeDTO toDTO(Employee employee) {
+        EmployeeDTO dto = new EmployeeDTO();
+        dto.setId(String.valueOf(employee.getId()));
+        dto.setEmail(employee.getEmail());
+        dto.setFirstName(employee.getFirstName());
+        dto.setLastName(employee.getLastName());
+        dto.setFullName(employee.getFirstName() + " " + employee.getLastName());
+        dto.setActive(employee.getActive());
+        dto.setEfficiencyRating(employee.getEfficiencyRating());
+        dto.setWorkHoursPerDay(employee.getWorkHoursPerDay());
+        dto.setPhotoUrl(employee.getPhotoUrl());
+        dto.setCreationDate(employee.getCreationDate());
+        dto.setDailyCapacityMinutes(employee.getWorkHoursPerDay() * 60);
+
+        // ✅ AJOUTER LES TEAMS
+        dto.setTeams(employee.getTeams().stream()
+                .map(Team::getName)
+                .collect(Collectors.toList()));
+
+        return dto;
     }
 
 }

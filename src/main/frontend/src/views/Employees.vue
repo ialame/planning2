@@ -401,6 +401,7 @@ import EmployeeDetailPage from '../components/EmployeeDetailPage.vue'
 import EmployeeAvatar from '@/components/EmployeeAvatar.vue'
 import EmployeePhotoUploader from '@/components/EmployeePhotoUploader.vue'
 import { API_BASE_URL, API_ENDPOINTS } from '@/config/api.ts'
+import authService from "@/services/authService.ts";
 
 // ========== INTERFACES ==========
 interface Employee {
@@ -439,11 +440,23 @@ const selectedPhotoEmployeeId = ref<string | null>(null)
 const avatarKey = ref(0) // Key to force avatar reload
 
 const employees = ref<Employee[]>([])
+
+const error = ref<string | null>(null)
+
 const newEmployee = ref<NewEmployee>({
   firstName: '',
   lastName: '',
   email: ''
 })
+
+/**
+ * View employee details
+ */
+const viewEmployeeDetails = (employeeId: string) => {
+  console.log('👁️ Viewing employee details:', employeeId)
+  currentView.value = 'planning'  // ✅ Changer le mode en planning
+  selectedEmployeeId.value = employeeId
+}
 
 // ========== COMPUTED ==========
 const stats = computed(() => ({
@@ -476,24 +489,57 @@ const employeesWithWorkload = computed(() => {
 /**
  * Load employees
  */
+// ✅ Flag pour empêcher les appels multiples
+let isLoadingEmployees = false
+
+/**
+ * Load employees
+ */
 const loadEmployees = async () => {
+  // Protection contre les appels multiples
+  if (isLoadingEmployees) {
+    console.log('⏭️ Already loading employees, skipping...')
+    return
+  }
+
+  isLoadingEmployees = true
   loading.value = true
+  error.value = null
+
   try {
-    console.log('👥 Loading employees')
+    console.log('📦 Loading employees...')
 
-    const response = await fetch(`${API_BASE_URL}/api/employees`, { method: 'GET' })
+    const data = await authService.get('/api/employees')
 
-    if (response.ok) {
-      const data = await response.json()
+    console.log('📥 API Response:', data)
+    console.log('📊 Is Array?', Array.isArray(data))
+    console.log('📊 Length:', Array.isArray(data) ? data.length : 'N/A')
+
+    // Handle different response formats
+    if (Array.isArray(data)) {
       employees.value = data
-      console.log(`✅ Loaded ${employees.value.length} employees`)
+      console.log('✅ Loaded as array:', data.length, 'employees')
+    } else if (data.content) {
+      employees.value = data.content
+      console.log('✅ Loaded from data.content:', data.content.length, 'employees')
+    } else if (data.employees) {
+      employees.value = data.employees
+      console.log('✅ Loaded from data.employees:', data.employees.length, 'employees')
     } else {
-      console.error('❌ Failed to load employees')
+      console.warn('⚠️ Unknown response format:', Object.keys(data))
+      employees.value = []
     }
-  } catch (error) {
-    console.error('❌ Error loading employees:', error)
+
+    console.log('✅ Final employees:', employees.value.length)
+
+  } catch (err: any) {
+    console.error('❌ Error loading employees:', err)
+    error.value = err.message || 'Failed to load employees'
+    employees.value = []
   } finally {
     loading.value = false
+    isLoadingEmployees = false
+    console.log('🏁 Loading complete')
   }
 }
 
@@ -541,14 +587,6 @@ const loadPlanningForSelectedDate = async () => {
   if (selectedEmployeeId.value && currentView.value === 'planning') {
     console.log('📅 Loading planning for date:', selectedDate.value)
   }
-}
-
-/**
- * View employee details
- */
-const viewEmployeeDetails = (employeeId: string) => {
-  console.log('👁️ Viewing employee details:', employeeId)
-  selectedEmployeeId.value = employeeId
 }
 
 /**
@@ -606,9 +644,26 @@ const handlePhotoDeleted = () => {
   }, 500)
 }
 
+// Mock teams for display (temporary)
+const getEmployeeRole = (email: string): string => {
+  if (email.includes('admin')) return 'Admin'
+  if (email.includes('manager')) return 'Manager'
+  if (email.includes('grader')) return 'Grader'
+  if (email.includes('certifier')) return 'Certifier'
+  if (email.includes('scanner')) return 'Scanner'
+  if (email.includes('preparer')) return 'Preparer'
+  return 'Employee'
+}
 // ========== LIFECYCLE ==========
 onMounted(() => {
-  loadEmployees()
+  console.log('🔧 Employees component mounted')
+
+  // ✅ Charger une seule fois
+  if (authService.isAuthenticated()) {
+    loadEmployees()
+  } else {
+    console.log('⚠️ Not authenticated')
+  }
 })
 </script>
 

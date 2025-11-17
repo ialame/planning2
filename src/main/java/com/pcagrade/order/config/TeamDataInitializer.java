@@ -4,182 +4,119 @@ import com.pcagrade.order.entity.Employee;
 import com.pcagrade.order.entity.Team;
 import com.pcagrade.order.repository.EmployeeRepository;
 import com.pcagrade.order.repository.TeamRepository;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Initialize database with required teams and sample users on application startup
- * Only runs in development mode when database is empty
- */
-@Configuration
-@RequiredArgsConstructor
+@Component
 @Slf4j
-public class TeamDataInitializer {
+public class TeamDataInitializer implements CommandLineRunner {
 
     private final TeamRepository teamRepository;
     private final EmployeeRepository employeeRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @PostConstruct
-    @Transactional
-    public void initializeData() {
-        log.info("🔍 Checking if team table needs initialization...");
-
-        long teamCount = teamRepository.count();
-
-        if (teamCount == 0) {
-            log.info("📝 Initializing teams...");
-            createTeams();
-            log.info("✅ Teams created successfully");
-        } else {
-            log.info("✅ Teams already initialized (count: {})", teamCount);
-        }
-
-        // Check if we need to add missing teams (MANAGER and ADMIN)
-        ensureManagerAndAdminTeams();
-
-        // Create sample employees if database is empty
-        long employeeCount = employeeRepository.count();
-        if (employeeCount == 0) {
-            log.info("📝 Creating sample employees...");
-            createSampleEmployees();
-            log.info("✅ Sample employees created successfully");
-        } else {
-            log.info("✅ Employees already initialized (count: {})", employeeCount);
-        }
-
-        log.info("✅ Data initialization completed successfully");
+    // ✅ AJOUTER @Lazy DANS LE CONSTRUCTEUR
+    public TeamDataInitializer(
+            TeamRepository teamRepository,
+            EmployeeRepository employeeRepository,
+            @Lazy PasswordEncoder passwordEncoder) {
+        this.teamRepository = teamRepository;
+        this.employeeRepository = employeeRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
-    private void createTeams() {
+    @Override
+    public void run(String... args) {
+        initializeTeams();
+        initializeEmployees();
+    }
+    private void initializeTeams() {
+        if (teamRepository.count() > 0) {
+            log.info("✅ Teams already initialized");
+            return;
+        }
+
+        log.info("🔧 Initializing teams...");
+
         List<Team> teams = List.of(
-                createTeam("ROLE_GRADER", "Grading Team",
-                        "Team responsible for grading Pokemon cards",
-                        "#3B82F6", "⭐"),
-
-                createTeam("ROLE_CERTIFIER", "Certification Team",
-                        "Team responsible for certifying graded cards",
-                        "#10B981", "✓"),
-
-                createTeam("ROLE_SCANNER", "Scanning Team",
-                        "Team responsible for scanning cards",
-                        "#F59E0B", "📷"),
-
-                createTeam("ROLE_PREPARER", "Preparation Team",
-                        "Team responsible for preparing orders for shipment",
-                        "#8B5CF6", "📦"),
-
-                createTeam("ROLE_MANAGER", "Management Team",
-                        "Team with management and planning permissions",
-                        "#DC2626", "👔"),
-
-                createTeam("ROLE_ADMIN", "Admin Team",
-                        "Team with full administrative permissions",
-                        "#991B1B", "🔐")
+                createTeam("ROLE_GRADER", "Grader", "Grades Pokemon cards", "#3b82f6", "⭐"),
+                createTeam("ROLE_CERTIFIER", "Certifier", "Certifies graded cards", "#10b981", "✓"),
+                createTeam("ROLE_SCANNER", "Scanner", "Scans certified cards", "#f59e0b", "📷"),
+                createTeam("ROLE_PREPARER", "Preparer", "Prepares orders for shipping", "#8b5cf6", "📦"),
+                createTeam("ROLE_MANAGER", "Manager", "Manages team and operations", "#ef4444", "👔"),
+                createTeam("ROLE_ADMIN", "Admin", "System administrator", "#6b7280", "⚙️")
         );
 
         teamRepository.saveAll(teams);
+        log.info("✅ {} teams initialized", teams.size());
     }
 
-    private void ensureManagerAndAdminTeams() {
-        // Check if MANAGER team exists
-        if (!teamRepository.findByName("ROLE_MANAGER").isPresent()) {
-            log.info("📝 Creating missing ROLE_MANAGER team...");
-            Team managerTeam = createTeam("ROLE_MANAGER", "Management Team",
-                    "Team with management and planning permissions",
-                    "#DC2626", "MGR");
-            teamRepository.save(managerTeam);
-            log.info("✅ ROLE_MANAGER team created");
-        }
-
-        // Check if ADMIN team exists
-        if (!teamRepository.findByName("ROLE_ADMIN").isPresent()) {
-            log.info("📝 Creating missing ROLE_ADMIN team...");
-            Team adminTeam = createTeam("ROLE_ADMIN", "Admin Team",
-                    "Team with full administrative permissions",
-                    "#991B1B", "ADM");
-            teamRepository.save(adminTeam);
-            log.info("✅ ROLE_ADMIN team created");
-        }
-    }
-
-    private Team createTeam(String name, String displayName, String description,
-                            String color, String icon) {
+    private Team createTeam(String name, String displayName, String description, String color, String icon) {
         Team team = new Team();
         team.setName(name);
         team.setDisplayName(displayName);
         team.setDescription(description);
         team.setColor(color);
         team.setIcon(icon);
-        team.setActive(true);
         return team;
     }
 
-    private void createSampleEmployees() {
-        // Get teams
-        Team graderTeam = teamRepository.findByName("ROLE_GRADER")
-                .orElseThrow(() -> new RuntimeException("ROLE_GRADER not found"));
-        Team certifierTeam = teamRepository.findByName("ROLE_CERTIFIER")
-                .orElseThrow(() -> new RuntimeException("ROLE_CERTIFIER not found"));
-        Team managerTeam = teamRepository.findByName("ROLE_MANAGER")
-                .orElseThrow(() -> new RuntimeException("ROLE_MANAGER not found"));
-        Team adminTeam = teamRepository.findByName("ROLE_ADMIN")
-                .orElseThrow(() -> new RuntimeException("ROLE_ADMIN not found"));
+    private void initializeEmployees() {
+        if (employeeRepository.count() > 0) {
+            log.info("✅ Employees already initialized");
+            return;
+        }
 
-        // Password: password123
-        String encodedPassword = passwordEncoder.encode("password123");
+        log.info("🔧 Initializing sample employees...");
+
+        Team graderTeam = teamRepository.findByName("ROLE_GRADER").orElse(null);
+        Team certifierTeam = teamRepository.findByName("ROLE_CERTIFIER").orElse(null);
+        Team scannerTeam = teamRepository.findByName("ROLE_SCANNER").orElse(null);  // ✅ Ajouter
+        Team preparerTeam = teamRepository.findByName("ROLE_PREPARER").orElse(null); // ✅ Ajouter
+        Team managerTeam = teamRepository.findByName("ROLE_MANAGER").orElse(null);
+        Team adminTeam = teamRepository.findByName("ROLE_ADMIN").orElse(null);
 
         List<Employee> employees = List.of(
-                // Graders
-                createEmployee("john.grader@pcagrade.com", "John", "Smith",
-                        encodedPassword, Set.of(graderTeam)),
+                createEmployee("john.grader@pcagrade.com", "John", "Smith", "password123", List.of(graderTeam)),
+                createEmployee("alice.grader@pcagrade.com", "Alice", "Johnson", "password123", List.of(graderTeam)),
+                createEmployee("bob.certifier@pcagrade.com", "Bob", "Wilson", "password123", List.of(certifierTeam)),
+                createEmployee("jane.certifier@pcagrade.com", "Jane", "Brown", "password123", List.of(certifierTeam)),
 
-                createEmployee("alice.grader@pcagrade.com", "Alice", "Johnson",
-                        encodedPassword, Set.of(graderTeam)),
+                // ✅ AJOUTER CES LIGNES
+                createEmployee("sarah.scanner@pcagrade.com", "Sarah", "Scanner", "password123", List.of(scannerTeam)),
+                createEmployee("mike.scanner@pcagrade.com", "Mike", "Scanner", "password123", List.of(scannerTeam)),
+                createEmployee("paul.preparer@pcagrade.com", "Paul", "Preparer", "password123", List.of(preparerTeam)),
+                createEmployee("lisa.preparer@pcagrade.com", "Lisa", "Preparer", "password123", List.of(preparerTeam)),
 
-                // Certifiers
-                createEmployee("bob.certifier@pcagrade.com", "Bob", "Wilson",
-                        encodedPassword, Set.of(certifierTeam)),
-
-                createEmployee("jane.certifier@pcagrade.com", "Jane", "Brown",
-                        encodedPassword, Set.of(certifierTeam)),
-
-                // Manager (has both GRADER and MANAGER roles)
-                createEmployee("manager@pcagrade.com", "Manager", "User",
-                        encodedPassword, Set.of(managerTeam)),
-
-                // Admin (has ADMIN role)
-                createEmployee("admin@pcagrade.com", "Admin", "User",
-                        encodedPassword, Set.of(adminTeam))
+                createEmployee("manager@pcagrade.com", "Manager", "User", "password123", List.of(managerTeam)),
+                createEmployee("admin@pcagrade.com", "Admin", "User", "password123", List.of(adminTeam))
         );
 
         employeeRepository.saveAll(employees);
-
-        log.info("✅ Created {} sample employees", employees.size());
-        log.info("📝 Sample credentials:");
-        log.info("   - john.grader@pcagrade.com / password123 (GRADER)");
-        log.info("   - manager@pcagrade.com / password123 (MANAGER)");
-        log.info("   - admin@pcagrade.com / password123 (ADMIN)");
+        log.info("✅ {} sample employees initialized", employees.size());
     }
 
-    private Employee createEmployee(String email, String firstName, String lastName,
-                                    String password, Set<Team> teams) {
+    private Employee createEmployee(String email, String firstName, String lastName, String password, List<Team> teams) {
         Employee employee = new Employee();
         employee.setEmail(email);
         employee.setFirstName(firstName);
         employee.setLastName(lastName);
-        employee.setPassword(password);
+        employee.setPassword(passwordEncoder.encode(password));
         employee.setActive(true);
+        employee.setWorkHoursPerDay(8);
         employee.setEfficiencyRating(1.0);
-        employee.setTeams(teams);
+
+        // ✅ CONVERTIR List en Set
+        employee.setTeams(new HashSet<>(teams));  // Au lieu de employee.setTeams(teams)
+
         return employee;
     }
 }

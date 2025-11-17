@@ -235,6 +235,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import EmployeePhotoUploader from './EmployeePhotoUploader.vue'
+import authService from "@/services/authService.ts";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
 const props = defineProps<{
@@ -310,6 +311,7 @@ const goBack = () => {
   emit('back')
 }
 
+
 const loadEmployeeData = async () => {
   if (!props.employeeId) {
     console.warn('⚠️ No employeeId provided')
@@ -333,76 +335,43 @@ const loadEmployeeData = async () => {
 
 // Replace the loadEmployeeOrders method in EmployeeDetailPage.vue
 // Around line 329-371
+const error = ref<string | null>(null)
 
 const loadEmployeeOrders = async () => {
-  if (!props.employeeId) {
-    console.warn('⚠️ No employeeId provided for loading orders')
-    return
-  }
-
-  // Prevent multiple simultaneous calls
-  if (loading.value) {
-    console.log('⏳ Already loading, skipping...')
-    return
-  }
+  console.log('🔧 loadEmployeeOrders called')
+  console.log('   Employee ID:', props.employeeId)
+  console.log('   Date:', props.selectedDate)
 
   loading.value = true
-  console.log('📋 Loading orders for employee:', props.employeeId, 'date:', localSelectedDate.value)
+  error.value = null
 
   try {
-    const url = `${API_BASE_URL}/api/planning/employee/${props.employeeId}?date=${localSelectedDate.value}`
-    console.log('🔗 Fetching from:', url)
+    const url = `/api/planning/employee/${props.employeeId}?date=${props.selectedDate}`
+    console.log('🔗 Calling API:', url)
 
-    const response = await fetch(url)
+    const data = await authService.get(url)
+    console.log('📥 Full API Response:', JSON.stringify(data, null, 2))
 
-    if (response.ok) {
-      const data = await response.json()
-      console.log('📦 API Response:', data)
-
-      // Handle successful response
-      if (data.success === false) {
-        console.error('❌ API returned error:', data.error)
-        orders.value = []
-      }
-      // ✅ FIXED: Check for data.assignments first (this is what the backend returns!)
-      else if (data && data.assignments && Array.isArray(data.assignments)) {
-        orders.value = data.assignments
-        console.log(`✅ Loaded ${orders.value.length} orders from data.assignments`)
-      }
-      else if (data && data.orders && Array.isArray(data.orders)) {
-        orders.value = data.orders
-        console.log(`✅ Loaded ${orders.value.length} orders from data.orders`)
-      }
-      else if (data && Array.isArray(data.plannings)) {
-        orders.value = data.plannings
-        console.log(`✅ Loaded ${orders.value.length} orders from data.plannings`)
-      }
-      else if (Array.isArray(data)) {
-        orders.value = data
-        console.log(`✅ Loaded ${orders.value.length} orders from data array`)
-      }
-      else {
-        console.warn('⚠️ No orders found in response:', data)
-        orders.value = []
-      }
-
-      if (orders.value.length === 0) {
-        console.log('ℹ️ No orders found for this employee on', localSelectedDate.value)
-      } else {
-        console.log(`✅ Successfully loaded ${orders.value.length} assignments for employee`)
-      }
+    if (data.success && data.assignments) {
+      orders.value = data.assignments
+      console.log('✅ SUCCESS: Loaded', orders.value.length, 'orders')
+      console.log('📋 First order:', orders.value[0])
     } else {
-      console.error('❌ API error:', response.status, response.statusText)
+      console.warn('⚠️ No assignments found')
       orders.value = []
     }
-  } catch (error) {
-    console.error('❌ Error loading orders:', error)
+
+  } catch (err: any) {
+    console.error('❌ ERROR:', err)
+    error.value = err.message
     orders.value = []
   } finally {
     loading.value = false
-    console.log('✅ Loading complete')
+    console.log('🏁 loadEmployeeOrders finished. Orders count:', orders.value.length)
   }
 }
+
+
 const handleDateChange = () => {
   console.log('📅 Manual date change to:', localSelectedDate.value)
   loadEmployeeOrders()
