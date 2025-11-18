@@ -365,26 +365,20 @@ const checkSyncStatus = async () => {
   }
 }
 
-// Sync operations
-const syncAll = async () => {
-  if (!confirm('⚠️ This will replace ALL data. Continue?')) return
-  await performSync('all', 'Full Synchronization')
-}
+// Sync all data
+const syncAll = () => performSync('all', 'Full Synchronization')
 
-const syncOrders = async () => {
-  if (!confirm('⚠️ This will replace order data. Continue?')) return
-  await performSync('orders', 'Orders Sync')
-}
+// Sync orders only
+const syncOrders = () => performSync('orders', 'Order Synchronization')
 
-const syncCards = async () => {
-  if (!confirm('⚠️ This will replace card data. Continue?')) return
-  await performSync('cards', 'Cards Sync')
-}
+// Sync cards
+const syncCards = () => performSync('cards', 'Card Synchronization')
 
-const syncIncremental = async () => {
-  await performSync('incremental', 'Incremental Sync')
-}
+// Full sync
+const syncFull = () => performSync('full', 'Complete Data Sync')
 
+// Incremental sync
+const syncIncremental = () => performSync('incremental', 'Incremental Sync')
 // Lifecycle
 onMounted(async () => {
   console.log('📊 DataSync mounted')

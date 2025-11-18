@@ -187,6 +187,7 @@ import { ref, computed, onMounted } from 'vue'
 import { X, Search, Shield, Users, Save } from 'lucide-vue-next'
 
 import { API_BASE_URL } from '@/config/api.ts'
+import authService from "@/services/authService.ts";
 
 // ========== INTERFACES ==========
 interface Employee {
@@ -365,7 +366,6 @@ const saveChanges = async () => {
   if (!props.employee || !hasChanges.value) return
 
   loading.value = true
-
   const employeeId = props.employee.id.toUpperCase()
 
   console.log('🔄 Saving team changes for employee:', employeeId)
@@ -390,68 +390,54 @@ const saveChanges = async () => {
     for (const team of teamsToAdd) {
       const formattedTeamId = formatUUID(team.id)
       const url = `/api/v2/teams/${formattedTeamId}/employees/${employeeId}`
+      console.log('📤 POST', url)
 
-      console.log('📤 POST', `http://localhost:8080${url}`)
-
+      // ✅ Utiliser authService au lieu de fetch
       operations.push(
-        fetch(`http://localhost:8080${url}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        }).then(async response => {
-          if (!response.ok) {
-            const errorData = await response.text()
-            console.error(`❌ Failed to add to team ${team.name}:`, response.status, errorData)
-            throw new Error(`Failed to add to team ${team.name}: ${response.status} - ${errorData}`)
-          }
-          return response
-        })
+        authService.post(url, {})
+          .then(() => {
+            console.log(`✅ Added to team ${team.name}`)
+          })
+          .catch(error => {
+            console.error(`❌ Failed to add to team ${team.name}:`, error)
+            throw new Error(`Failed to add to team ${team.name}: ${error.message}`)
+          })
       )
     }
 
     // Remove from old teams
     for (const teamId of teamsToRemove) {
+      const team = props.availableTeams.find(t => t.id === teamId)
       const formattedTeamId = formatUUID(teamId)
       const url = `/api/v2/teams/${formattedTeamId}/employees/${employeeId}`
-      const teamName = props.availableTeams.find(t => t.id === teamId)?.name || teamId
+      console.log('📤 DELETE', url)
 
-      console.log('📤 DELETE', `http://localhost:8080${url}`)
-
+      // ✅ Utiliser authService au lieu de fetch
       operations.push(
-        fetch(`http://localhost:8080${url}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' }
-        }).then(async response => {
-          if (!response.ok) {
-            const errorData = await response.text()
-            console.error(`❌ Failed to remove from team ${teamName}:`, response.status, errorData)
-            throw new Error(`Failed to remove from team ${teamName}: ${response.status} - ${errorData}`)
-          }
-          return response
-        })
+        authService.delete(url)
+          .then(() => {
+            console.log(`✅ Removed from team ${team?.name || teamId}`)
+          })
+          .catch(error => {
+            console.error(`❌ Failed to remove from team ${team?.name || teamId}:`, error)
+            throw new Error(`Failed to remove from team ${team?.name || teamId}: ${error.message}`)
+          })
       )
     }
 
-    if (operations.length === 0) {
-      console.log('ℹ️ No changes to save')
-      return
-    }
-
     console.log(`🚀 Executing ${operations.length} individual operations...`)
+
+    // Execute all operations
     await Promise.all(operations)
 
-    console.log('✅ All operations completed successfully')
+    console.log('✅ All team changes saved successfully')
+    showNotification('Team assignments updated successfully', 'success')
 
-    // Update original state
-    originalTeamIds.value = selectedTeams.value.map(t => t.id)
+    emit('saved')
 
-    // Notify parent and close
-    setTimeout(() => {
-      emit('saved')
-    }, 500)
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error saving changes:', error)
-    alert(`Failed to save team assignments: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    showNotification(`Failed to save changes: ${error.message}`, 'error')
   } finally {
     loading.value = false
   }

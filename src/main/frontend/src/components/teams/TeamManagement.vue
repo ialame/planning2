@@ -260,6 +260,7 @@ import TeamDetailModal from './TeamDetailModal.vue'
 import EmployeeAssignmentModal from './EmployeeAssignmentModal.vue'
 
 import { API_BASE_URL } from '@/config/api.ts'
+import authService from "@/services/authService.ts";
 
 // ========== INTERFACES ==========
 interface Team {
@@ -350,32 +351,34 @@ const filteredTeams = computed(() => {
 
 // ========== METHODS ==========
 const loadTeams = async () => {
-  loading.value = true
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/teams?includeEmployeeCount=true`)
-    if (response.ok) {
-      const data = await response.json()
-      teams.value = data.teams || []
-    }
+    console.log('📥 Loading teams...')
+
+    // ✅ Utiliser authService
+    const data = await authService.get('/api/v2/teams?includeEmployeeCount=true')
+
+    teams.value = data.teams || []
+    console.log(`✅ Loaded ${teams.value.length} teams`)
+
   } catch (error) {
-    showNotification('Error loading teams', 'error')
-  } finally {
-    loading.value = false
+    console.error('❌ Error loading teams:', error)
   }
 }
 
 const loadEmployees = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/employees`)
-    if (response.ok) {
-      const data = await response.json()
-      employees.value = data.employees || []
-    }
+    console.log('📥 Loading employees...')
+
+    // ✅ Utiliser authService
+    const data = await authService.get('/api/employees')
+
+    employees.value = data || []
+    console.log(`✅ Loaded ${employees.value.length} employees`)
+
   } catch (error) {
-    showNotification('Error loading employees', 'error')
+    console.error('❌ Error loading employees:', error)
   }
 }
-
 const initializeDefaultTeams = async () => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/v2/teams/init-defaults`, {

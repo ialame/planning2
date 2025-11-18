@@ -2,6 +2,7 @@ package com.pcagrade.order.config;
 
 import com.pcagrade.order.config.ApiKeyAuthenticationFilter;
 import com.pcagrade.order.config.JwtAuthenticationFilter;
+import org.springframework.http.HttpMethod;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -59,19 +60,40 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
+                        // PUBLIC
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/error").permitAll()
-                        
+                        .requestMatchers("/api/sync/progress/stream/**").permitAll()
+
+                        // PLANNING
                         .requestMatchers("/api/planning/**").authenticated()
                         .requestMatchers("/api/work-assignments/**").authenticated()
-                        
+
+                        // ✅ TEAMS - Autoriser toutes les méthodes HTTP
+                        .requestMatchers(HttpMethod.GET, "/api/teams/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/v2/teams/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/teams/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.POST, "/api/v2/teams/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.PUT, "/api/teams/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.PUT, "/api/v2/teams/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/teams/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v2/teams/**").hasAnyRole("ADMIN", "MANAGER")
+
+                        // SYNC
                         .requestMatchers("/api/sync/**").hasAnyRole("ADMIN", "MANAGER")
+
+                        // EMPLOYEES
                         .requestMatchers("/api/employees/**").authenticated()
+
+                        // ORDERS
                         .requestMatchers("/api/orders/**").authenticated()
+
+                        // ADMIN
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        
+
+                        // DEFAULT
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().authenticated()
                 )

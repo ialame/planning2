@@ -446,24 +446,51 @@ public class TeamController {
             @PathVariable String employeeId) {
         try {
             log.info("➕ Adding employee {} to team {}", employeeId, teamId);
-
             UUID teamUuid = parseUUID(teamId);
             UUID employeeUuid = parseUUID(employeeId);
 
-            // ✅ Ordre correct : employeeId PUIS teamId
-            teamService.assignEmployeeToTeam(employeeUuid, teamUuid);
+            // ✅ CORRIGER L'ORDRE : teamId PUIS employeeId
+            teamService.assignEmployeeToTeam(teamUuid, employeeUuid);
 
-            return ResponseEntity.ok().body(Map.of(
-                    "message", "Employee added to team successfully",
-                    "success", true
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Employee added to team successfully"
             ));
         } catch (Exception e) {
             log.error("❌ Error adding employee to team", e);
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(500).body(Map.of(
+                    "error", e.getMessage()
+            ));
         }
     }
 
+    /**
+     * Remove an employee from a team
+     * DELETE /api/v2/teams/{teamId}/employees/{employeeId}
+     */
+    @DeleteMapping("/{teamId}/employees/{employeeId}")
+    public ResponseEntity<?> removeEmployeeFromTeam(
+            @PathVariable String teamId,
+            @PathVariable String employeeId) {
+        try {
+            log.info("➖ Removing employee {} from team {}", employeeId, teamId);
+            UUID teamUuid = parseUUID(teamId);
+            UUID employeeUuid = parseUUID(employeeId);
+
+            // ✅ CORRIGER L'ORDRE : teamId PUIS employeeId
+            teamService.removeEmployeeFromTeam(teamUuid, employeeUuid);
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Employee removed from team successfully"
+            ));
+        } catch (Exception e) {
+            log.error("❌ Error removing employee from team", e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "error", e.getMessage()
+            ));
+        }
+    }
     /**
      * Parse UUID avec ou sans tirets
      * IMPORTANT: Ne pas reformater si déjà correct !
@@ -498,22 +525,7 @@ public class TeamController {
         }
     }
 
-    /**
-     * Remove an employee from a team
-     * DELETE /api/v2/teams/{teamId}/employees/{employeeId}
-     */
-    @DeleteMapping("/{teamId}/employees/{employeeId}")
-    public ResponseEntity<?> removeEmployeeFromTeam(
-            @PathVariable String teamId,
-            @PathVariable String employeeId) {
-        try {
-            teamService.removeEmployeeFromTeam(UUID.fromString(teamId), UUID.fromString(employeeId));
-            return ResponseEntity.ok().body(Map.of("message", "Employee removed from team successfully"));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        }
-    }
+
 
     /**
      * Get all employees in a team

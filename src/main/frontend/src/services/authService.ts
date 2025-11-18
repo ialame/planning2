@@ -350,8 +350,35 @@ class AuthService {
   /**
    * DELETE request
    */
-  async delete<T = any>(endpoint: string): Promise<T> {
-    const response = await this.apiCall(endpoint, { method: 'DELETE' })
+  async delete(url: string) {
+    const token = localStorage.getItem('jwt_token')
+
+    if (!token) {
+      throw new Error('No authentication token found')
+    }
+
+    console.log('🌐 DELETE Request:', url)
+    console.log('🔑 Token present:', !!token)
+
+    const response = await fetch(`${API_BASE_URL}${url}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    console.log('📊 Response status:', response.status)
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    // DELETE peut retourner 204 No Content
+    if (response.status === 204) {
+      return null
+    }
+
     return response.json()
   }
 }

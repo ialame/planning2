@@ -44,7 +44,7 @@ public class TeamService {
      * Get team by ID
      */
     public Team getTeamById(UUID teamId) {
-        return teamRepository.findById(teamId.toString())
+        return teamRepository.findById(teamId)
                 .orElseThrow(() -> new RuntimeException("Team not found with id: " + teamId));
     }
 
@@ -80,7 +80,7 @@ public class TeamService {
      * Update a team
      */
     public Team updateTeam(UUID teamId, Team updatedTeam) {
-        Team team = teamRepository.findById(teamId.toString())
+        Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new RuntimeException("Team not found"));
 
         team.setDescription(updatedTeam.getDescription());
@@ -96,10 +96,10 @@ public class TeamService {
      * Delete a team
      */
     public void deleteTeam(UUID teamId) {
-        if (!teamRepository.existsById(teamId.toString())) {
+        if (!teamRepository.existsById(teamId)) {
             throw new RuntimeException("Team not found");
         }
-        teamRepository.deleteById(teamId.toString());
+        teamRepository.deleteById(teamId);
     }
 
     /**

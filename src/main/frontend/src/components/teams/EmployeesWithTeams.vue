@@ -204,6 +204,7 @@ import {
 import EmployeeTeamManagementModal from './EmployeeTeamManagementModal.vue'
 
 import { API_BASE_URL } from '@/config/api.ts'
+import authService from "@/services/authService.ts";
 
 // ========== INTERFACES ==========
 interface Employee {
@@ -307,84 +308,71 @@ const loadEmployees = async () => {
   console.log('🔄 Starting to load employees...')
 
   try {
-    const url = `${API_BASE_URL}/api/employees`
-    console.log('📡 Fetching from:', url)
+    // ✅ authService.get retourne directement les données
+    const data = await authService.get('/api/employees')
 
-    const response = await fetch(url)
-    console.log('📥 Response status:', response.status, response.statusText)
+    console.log('📦 Raw API response:', data)
+    console.log('📦 Data type:', typeof data, 'Is array?', Array.isArray(data))
 
-    if (response.ok) {
-      const data = await response.json()
-      console.log('📦 Raw API response:', data)
-      console.log('📦 Data type:', typeof data, 'Is array?', Array.isArray(data))
+    let employeeList: Employee[] = []
 
-      let employeeList: Employee[] = []
-
-      // The /api/employees endpoint returns a direct array
-      if (Array.isArray(data)) {
-        employeeList = data.map(emp => ({
-          id: emp.id,
-          firstName: emp.firstName,
-          lastName: emp.lastName,
-          fullName: emp.fullName || `${emp.firstName} ${emp.lastName}`,
-          email: emp.email,
-          active: emp.active,
-          workHoursPerDay: emp.workHoursPerDay,
-          efficiencyRating: emp.efficiencyRating || 1.0,
-          teams: []
-        }))
-        console.log('✅ Using direct array format, count:', employeeList.length)
-      } else if (data.employees && Array.isArray(data.employees)) {
-        // Fallback for wrapped format
-        employeeList = data.employees.map(emp => ({
-          id: emp.id,
-          firstName: emp.firstName,
-          lastName: emp.lastName,
-          fullName: emp.fullName || `${emp.firstName} ${emp.lastName}`,
-          email: emp.email,
-          active: emp.active,
-          workHoursPerDay: emp.workHoursPerDay,
-          efficiencyRating: emp.efficiencyRating || 1.0,
-          teams: []
-        }))
-        console.log('✅ Using data.employees format, count:', employeeList.length)
-      } else {
-        console.error('❌ Unexpected response format:', data)
-        console.error('❌ Available keys:', Object.keys(data))
-        return
-      }
-
-      console.log('👥 Employee list sample:', employeeList.slice(0, 2))
-
-      // Load teams for each employee
-      const employeesWithTeams = await Promise.all(
-        employeeList.map(async (emp: Employee) => {
-          try {
-            // Format UUID with hyphens for API call
-            const formattedId = formatUUID(emp.id)
-            const teamsResponse = await fetch(`${API_BASE_URL}/api/v2/teams/employee/${formattedId}`)
-            if (teamsResponse.ok) {
-              const teamsData = await teamsResponse.json()
-              emp.teams = teamsData.teams || []
-            } else {
-              console.warn(`⚠️ Failed to load teams for employee ${emp.id}:`, teamsResponse.status)
-              emp.teams = []
-            }
-          } catch (error) {
-            console.error(`❌ Error loading teams for employee ${emp.id}:`, error)
-            emp.teams = []
-          }
-          return emp
-        })
-      )
-
-      employees.value = employeesWithTeams
-      console.log('✅ SUCCESS! Employees loaded:', employees.value.length)
-      console.log('👤 First employee sample:', employees.value[0])
-      console.log('🔍 filteredEmployees computed:', filteredEmployees.value.length)
+    if (Array.isArray(data)) {
+      employeeList = data.map(emp => ({
+        id: emp.id,
+        firstName: emp.firstName,
+        lastName: emp.lastName,
+        fullName: emp.fullName || `${emp.firstName} ${emp.lastName}`,
+        email: emp.email,
+        active: emp.active,
+        workHoursPerDay: emp.workHoursPerDay,
+        efficiencyRating: emp.efficiencyRating || 1.0,
+        teams: []
+      }))
+      console.log('✅ Using direct array format, count:', employeeList.length)
+    } else if (data.employees && Array.isArray(data.employees)) {
+      employeeList = data.employees.map(emp => ({
+        id: emp.id,
+        firstName: emp.firstName,
+        lastName: emp.lastName,
+        fullName: emp.fullName || `${emp.firstName} ${emp.lastName}`,
+        email: emp.email,
+        active: emp.active,
+        workHoursPerDay: emp.workHoursPerDay,
+        efficiencyRating: emp.efficiencyRating || 1.0,
+        teams: []
+      }))
+      console.log('✅ Using data.employees format, count:', employeeList.length)
     } else {
-      console.error('❌ HTTP Error:', response.status, response.statusText)
+      console.error('❌ Unexpected response format:', data)
+      console.error('❌ Available keys:', Object.keys(data))
+      return
     }
+
+    console.log('👥 Employee list sample:', employeeList.slice(0, 2))
+
+    // Load teams for each employee
+    const employeesWithTeams = await Promise.all(
+      employeeList.map(async (emp: Employee) => {
+        try {
+          const formattedId = formatUUID(emp.id)
+
+          // ✅ Utiliser authService au lieu de fetch
+          const teamsData = await authService.get(`/api/v2/teams/employee/${formattedId}`)
+          emp.teams = teamsData.teams || []
+
+        } catch (error) {
+          console.error(`❌ Error loading teams for employee ${emp.id}:`, error)
+          emp.teams = []
+        }
+        return emp
+      })
+    )
+
+    employees.value = employeesWithTeams
+    console.log('✅ SUCCESS! Employees loaded:', employees.value.length)
+    console.log('👤 First employee sample:', employees.value[0])
+    console.log('🔍 filteredEmployees computed:', filteredEmployees.value.length)
+
   } catch (error) {
     console.error('❌ Exception during loadEmployees:', error)
   } finally {
@@ -395,19 +383,16 @@ const loadEmployees = async () => {
 
 const loadAllTeams = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v2/teams`)
-    if (response.ok) {
-      const data = await response.json()
-      allTeams.value = data.teams || data || []
-      console.log(`✅ Loaded ${allTeams.value.length} teams`)
-    } else {
-      console.error('❌ Failed to load teams:', response.status)
-    }
+    // ✅ authService.get retourne directement les données
+    const data = await authService.get('/api/v2/teams')
+
+    allTeams.value = data.teams || data || []
+    console.log(`✅ Loaded ${allTeams.value.length} teams`)
+
   } catch (error) {
     console.error('❌ Error loading teams:', error)
   }
 }
-
 const manageEmployeeTeams = (employee: Employee) => {
   console.log('🔧 Opening modal for employee:', employee.fullName)
   selectedEmployee.value = employee
